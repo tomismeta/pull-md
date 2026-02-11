@@ -89,6 +89,10 @@ export default function handler(req, res) {
       redownload_request: 'Include X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, and X-PURCHASE-RECEIPT',
       note: 'auth_message_template may appear in a 402 response as helper text; purchase still requires payment header submission.',
       v2_requirement: 'Submitted payment JSON must include accepted matching PAYMENT-REQUIRED.accepts[0] exactly.',
+      method_discipline:
+        'Submit exactly one payload method branch. eip3009 => authorization+signature only. permit2 => permit2Authorization(+transaction)+signature only.',
+      cdp_default:
+        'CDP Base mainnet path defaults to eip3009 in this deployment. If permit2 is disabled by facilitator policy, re-sign as eip3009.',
       permit2_pitfalls: [
         'Set top-level network to accepted.network (eip155:8453), not "base".',
         'Use payload.permit2Authorization (not payload.permit2).',

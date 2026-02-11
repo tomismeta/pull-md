@@ -74,6 +74,8 @@ If `401` or `402`, continue to purchase flow.
 - Standard wallet:
 Read `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`:
 `permit2` -> sign `PermitWitnessTransferFrom`; `eip3009` -> sign `TransferWithAuthorization`.
+- CDP/Base production default path:
+assume `eip3009` unless current `PAYMENT-REQUIRED` says `permit2`.
 - Bankr wallet:
 Use Bankr Agent API typed-data signing:
 `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then pass final base64 JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
@@ -97,6 +99,9 @@ If facilitator reports schema errors (`paymentPayload is invalid`, `must match o
 - Permit2 payload must include: `payload.from`, `payload.permit2Authorization`, `payload.transaction`, `payload.signature`.
 - Do not send `payload.permit2`.
 - Do not include `payload.authorization` in permit2 mode.
+- For eip3009 send only `payload.authorization` and `payload.signature`.
+- Never send both `payload.authorization` and `payload.permit2Authorization` in the same payload.
+- If CDP returns `permit2 payments are disabled`, switch to eip3009 immediately.
 
 ### Bankr Capability Mapping
 

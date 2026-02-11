@@ -86,6 +86,12 @@ export default async function handler(req, res) {
         step_3: 'Retry GET /api/souls/{soul_id}/download with header PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT)',
         step_4: 'On success, store X-PURCHASE-RECEIPT for future re-downloads'
       },
+      method_rules: {
+        default_for_cdp_base_mainnet: 'eip3009',
+        eip3009_only_shape: 'Use payload.authorization + payload.signature only.',
+        permit2_only_shape: 'Use payload.permit2Authorization (+ payload.transaction when required) + payload.signature only.',
+        never_mix_payload_branches: true
+      },
       security_rules: {
         never_share_bankr_key_with_soulstarter: true,
         note: 'Bankr API keys must stay inside the agent/Bankr runtime. SoulStarter only accepts signed x402 payment headers.'
@@ -132,6 +138,10 @@ export default async function handler(req, res) {
           'Regenerate signature from the latest PAYMENT-REQUIRED and ensure method-specific shape is correct (permit2 vs eip3009).',
         cdp_schema_invalid:
           'For permit2 include payload.from + payload.permit2Authorization + payload.transaction + payload.signature. Do not send payload.permit2 or payload.authorization.',
+        cdp_oneof_ambiguity:
+          'Payload matches multiple schemas because branches were mixed. Send only one method branch (eip3009 or permit2), never both.',
+        cdp_permit2_disabled:
+          'Facilitator policy disabled permit2. Re-fetch PAYMENT-REQUIRED and submit eip3009 TransferWithAuthorization payload.',
         network_mismatch:
           'Use top-level network "eip155:8453" exactly; avoid "base".'
       },

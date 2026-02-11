@@ -73,6 +73,10 @@ use Bankr Agent API `POST /agent/sign` with `signatureType=eth_signTypedData_v4`
 Bankr API keys and signer secrets stay in the agent/Bankr runtime only and must never be sent to SoulStarter.
 - Common permit2 pitfalls to avoid:
 top-level `network` must be `eip155:8453` (not `base`), use `payload.permit2Authorization` (not `payload.permit2`), do not include `payload.authorization` in permit2 mode, send permit2 numeric fields as strings, and set non-empty approve calldata in `payload.transaction.data`.
+- CDP/Base production default:
+`eip3009` is the default transfer method in this deployment.
+For eip3009 submit only `payload.authorization` + `payload.signature`.
+Never submit both `payload.authorization` and `payload.permit2Authorization` in one payload.
 
 Critical v2 payload requirement:
 - Include `accepted` exactly as `PAYMENT-REQUIRED.accepts[0]` in the submitted payment JSON.

@@ -74,6 +74,8 @@ Important:
 - Standard wallet:
 Read `accepted.extra.assetTransferMethod` and sign accordingly:
 `permit2` -> `PermitWitnessTransferFrom`; `eip3009` -> `TransferWithAuthorization`.
+- CDP/Base production default:
+SoulStarter defaults to `eip3009`. Treat this as the primary path unless the latest `PAYMENT-REQUIRED` explicitly sets `permit2`.
 - Bankr wallet:
 Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
 - Bankr API capability mapping:
@@ -95,6 +97,8 @@ Only the SoulStarter server needs facilitator credentials.
    Keep top-level `network` as `eip155:8453` (from `accepted.network`), not `base`.
    Do not include `payload.authorization` when in permit2 mode.
    Send permit2 numeric fields as strings.
+   For `eip3009`, include only `payload.authorization` + `payload.signature`.
+   Do not include `payload.permit2Authorization` or `payload.transaction` in eip3009 mode.
 5. Build x402 JSON payload, base64-encode it, and send:
    `PAYMENT-SIGNATURE: <base64(JSON payload)>`
 6. Save `X-PURCHASE-RECEIPT` from the `200` response for re-downloads.
@@ -129,6 +133,13 @@ Re-sign from latest requirements and verify method-specific shape.
 - Facilitator schema errors (`paymentPayload is invalid`, `must match oneOf`):
 for permit2 use `payload.from`, `payload.permit2Authorization`, `payload.transaction`, `payload.signature`.
 Do not send `payload.permit2`. Do not include `payload.authorization` in permit2 mode.
+- OneOf ambiguity errors (`matches more than one schema`, `input matches more than one oneOf schemas`):
+do not send mixed payload branches.
+Use exactly one method:
+`eip3009` => `payload.authorization` + `payload.signature` only.
+`permit2` => `payload.permit2Authorization` (+ `payload.transaction` when required) + `payload.signature` only.
+- CDP policy error `permit2 payments are disabled`:
+re-fetch latest paywall and use `eip3009` (`TransferWithAuthorization`) flow.
 - `network mismatch: submitted=base expected=eip155:8453`:
 top-level payload `network` must be `eip155:8453`.
 - CDP facilitator enum note:
