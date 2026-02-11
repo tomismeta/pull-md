@@ -160,10 +160,11 @@ function normalizeFacilitatorRequest(url, body) {
     remapped.paymentPayload,
     remapped.paymentRequirements
   );
-  return {
+  const normalized = {
     ...remapped,
     paymentPayload: normalizedPaymentPayload
   };
+  return coerceToCdpV1Envelope(normalized);
 }
 
 function isCdpFacilitatorUrl(rawUrl) {
@@ -240,6 +241,64 @@ function normalizePaymentPayloadShapeForFacilitator(paymentPayload, paymentRequi
   return {
     ...paymentPayload,
     payload: nextPayload
+  };
+}
+
+function coerceToCdpV1Envelope(body) {
+  const paymentPayload = body?.paymentPayload;
+  const paymentRequirements = body?.paymentRequirements;
+  if (!paymentPayload || typeof paymentPayload !== 'object') return body;
+
+  const accepted =
+    paymentPayload?.accepted && typeof paymentPayload.accepted === 'object'
+      ? paymentPayload.accepted
+      : paymentRequirements && typeof paymentRequirements === 'object'
+        ? paymentRequirements
+        : null;
+
+  const transferMethod = getTransferMethod(paymentPayload, accepted);
+  const resource = paymentPayload?.resource && typeof paymentPayload.resource === 'object' ? paymentPayload.resource : null;
+  const v1InnerPayload =
+    paymentPayload?.payload && typeof paymentPayload.payload === 'object' ? { ...paymentPayload.payload } : {};
+
+  // Avoid oneOf ambiguity in facilitator schema: send only one branch.
+  if (transferMethod === 'permit2') {
+    delete v1InnerPayload.authorization;
+  } else {
+    delete v1InnerPayload.permit2Authorization;
+    delete v1InnerPayload.transaction;
+  }
+
+  const v1PaymentPayload = {
+    x402Version: 1,
+    scheme: paymentPayload?.scheme ?? accepted?.scheme ?? 'exact',
+    network: paymentPayload?.network ?? accepted?.network ?? 'base',
+    payload: v1InnerPayload
+  };
+
+  const v1Requirements = {
+    scheme: paymentRequirements?.scheme ?? accepted?.scheme ?? 'exact',
+    network: paymentRequirements?.network ?? accepted?.network ?? 'base',
+    maxAmountRequired: normalizeUintString(paymentRequirements?.maxAmountRequired ?? accepted?.amount ?? paymentRequirements?.amount ?? '0'),
+    resource: String(paymentRequirements?.resource ?? resource?.url ?? ''),
+    description: String(paymentRequirements?.description ?? resource?.description ?? 'x402 payment'),
+    mimeType: String(paymentRequirements?.mimeType ?? resource?.mimeType ?? 'application/octet-stream'),
+    payTo: paymentRequirements?.payTo ?? accepted?.payTo ?? '',
+    maxTimeoutSeconds: Number(paymentRequirements?.maxTimeoutSeconds ?? accepted?.maxTimeoutSeconds ?? 300),
+    asset: paymentRequirements?.asset ?? accepted?.asset ?? '',
+    outputSchema: paymentRequirements?.outputSchema ?? null,
+    extra:
+      paymentRequirements?.extra && typeof paymentRequirements.extra === 'object'
+        ? paymentRequirements.extra
+        : accepted?.extra && typeof accepted.extra === 'object'
+          ? accepted.extra
+          : {}
+  };
+
+  return {
+    x402Version: 1,
+    paymentPayload: v1PaymentPayload,
+    paymentRequirements: v1Requirements
   };
 }
 
@@ -534,6 +593,10 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
         cdp_authorization_validBefore: cdpNormalizedPayload?.payload?.authorization?.validBefore ?? null,
         cdp_authorization_to: cdpNormalizedPayload?.payload?.authorization?.to ?? null,
         cdp_authorization_value: cdpNormalizedPayload?.payload?.authorization?.value ?? null
+      },
+      cdp_envelope: {
+        x402Version: 1,
+        transfer_method: getTransferMethod(cdpNormalizedPayload, cdpMappedRequirements)
       }
     };
   } catch (error) {
@@ -562,6 +625,10 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
         cdp_authorization_validBefore: cdpNormalizedPayload?.payload?.authorization?.validBefore ?? null,
         cdp_authorization_to: cdpNormalizedPayload?.payload?.authorization?.to ?? null,
         cdp_authorization_value: cdpNormalizedPayload?.payload?.authorization?.value ?? null
+      },
+      cdp_envelope: {
+        x402Version: 1,
+        transfer_method: getTransferMethod(cdpNormalizedPayload, cdpMappedRequirements)
       }
     };
   }
