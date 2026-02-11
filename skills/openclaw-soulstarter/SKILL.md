@@ -77,8 +77,6 @@ Read `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`:
 - Bankr wallet:
 Use Bankr Agent API typed-data signing:
 `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then pass final base64 JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
-Or use SoulStarter helper tool:
-`POST {base_url}/api/mcp/tools/purchase_soul_bankr` with `soul_id` (server-managed signer only).
 
 If you get `No matching payment requirements`:
 - You likely omitted or mutated `accepted`.

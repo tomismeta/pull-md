@@ -67,35 +67,6 @@ export default function handler(req, res) {
         returns: { type: 'object', description: '402 response body + PAYMENT-REQUIRED header details' }
       },
       {
-        name: 'purchase_soul_bankr',
-        description: 'Execute full x402 purchase using a server-managed Bankr signer',
-        endpoint: '/api/mcp/tools/purchase_soul_bankr',
-        method: 'POST',
-        parameters: {
-          soul_id: { type: 'string', required: true, description: 'Soul identifier to purchase' },
-          wallet_address: {
-            type: 'string',
-            required: false,
-            description: 'Optional wallet to assert; must match Bankr evm wallet if provided'
-          }
-        },
-        returns: {
-          type: 'object',
-          description: 'Purchased soul markdown, receipt, and settlement response. Uses server-side Bankr credentials only.',
-          success_fields: ['success', 'soul_id', 'wallet_address', 'purchase_receipt', 'payment_response', 'soul_markdown'],
-          failure_fields: ['error', 'detail', 'upstream_status', 'upstream_body', 'bankr_debug'],
-          bankr_debug_stages: [
-            'init',
-            'fetch_payment_required',
-            'bankr_me',
-            'build_typed_data',
-            'bankr_sign',
-            'submit_payment',
-            'exception'
-          ]
-        }
-      },
-      {
         name: 'check_entitlements',
         description: 'Verify receipt proofs for wallet re-download entitlement',
         endpoint: '/api/mcp/tools/check_entitlements',

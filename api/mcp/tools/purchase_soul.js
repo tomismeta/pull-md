@@ -93,8 +93,7 @@ export default async function handler(req, res) {
       wallet_examples: {
         standard_wallet:
           'If assetTransferMethod=permit2, sign PermitWitnessTransferFrom and include permit2Authorization + transaction. If eip3009, sign TransferWithAuthorization.',
-        bankr_wallet:
-          'Use Bankr Agent API /agent/sign (eth_signTypedData_v4) based on assetTransferMethod, or call /api/mcp/tools/purchase_soul_bankr.'
+        bankr_wallet: 'Use your own Bankr context to call /agent/sign (eth_signTypedData_v4) based on assetTransferMethod.'
       },
       payload_requirements: {
         critical: 'For x402 v2, include top-level accepted object. If accepted is missing or modified, server returns: No matching payment requirements.',

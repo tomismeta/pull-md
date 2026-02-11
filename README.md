@@ -19,7 +19,6 @@ preflight checks, multi-endpoint failover, timeout, circuit breaker
 - `GET /api/mcp/tools/list_souls`
 - `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
 - `POST /api/mcp/tools/purchase_soul`
-- `POST /api/mcp/tools/purchase_soul_bankr`
 - `POST /api/mcp/tools/check_entitlements`
 - `GET /api/souls/{id}/download`
 - `GET /api/health/facilitator`
@@ -39,10 +38,7 @@ preflight checks, multi-endpoint failover, timeout, circuit breaker
 | `FACILITATOR_MAX_FAILURES` | optional | Failures before endpoint circuit opens (default `3`) |
 | `FACILITATOR_COOLDOWN_MS` | optional | Circuit cooldown duration (default `60000`) |
 | `FACILITATOR_PREFLIGHT_TTL_MS` | optional | Cached preflight TTL (default `120000`) |
-| `PUBLIC_BASE_URL` | recommended | Canonical app URL used for server-side purchase submission (default `https://soulstarter.vercel.app`) |
-| `BANKR_HTTP_TIMEOUT_MS` | optional | Timeout for Bankr API calls in ms (default `10000`) |
 | `WALLETCONNECT_PROJECT_ID` | optional | WalletConnect Cloud project ID for browser wallet UX |
-| `BANKR_API_KEY` | optional | Server-managed Bankr signer key for `purchase_soul_bankr` (never provided by end users) |
 | `SOUL_META_STARTER_V1` | optional | Env fallback content for `meta-starter-v1` |
 
 ## Facilitator Health Checks
@@ -70,10 +66,6 @@ read `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`:
 `eip3009` -> sign `TransferWithAuthorization`.
 - Bankr wallet:
 use Bankr Agent API `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then submit the resulting base64 payload.
-- Bankr server-side helper:
-`POST /api/mcp/tools/purchase_soul_bankr` performs wallet lookup (`/agent/me`) and signing (`/agent/sign`) before submitting the strict x402 header.
-This endpoint uses a server-managed `BANKR_API_KEY` only; callers must never send personal Bankr keys.
-On failure it returns `bankr_debug` with stage-level diagnostics for triage.
 - Bankr capability mapping:
 `/agent/me` for wallet discovery, `/agent/sign` for typed-data signing, and no `/agent/submit` call for SoulStarter purchase settlement.
 
