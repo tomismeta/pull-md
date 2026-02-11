@@ -74,6 +74,32 @@ Create EIP-712 `TransferWithAuthorization` typed data from `PAYMENT-REQUIRED.acc
 - Bankr wallet:
 Use Bankr's x402 exact EVM flow and pass its final base64-encoded JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
 
+### Bankr Capability Mapping
+
+Use these Bankr capabilities explicitly:
+
+1. `bankr prompt` or `POST /agent/prompt`:
+- Ask Bankr to generate the x402 exact EVM payment payload from `PAYMENT-REQUIRED`.
+- Poll job completion via `bankr status` or `GET /agent/job/{jobId}`.
+
+2. `POST /agent/sign`:
+- Use when you need explicit typed-data signing control for `TransferWithAuthorization`.
+
+3. `POST /agent/submit`:
+- Not required for SoulStarter purchase flow.
+- SoulStarter server settles via facilitator after receiving the signed x402 payload header.
+
+4. Conversation threads (`threadId`):
+- Reuse the same thread for multi-step flows:
+request terms -> build payload -> sign -> return final base64 header.
+
+5. LLM gateway:
+- Optional for orchestration/reasoning only; not required for settlement.
+
+Important:
+- Buyer/Banr wallet does **not** need CDP credentials.
+- Only SoulStarter server needs facilitator credentials.
+
 ## 4. Optional Entitlement Verification Tool
 
 Use:

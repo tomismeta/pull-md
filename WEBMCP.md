@@ -64,6 +64,8 @@ base64(JSON.stringify({
 Build EIP-712 domain/types/message from `PAYMENT-REQUIRED.accepts[0]`, sign typed data, send base64 JSON payload.
 - Bankr wallet:
 Use Bankr's x402 exact EVM signer output directly, then send its base64 JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
+- Bankr API/CLI capability mapping:
+`/agent/prompt` + job polling for orchestration, `/agent/sign` for explicit signature generation, and **do not** use `/agent/submit` for SoulStarter purchase settlement.
 - Buyers do **not** need CDP credentials.
 Only the SoulStarter server needs facilitator credentials.
 

@@ -64,6 +64,8 @@ Wallet notes:
 sign EIP-712 `TransferWithAuthorization` using `PAYMENT-REQUIRED.accepts[0]`.
 - Bankr wallet:
 use Bankr's x402 exact EVM signer output and submit the resulting base64 payload.
+- Bankr capability mapping:
+`/agent/prompt` + `/agent/job/{jobId}` for async orchestration, `/agent/sign` for explicit signing, and no `/agent/submit` call for SoulStarter purchase settlement.
 
 If a `402` body contains `auth_message_template`, treat it as optional re-download helper text.
 It does **not** replace the purchase flow.
