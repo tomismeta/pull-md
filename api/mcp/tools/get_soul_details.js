@@ -29,7 +29,7 @@ export default function handler(req, res) {
     soul: {
       ...summary,
       long_description: soul.longDescription,
-      files: ['SOUL.md', 'AGENTS.md', 'HEARTBEAT.md', 'TOOLS.md.template'],
+      files: ['SOUL.md'],
       purchase_endpoint: `/api/souls/${id}/download`,
       payment_protocol: 'x402',
       auth_headers: {

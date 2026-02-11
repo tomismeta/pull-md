@@ -459,7 +459,7 @@ async function loadSouls() {
     grid.innerHTML = souls
       .map(
         (soul) => `
-      <article class="soul-card" data-soul-id="${escapeHtml(soul.id)}">
+      <article class="soul-card ${soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : ''}" data-soul-id="${escapeHtml(soul.id)}">
         <div class="soul-card-icon">${escapeHtml(soul.icon || '🔮')}</div>
         <h3>${escapeHtml(soul.name)}</h3>
         <p>${escapeHtml(soul.description)}</p>

@@ -330,6 +330,32 @@ main {
   transform: translateY(-2px);
 }
 
+.soul-card-featured {
+  border-color: rgba(124, 146, 255, 0.6);
+  box-shadow:
+    0 0 0 1px rgba(124, 146, 255, 0.4),
+    0 14px 32px rgba(93, 95, 255, 0.28);
+  background:
+    linear-gradient(135deg, rgba(92, 119, 255, 0.14), rgba(179, 95, 255, 0.11)),
+    var(--bg-elevated);
+}
+
+.soul-card-featured::before {
+  content: 'Featured';
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d8dfff;
+  border: 1px solid rgba(172, 184, 255, 0.6);
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: rgba(50, 58, 114, 0.38);
+}
+
 .soul-card-icon {
   font-size: 1.5rem;
   margin-bottom: 10px;

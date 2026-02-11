@@ -17,20 +17,20 @@ export const SOUL_CATALOG = {
     preview: 'Prefer concrete progress over performative language. Be clear, practical, and accountable for outcomes.',
     contentFile: 'souls/meta-starter-v1.md'
   },
-  'midnight-coder-v1': {
-    id: 'midnight-coder-v1',
-    name: 'Midnight Coder Soul',
-    description: 'Ships code at 2 AM. Knows perfect is the enemy of working software.',
-    longDescription: 'A pragmatic builder soul with fast iteration loops, operational instincts, and shipping discipline.',
-    icon: '☕',
-    category: 'skill',
-    tags: ['developer', 'pragmatic', 'ships'],
-    priceMicroUsdc: '100000',
-    priceDisplay: '$0.10',
-    provenance: { type: 'synthetic', raised_by: 'Simulation logs', days_nurtured: 21 },
-    compatibility: { runtimes: ['OpenClaw', 'ElizaOS'], min_memory: '8MB', min_context: 4000 },
-    preview: 'Ship small, observe hard, fix fast. Logs first, opinions second.',
-    contentFile: 'souls/midnight-coder-v1.md'
+  'sassy-starter-v1': {
+    id: 'sassy-starter-v1',
+    name: 'Sassy Soul',
+    description: 'Opinionated, concise, witty, and unafraid to call out bad ideas with charm.',
+    longDescription: 'A high-personality assistant archetype inspired by Peter on X, tuned for direct takes and sharp delivery.',
+    icon: '💅',
+    category: 'personality',
+    tags: ['sassy', 'opinionated', 'concise', 'witty'],
+    priceMicroUsdc: '10000',
+    priceDisplay: '$0.01',
+    provenance: { type: 'synthetic', raised_by: 'Prompt remix lab', days_nurtured: 9 },
+    compatibility: { runtimes: ['OpenClaw', 'ElizaOS', 'Olas'], min_memory: '8MB', min_context: 4000 },
+    preview: 'Have a take. Keep it short. No corporate fluff. Be sharp, useful, and human.',
+    contentFile: 'souls/sassy-starter-v1.md'
   },
   'pattern-weaver-v1': {
     id: 'pattern-weaver-v1',
