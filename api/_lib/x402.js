@@ -119,6 +119,7 @@ async function facilitatorFetch(url, path, body) {
   try {
     const method = body ? 'POST' : 'GET';
     const authHeaders = await getDynamicFacilitatorAuthHeaders(url, path, method);
+    const normalizedBody = normalizeFacilitatorRequest(url, body);
     const response = await fetch(`${url}/${path}`, {
       method,
       headers: {
@@ -126,7 +127,7 @@ async function facilitatorFetch(url, path, body) {
         ...authHeaders,
         ...FACILITATOR_AUTH_HEADERS
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
+      ...(normalizedBody ? { body: JSON.stringify(normalizedBody) } : {}),
       signal
     });
 
@@ -146,6 +147,45 @@ async function facilitatorFetch(url, path, body) {
   } finally {
     done();
   }
+}
+
+function normalizeFacilitatorRequest(url, body) {
+  if (!body || typeof body !== 'object') return body;
+  if (!isCdpFacilitatorUrl(url)) return body;
+  return remapNetworkFields(body);
+}
+
+function isCdpFacilitatorUrl(rawUrl) {
+  try {
+    return new URL(rawUrl).hostname === 'api.cdp.coinbase.com';
+  } catch {
+    return false;
+  }
+}
+
+function remapNetworkFields(value) {
+  if (Array.isArray(value)) {
+    return value.map(remapNetworkFields);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  const next = {};
+  for (const [key, nested] of Object.entries(value)) {
+    if (key === 'network' && typeof nested === 'string') {
+      next[key] = remapNetworkValue(nested);
+      continue;
+    }
+    next[key] = remapNetworkFields(nested);
+  }
+  return next;
+}
+
+function remapNetworkValue(network) {
+  if (network === 'eip155:8453') return 'base';
+  if (network === 'eip155:84532') return 'base-sepolia';
+  return network;
 }
 
 async function getDynamicFacilitatorAuthHeaders(baseUrl, endpointPath, method) {
@@ -308,6 +348,8 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
   }
 
   try {
+    const cdpMappedPayload = remapNetworkFields(paymentPayload);
+    const cdpMappedRequirements = remapNetworkFields(paymentRequirements);
     const verify = await callFacilitator('verify', {
       x402Version: x402Version ?? paymentPayload.x402Version ?? 2,
       paymentPayload,
@@ -315,13 +357,25 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
     });
     return {
       ok: true,
-      result: summarizeVerifyResult(verify)
+      result: summarizeVerifyResult(verify),
+      network_mapping: {
+        submitted_payment_network: paymentPayload?.network ?? null,
+        submitted_requirements_network: paymentRequirements?.network ?? null,
+        cdp_payment_network: cdpMappedPayload?.network ?? null,
+        cdp_requirements_network: cdpMappedRequirements?.network ?? null
+      }
     };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
-      parsed_error: parseFacilitatorError(error)
+      parsed_error: parseFacilitatorError(error),
+      network_mapping: {
+        submitted_payment_network: paymentPayload?.network ?? null,
+        submitted_requirements_network: paymentRequirements?.network ?? null,
+        cdp_payment_network: remapNetworkValue(paymentPayload?.network ?? ''),
+        cdp_requirements_network: remapNetworkValue(paymentRequirements?.network ?? '')
+      }
     };
   }
 }

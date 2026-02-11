@@ -123,6 +123,18 @@ export default async function handler(req, res) {
         transaction_data:
           'For permit2, payload.transaction.data must be ERC20 approve(PERMIT2_ADDRESS, MAX_UINT256) calldata, not empty 0x.'
       },
+      error_to_fix_map: {
+        auth_message_template:
+          'This is re-download helper text only. Continue purchase flow by submitting PAYMENT-SIGNATURE on the same /download endpoint.',
+        no_matching_payment_requirements:
+          'Rebuild payload from the latest PAYMENT-REQUIRED. accepted must exactly equal accepts[0], including maxTimeoutSeconds and extra fields.',
+        payment_header_detected_but_not_verified:
+          'Regenerate signature from the latest PAYMENT-REQUIRED and ensure method-specific shape is correct (permit2 vs eip3009).',
+        cdp_schema_invalid:
+          'For permit2 include payload.from + payload.permit2Authorization + payload.transaction + payload.signature. Do not send payload.permit2 or payload.authorization.',
+        network_mismatch:
+          'Use top-level network "eip155:8453" exactly; avoid "base".'
+      },
       payload_requirements: {
         critical: 'For x402 v2, include top-level accepted object. If accepted is missing or modified, server returns: No matching payment requirements.',
         transfer_method: paymentRequired?.accepts?.[0]?.extra?.assetTransferMethod || 'eip3009',

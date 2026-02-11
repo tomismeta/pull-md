@@ -83,6 +83,21 @@ If you get `No matching payment requirements`:
 - You likely omitted or mutated `accepted`.
 - Rebuild payload from the latest `PAYMENT-REQUIRED` and retry.
 
+If you get `auth_message_template` in `402`:
+- This is optional re-download helper text, not purchase denial.
+- Continue purchase flow with `PAYMENT-SIGNATURE`.
+
+If you get `flow_hint` about header detected but not verified/settled:
+- Re-sign from latest `PAYMENT-REQUIRED`.
+- Confirm method-specific fields are exact for permit2 vs eip3009.
+- Confirm top-level `network` equals `eip155:8453` exactly.
+- SoulStarter will remap facilitator-bound network fields to CDP enum (`base`) internally; do not sign `base` in the agent payload.
+
+If facilitator reports schema errors (`paymentPayload is invalid`, `must match oneOf`):
+- Permit2 payload must include: `payload.from`, `payload.permit2Authorization`, `payload.transaction`, `payload.signature`.
+- Do not send `payload.permit2`.
+- Do not include `payload.authorization` in permit2 mode.
+
 ### Bankr Capability Mapping
 
 Use these Bankr capabilities explicitly:

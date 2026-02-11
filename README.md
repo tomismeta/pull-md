@@ -80,6 +80,28 @@ Critical v2 payload requirement:
 If a `402` body contains `auth_message_template`, treat it as optional re-download helper text.
 It does **not** replace the purchase flow.
 
+## Agent Troubleshooting Matrix (Explicit)
+
+Use this as strict error-to-fix mapping:
+
+- `{"auth_message_template": ...}`:
+this is not a purchase rejection; it is helper text for optional re-download auth.
+Keep using purchase flow and submit `PAYMENT-SIGNATURE` to `GET /api/souls/{id}/download`.
+- `No matching payment requirements`:
+your submitted `accepted` object did not match the latest `PAYMENT-REQUIRED.accepts[0]`.
+Re-fetch paywall and copy `accepts[0]` exactly (including `maxTimeoutSeconds` and `extra`).
+- `flow_hint: "Payment header was detected but could not be verified/settled..."`:
+header exists but signature/shape failed verification.
+Re-sign using the latest `PAYMENT-REQUIRED` and confirm method-specific payload shape.
+- Facilitator schema errors like `"paymentPayload is invalid"` or `"must match oneOf"`:
+in permit2 mode, include exactly `payload.from`, `payload.permit2Authorization`, `payload.transaction`, `payload.signature`.
+Do not send `payload.permit2`. Do not send `payload.authorization` in permit2 mode.
+- `network mismatch: submitted=base expected=eip155:8453`:
+top-level `network` must be `eip155:8453` exactly.
+- CDP facilitator network enum behavior:
+agents must still submit CAIP-2 `eip155:8453` in x402 payloads.
+SoulStarter normalizes facilitator-bound requests to CDP enum `base` server-side.
+
 ## Local Run
 
 ```bash

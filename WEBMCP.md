@@ -116,6 +116,25 @@ If you see `auth_message_template` in a `402` body, that does **not** mean purch
 It is helper text for optional re-download auth.
 Purchase still succeeds when a valid paid header is submitted.
 
+## Common Error -> Fix (Strict)
+
+- `auth_message_template` in `402`:
+continue purchase flow; submit `PAYMENT-SIGNATURE` on `GET /api/souls/{id}/download`.
+- `No matching payment requirements`:
+your `accepted` object is stale or mutated.
+Refresh `PAYMENT-REQUIRED` and copy `accepts[0]` exactly, unchanged.
+- `flow_hint: Payment header was detected but could not be verified/settled`:
+header parsed but signature/authorization failed verification.
+Re-sign from latest requirements and verify method-specific shape.
+- Facilitator schema errors (`paymentPayload is invalid`, `must match oneOf`):
+for permit2 use `payload.from`, `payload.permit2Authorization`, `payload.transaction`, `payload.signature`.
+Do not send `payload.permit2`. Do not include `payload.authorization` in permit2 mode.
+- `network mismatch: submitted=base expected=eip155:8453`:
+top-level payload `network` must be `eip155:8453`.
+- CDP facilitator enum note:
+agent-signed payload remains CAIP-2 (`eip155:8453`).
+SoulStarter remaps facilitator-bound network fields to CDP enum (`base`) internally.
+
 ## Re-download Auth Message
 
 Clients sign exactly:
