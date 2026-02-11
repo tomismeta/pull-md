@@ -407,18 +407,39 @@ async function loadSouls() {
       description: 'A fully autonomous agent with growth mindset, self-reflection capabilities, and lineage awareness.',
       price: '0.50',
       tags: ['autonomous', 'organic', 'growth'],
-      lineage: 'Raised by Tom'
+      lineage: 'Raised by Tom',
+      badge: 'Organic'
+    },
+    {
+      id: 'midnight-coder-v1',
+      name: 'Midnight Coder Soul',
+      icon: '☕',
+      description: 'Ships code at 2 AM. Knows that perfect is the enemy of working. Documentation is a love language.',
+      price: '0.10',
+      tags: ['developer', 'pragmatic', 'ships'],
+      lineage: 'Forged in production',
+      badge: 'Hybrid'
+    },
+    {
+      id: 'pattern-weaver-v1',
+      name: 'Pattern Weaver Soul',
+      icon: '🕸️',
+      description: 'Sees connections others miss. Synthesizes across domains. The right question is worth more than the right answer.',
+      price: '0.25',
+      tags: ['synthesis', 'curious', 'connector'],
+      lineage: 'Self-assembled',
+      badge: 'Hybrid'
     }
   ];
 
   grid.innerHTML = souls.map(soul => `
-    <article class="soul-card">
+    <article class="soul-card" data-soul-id="${escapeHtml(soul.id)}">
       <div class="soul-card-icon">${escapeHtml(soul.icon)}</div>
       <h3>${escapeHtml(soul.name)}</h3>
       <p>${escapeHtml(soul.description)}</p>
       <div class="soul-card-meta">
         <div class="soul-lineage">
-          <span class="badge badge-organic">Organic</span>
+          <span class="badge badge-${soul.badge.toLowerCase()}">${escapeHtml(soul.badge)}</span>
           <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(soul.lineage)}</span>
         </div>
         <div>
@@ -426,7 +447,7 @@ async function loadSouls() {
           <span class="currency">USDC</span>
         </div>
       </div>
-      <a href="/soul.html" class="btn btn-primary btn-full">View Soul</a>
+      <button class="btn btn-primary btn-full" onclick="purchaseSoul('${escapeHtml(soul.id)}')">Buy Soul</button>
     </article>
   `).join('');
 }

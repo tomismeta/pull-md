@@ -84,8 +84,14 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid soul ID' });
   }
   
-  const validSouls = ['meta-starter-v1'];
-  if (!validSouls.includes(id)) {
+  // Soul catalog with prices (in USDC with 6 decimals)
+  const SOUL_CATALOG = {
+    'meta-starter-v1': { price: '500000', priceDisplay: '$0.50' },      // $0.50
+    'midnight-coder-v1': { price: '100000', priceDisplay: '$0.10' },     // $0.10
+    'pattern-weaver-v1': { price: '250000', priceDisplay: '$0.25' }      // $0.25
+  };
+  
+  if (!SOUL_CATALOG[id]) {
     return res.status(404).json({ error: 'Soul not found' });
   }
 
@@ -93,7 +99,8 @@ export default async function handler(req, res) {
     usdcAddress: USDC_ADDRESS,
     sellerAddress: process.env.SELLER_ADDRESS?.trim(),
     network: 'eip155:8453',
-    price: '500000'
+    price: SOUL_CATALOG[id].price,
+    priceDisplay: SOUL_CATALOG[id].priceDisplay
   };
 
   if (!CONFIG.sellerAddress) {
@@ -122,7 +129,7 @@ export default async function handler(req, res) {
     return res.status(402).json({
       error: 'Payment required',
       message: 'This soul requires payment. Please provide a payment signature.',
-      price: '$0.50',
+      price: CONFIG.priceDisplay,
       currency: 'USDC',
       network: 'Base'
     });
