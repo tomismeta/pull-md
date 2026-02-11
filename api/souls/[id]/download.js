@@ -231,8 +231,12 @@ export default async function handler(req, res) {
     
     if (serviceWalletKey) {
       try {
-        const serviceWallet = new ethers.Wallet(serviceWalletKey, provider);
+        // Handle key format - ensure it has 0x prefix
+        const formattedKey = serviceWalletKey.startsWith('0x') ? serviceWalletKey : '0x' + serviceWalletKey;
+        const serviceWallet = new ethers.Wallet(formattedKey, provider);
         const usdcWithSigner = usdc.connect(serviceWallet);
+        
+        console.log('Submitting USDC transfer from', auth.from, 'to', auth.to, 'amount', auth.value);
         
         const tx = await usdcWithSigner.transferWithAuthorization(
           auth.from,
@@ -250,10 +254,14 @@ export default async function handler(req, res) {
         txHash = tx.hash;
         console.log('USDC transfer submitted:', txHash);
         
-        // Wait for confirmation (optional - can be async)
-        // await tx.wait();
+        // Wait for confirmation
+        const receipt = await tx.wait();
+        console.log('USDC transfer confirmed in block:', receipt.blockNumber);
       } catch (txError) {
-        console.error('Transaction submission failed:', txError);
+        console.error('Transaction submission failed:', txError.message);
+        if (txError.error) {
+          console.error('Error details:', txError.error.message);
+        }
         // Continue anyway - authorization is valid, user can submit manually
       }
     } else {
@@ -270,29 +278,50 @@ export default async function handler(req, res) {
       noncesArray.slice(-5000).forEach(n => usedNonces.add(n));
     }
 
-    // Load soul content from file
-    let soulContent;
-    try {
-      const soulPath = path.join(process.cwd(), 'souls', `${id}.md`);
-      soulContent = await fs.readFile(soulPath, 'utf-8');
-    } catch (e) {
-      // Fallback to env var for backward compatibility
-      soulContent = process.env[`SOUL_${id.replace(/-/g, '_').toUpperCase()}`];
+    // Load ALL soul contents - buying one unlocks all
+    const allSouls = [];
+    const soulIds = Object.keys(SOUL_CATALOG);
+    
+    for (const soulId of soulIds) {
+      try {
+        const soulPath = path.join(process.cwd(), 'souls', `${soulId}.md`);
+        const content = await fs.readFile(soulPath, 'utf-8');
+        allSouls.push(`\n---\n# ${SOUL_CATALOG[soulId].priceDisplay} - ${soulId}\n---\n\n${content}`);
+      } catch (e) {
+        // Fallback to env var
+        const envContent = process.env[`SOUL_${soulId.replace(/-/g, '_').toUpperCase()}`];
+        if (envContent) {
+          allSouls.push(`\n---\n# ${SOUL_CATALOG[soulId].priceDisplay} - ${soulId}\n---\n\n${envContent}`);
+        }
+      }
     }
     
-    if (!soulContent) {
+    if (allSouls.length === 0) {
       return res.status(500).json({ error: 'Soul content unavailable' });
     }
 
+    const packageContent = `# 🎁 SOUL STARTER COLLECTION
+
+You purchased: **${SOUL_CATALOG[id].priceDisplay}** - ${id}
+
+**BONUS: All souls unlocked!** Enjoy the complete collection.
+
+${allSouls.join('\n')}
+
+---
+*Acquired from SoulStarter — lineage matters.*
+`;
+
     res.setHeader('Content-Type', 'text/markdown');
-    res.setHeader('Content-Disposition', `attachment; filename="${id}-SOUL.md"`);
+    res.setHeader('Content-Disposition', `attachment; filename="soulstarter-collection.md"`);
     res.setHeader('PAYMENT-RESPONSE', Buffer.from(JSON.stringify({
       settled: !!txHash,
       txHash: txHash || 'authorization-valid-submit-manually',
-      message: txHash ? 'USDC transfer submitted' : 'Authorization valid - submit manually'
+      message: txHash ? 'USDC transfer submitted' : 'Authorization valid - submit manually',
+      unlockedSouls: soulIds
     })).toString('base64'));
     
-    return res.send(soulContent);
+    return res.send(packageContent);
 
   } catch (error) {
     console.error('Payment processing error:', error);
