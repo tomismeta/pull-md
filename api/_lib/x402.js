@@ -223,8 +223,13 @@ function normalizePaymentPayloadShapeForFacilitator(paymentPayload, paymentRequi
       nextPayload.authorization = normalizePermit2Authorization(nextPayload.authorization);
     }
     if (nextPayload.transaction && typeof nextPayload.transaction === 'object') {
-      const txData = nextPayload.transaction.data;
-      nextPayload.transaction = typeof txData === 'string' ? txData : JSON.stringify(nextPayload.transaction);
+      nextPayload.transaction = {
+        ...nextPayload.transaction,
+        to: nextPayload.transaction.to == null ? nextPayload.transaction.to : String(nextPayload.transaction.to),
+        data: nextPayload.transaction.data == null ? nextPayload.transaction.data : String(nextPayload.transaction.data),
+        value:
+          nextPayload.transaction.value == null ? nextPayload.transaction.value : toStringNumber(nextPayload.transaction.value)
+      };
     }
     delete nextPayload.permit2;
   } else if (transferMethod === 'eip3009') {
