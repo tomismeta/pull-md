@@ -31,9 +31,5 @@
       "src": "/(.*)",
       "dest": "/$1"
     }
-  ],
-  "env": {
-    "SELLER_ADDRESS": "@seller_address",
-    "SOUL_META_STARTER_V1": "@soul_meta_starter_v1"
-  }
+  ]
 }
