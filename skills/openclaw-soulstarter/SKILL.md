@@ -72,7 +72,8 @@ If `401` or `402`, continue to purchase flow.
 ### Wallet-specific signing notes
 
 - Standard wallet:
-Create EIP-712 `TransferWithAuthorization` typed data from `PAYMENT-REQUIRED.accepts[0]` and sign with the buyer wallet.
+Read `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`:
+`permit2` -> sign `PermitWitnessTransferFrom`; `eip3009` -> sign `TransferWithAuthorization`.
 - Bankr wallet:
 Use Bankr Agent API typed-data signing:
 `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then pass final base64 JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
@@ -91,7 +92,7 @@ Use these Bankr capabilities explicitly:
 - Read the Bankr EVM wallet address for `authorization.from`.
 
 2. `POST /agent/sign`:
-- Sign `TransferWithAuthorization` typed data (`eth_signTypedData_v4`).
+- Sign typed data based on `assetTransferMethod` (`PermitWitnessTransferFrom` for permit2, `TransferWithAuthorization` for eip3009).
 
 3. `POST /agent/submit`:
 - Not required for SoulStarter purchase flow.

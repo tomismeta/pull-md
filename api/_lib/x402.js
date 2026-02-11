@@ -2,6 +2,7 @@ import { x402HTTPResourceServer, x402ResourceServer } from '@x402/core/server';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
 import { generateJwt } from '@coinbase/cdp-sdk/auth';
 
+const BASE_MAINNET_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const DEFAULT_FACILITATORS = [
   // Production facilitator (requires proper CDP auth if your account/workspace enforces it)
   'https://api.cdp.coinbase.com/platform/v2/x402',
@@ -398,12 +399,21 @@ class NodeAdapter {
 }
 
 function routeConfigForSoul({ soulId, soul, sellerAddress }) {
+  const assetTransferMethod = getAssetTransferMethod();
   return {
     accepts: {
       scheme: 'exact',
       network: 'eip155:8453',
       payTo: sellerAddress,
-      price: soul.priceDisplay,
+      price: {
+        amount: soul.priceMicroUsdc,
+        asset: BASE_MAINNET_USDC,
+        extra: {
+          name: 'USD Coin',
+          version: '2',
+          assetTransferMethod
+        }
+      },
       maxTimeoutSeconds: 300
     },
     description: `Soul purchase for ${soulId}`,
@@ -417,6 +427,11 @@ function routeConfigForSoul({ soulId, soul, sellerAddress }) {
       }
     })
   };
+}
+
+function getAssetTransferMethod() {
+  const raw = String(process.env.X402_ASSET_TRANSFER_METHOD || 'permit2').trim().toLowerCase();
+  return raw === 'eip3009' ? 'eip3009' : 'permit2';
 }
 
 export async function getX402HTTPServer({ soulId, soul, sellerAddress }) {

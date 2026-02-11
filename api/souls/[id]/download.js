@@ -196,6 +196,8 @@ function buildPaymentDebug(req, paymentRequired) {
   const submitted = decodeSubmittedPayment(req);
   const expected = paymentRequired?.accepts?.[0] || null;
   const auth = submitted?.payload?.authorization || null;
+  const permit2Auth = submitted?.payload?.permit2Authorization || null;
+  const transferMethod = String(expected?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
   const expectedChainId = toChainId(expected?.network);
   const nowSec = Math.floor(Date.now() / 1000);
 
@@ -218,7 +220,9 @@ function buildPaymentDebug(req, paymentRequired) {
           hasAccepted: Boolean(submitted.accepted),
           hasPayload: Boolean(submitted.payload),
           hasAuthorization: Boolean(submitted.payload?.authorization),
+          hasPermit2Authorization: Boolean(submitted.payload?.permit2Authorization),
           hasSignature: Boolean(submitted.payload?.signature),
+          hasTransaction: Boolean(submitted.payload?.transaction),
           signatureHexLength: typeof submitted.payload?.signature === 'string' ? submitted.payload.signature.length : null
         }
       : null,
@@ -249,13 +253,32 @@ function buildPaymentDebug(req, paymentRequired) {
             valid_before_not_expired: isBigIntGt(auth.validBefore, String(nowSec + 6))
           }
         : null,
+    permit2_checks:
+      permit2Auth && expected
+        ? {
+            from: permit2Auth.from ?? null,
+            token: permit2Auth.permitted?.token ?? null,
+            amount: permit2Auth.permitted?.amount ?? null,
+            spender: permit2Auth.spender ?? null,
+            deadline: permit2Auth.deadline ?? null,
+            witness_to: permit2Auth.witness?.to ?? null,
+            witness_validAfter: permit2Auth.witness?.validAfter ?? null,
+            token_matches_asset: equalAddress(permit2Auth.permitted?.token, expected.asset),
+            witness_to_matches_payTo: equalAddress(permit2Auth.witness?.to, expected.payTo),
+            amount_gte_required: isBigIntGte(permit2Auth.permitted?.amount, expected.amount),
+            witness_valid_after_not_future: isBigIntLte(permit2Auth.witness?.validAfter, String(nowSec)),
+            deadline_not_expired: isBigIntGt(permit2Auth.deadline, String(nowSec + 6))
+          }
+        : null,
     eip712_hint: expected
       ? {
-          likely_primary_type: 'TransferWithAuthorization',
+          likely_primary_type: transferMethod === 'permit2' ? 'PermitWitnessTransferFrom' : 'TransferWithAuthorization',
           chainId: expectedChainId,
-          verifyingContract: expected.asset ?? null,
-          domainName: expected?.extra?.name ?? 'USD Coin',
-          domainVersion: expected?.extra?.version ?? '2',
+          verifyingContract:
+            transferMethod === 'permit2' ? '0x000000000022D473030F116dDEE9F6B43aC78BA3' : expected.asset ?? null,
+          domainName: transferMethod === 'permit2' ? 'Permit2' : expected?.extra?.name ?? 'USD Coin',
+          domainVersion: transferMethod === 'permit2' ? null : expected?.extra?.version ?? '2',
+          transferMethod,
           note: 'Sign against the exact accepted requirement and current timestamps/nonce.'
         }
       : null,
@@ -287,7 +310,36 @@ function buildPaymentDebug(req, paymentRequired) {
     );
   }
 
-  if (auth && expected) {
+  if (transferMethod === 'permit2' && permit2Auth && expected) {
+    if (!equalAddress(permit2Auth.permitted?.token, expected.asset)) {
+      info.mismatch_hints.push(
+        `permit2.permitted.token mismatch: submitted=${permit2Auth.permitted?.token} expected=${expected.asset}`
+      );
+    }
+    if (!equalAddress(permit2Auth.witness?.to, expected.payTo)) {
+      info.mismatch_hints.push(`permit2.witness.to mismatch: submitted=${permit2Auth.witness?.to} expected=${expected.payTo}`);
+    }
+    if (!isBigIntGte(permit2Auth.permitted?.amount, expected.amount)) {
+      info.mismatch_hints.push(
+        `permit2.permitted.amount too low: submitted=${permit2Auth.permitted?.amount} expected>=${expected.amount}`
+      );
+    }
+    if (!isBigIntLte(permit2Auth.witness?.validAfter, String(nowSec))) {
+      info.mismatch_hints.push(
+        `permit2.witness.validAfter is in the future: submitted=${permit2Auth.witness?.validAfter} now=${nowSec}`
+      );
+    }
+    if (!isBigIntGt(permit2Auth.deadline, String(nowSec + 6))) {
+      info.mismatch_hints.push(
+        `permit2.deadline expired/too close: submitted=${permit2Auth.deadline} now_plus_6=${nowSec + 6}`
+      );
+    }
+    if (!submitted?.payload?.transaction) {
+      info.mismatch_hints.push('Missing payload.transaction for permit2 payment.');
+    }
+  } else if (transferMethod === 'permit2' && submitted?.payload && !permit2Auth) {
+    info.mismatch_hints.push('Missing payload.permit2Authorization object for permit2 payment.');
+  } else if (auth && expected) {
     if (!equalAddress(auth.to, expected.payTo)) {
       info.mismatch_hints.push(`authorization.to mismatch: submitted=${auth.to} expected=${expected.payTo}`);
     }
@@ -302,7 +354,7 @@ function buildPaymentDebug(req, paymentRequired) {
         `authorization.validBefore expired/too close: submitted=${auth.validBefore} now_plus_6=${nowSec + 6}`
       );
     }
-  } else if (submitted.payload && !auth) {
+  } else if (submitted.payload && !auth && !permit2Auth) {
     info.mismatch_hints.push('Missing payload.authorization object for exact/eip3009 payment.');
   }
 

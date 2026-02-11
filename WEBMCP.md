@@ -58,8 +58,13 @@ base64(JSON.stringify({
   network: "eip155:8453",
   accepted: PAYMENT_REQUIRED.accepts[0], // exact object, unchanged
   payload: {
-    authorization: { ...TransferWithAuthorization },
-    signature: "0x..."
+    // if accepted.extra.assetTransferMethod === "permit2":
+    // permit2Authorization: { ...PermitWitnessTransferFrom message fields },
+    // transaction: { to: accepted.asset, data: "0x..." },
+    // signature: "0x..."
+    // else (eip3009):
+    // authorization: { ...TransferWithAuthorization },
+    // signature: "0x..."
   }
 }))
 ```
@@ -71,7 +76,8 @@ Important:
 #### Wallet Notes
 
 - Standard wallet:
-Build EIP-712 domain/types/message from `PAYMENT-REQUIRED.accepts[0]`, sign typed data, send base64 JSON payload.
+Read `accepted.extra.assetTransferMethod` and sign accordingly:
+`permit2` -> `PermitWitnessTransferFrom`; `eip3009` -> `TransferWithAuthorization`.
 - Bankr wallet:
 Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
 - Bankr helper tool:

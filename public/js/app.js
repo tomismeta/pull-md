@@ -23,6 +23,29 @@ const TRANSFER_WITH_AUTHORIZATION_TYPE = {
   ]
 };
 
+const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
+const X402_EXACT_PERMIT2_PROXY = '0x4020615294c913F045dc10f0a5cdEbd86c280001';
+const MAX_UINT256_DEC = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
+
+const PERMIT2_WITNESS_TYPES = {
+  PermitWitnessTransferFrom: [
+    { name: 'permitted', type: 'TokenPermissions' },
+    { name: 'spender', type: 'address' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+    { name: 'witness', type: 'Witness' }
+  ],
+  TokenPermissions: [
+    { name: 'token', type: 'address' },
+    { name: 'amount', type: 'uint256' }
+  ],
+  Witness: [
+    { name: 'to', type: 'address' },
+    { name: 'validAfter', type: 'uint256' },
+    { name: 'extra', type: 'bytes' }
+  ]
+};
+
 let provider = null;
 let signer = null;
 let walletAddress = null;
@@ -214,7 +237,54 @@ async function buildX402PaymentSignature(paymentRequired) {
     throw new Error('Invalid payment network');
   }
 
+  const transferMethod = String(accepted.extra?.assetTransferMethod || 'eip3009').toLowerCase();
   const now = Math.floor(Date.now() / 1000);
+  if (transferMethod === 'permit2') {
+    const permit2Authorization = {
+      from: walletAddress,
+      permitted: {
+        token: accepted.asset,
+        amount: accepted.amount
+      },
+      spender: X402_EXACT_PERMIT2_PROXY,
+      nonce: ethers.BigNumber.from(ethers.utils.randomBytes(32)).toString(),
+      deadline: String(now + (accepted.maxTimeoutSeconds || 300)),
+      witness: {
+        to: accepted.payTo,
+        validAfter: String(now - 600),
+        extra: '0x'
+      }
+    };
+
+    const permitDomain = {
+      name: 'Permit2',
+      chainId,
+      verifyingContract: PERMIT2_ADDRESS
+    };
+    const permitSignature = await signer._signTypedData(permitDomain, PERMIT2_WITNESS_TYPES, permit2Authorization);
+    const approveData = new ethers.utils.Interface(['function approve(address spender, uint256 amount)']).encodeFunctionData(
+      'approve',
+      [PERMIT2_ADDRESS, MAX_UINT256_DEC]
+    );
+
+    return {
+      x402Version: paymentRequired.x402Version,
+      scheme: accepted.scheme,
+      network: accepted.network,
+      payload: {
+        permit2Authorization,
+        signature: permitSignature,
+        transaction: {
+          to: accepted.asset,
+          data: approveData
+        }
+      },
+      accepted,
+      resource: paymentRequired.resource,
+      extensions: paymentRequired.extensions
+    };
+  }
+
   const authorization = {
     from: walletAddress,
     to: accepted.payTo,
@@ -223,16 +293,13 @@ async function buildX402PaymentSignature(paymentRequired) {
     validBefore: String(now + (accepted.maxTimeoutSeconds || 300)),
     nonce: ethers.utils.hexlify(ethers.utils.randomBytes(32))
   };
-
   const domain = {
     name: accepted.extra.name,
     version: accepted.extra.version,
     chainId,
     verifyingContract: accepted.asset
   };
-
   const signature = await signer._signTypedData(domain, TRANSFER_WITH_AUTHORIZATION_TYPE, authorization);
-
   return {
     x402Version: paymentRequired.x402Version,
     scheme: accepted.scheme,

@@ -81,7 +81,8 @@ export default async function handler(req, res) {
       },
       instructions: {
         step_1: 'Decode PAYMENT-REQUIRED (base64 JSON) and keep accepts[0] exactly (do not edit fields/order)',
-        step_2: 'Sign EIP-712 TransferWithAuthorization from accepts[0], then build x402 payload including accepted',
+        step_2:
+          'Use accepts[0].extra.assetTransferMethod: permit2 -> sign PermitWitnessTransferFrom, eip3009 -> sign TransferWithAuthorization; then build x402 payload including accepted',
         step_3: 'Retry GET /api/souls/{soul_id}/download with header PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT)',
         step_4: 'On success, store X-PURCHASE-RECEIPT for future re-downloads'
       },
@@ -90,9 +91,10 @@ export default async function handler(req, res) {
         accepted_alternatives: ['PAYMENT: <base64(JSON x402 payload)>', 'X-PAYMENT: <base64(JSON x402 payload)>']
       },
       wallet_examples: {
-        standard_wallet: 'Sign TransferWithAuthorization typed data from PAYMENT-REQUIRED.accepts[0], then send payload in PAYMENT-SIGNATURE.',
+        standard_wallet:
+          'If assetTransferMethod=permit2, sign PermitWitnessTransferFrom and include permit2Authorization + transaction. If eip3009, sign TransferWithAuthorization.',
         bankr_wallet:
-          'Use Bankr Agent API /agent/sign (eth_signTypedData_v4) for TransferWithAuthorization, or call /api/mcp/tools/purchase_soul_bankr.'
+          'Use Bankr Agent API /agent/sign (eth_signTypedData_v4) based on assetTransferMethod, or call /api/mcp/tools/purchase_soul_bankr.'
       },
       payload_requirements: {
         critical: 'For x402 v2, include top-level accepted object. If accepted is missing or modified, server returns: No matching payment requirements.',

@@ -1,9 +1,13 @@
 import crypto from 'crypto';
+import { ethers } from 'ethers';
 import { getSoul, soulIds } from '../../_lib/catalog.js';
 import { getSellerAddress, setCors } from '../../_lib/payments.js';
 import { createRequestContext, getX402HTTPServer } from '../../_lib/x402.js';
 
 const BANKR_API_BASE = 'https://api.bankr.bot';
+const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
+const X402_EXACT_PERMIT2_PROXY = '0x4020615294c913F045dc10f0a5cdEbd86c280001';
+const MAX_UINT256_DEC = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -108,14 +112,19 @@ export default async function handler(req, res) {
     }
 
     bankrDebug.stage = 'build_typed_data';
-    const typedData = buildTypedData({ paymentRequired, accepted, payer });
+    const artifacts = buildSigningArtifacts({ paymentRequired, accepted, payer });
+    const typedData = artifacts.typedData;
     bankrDebug.sign = {
+      transfer_method: artifacts.method,
       chainId: typedData.domain?.chainId ?? null,
       verifyingContract: typedData.domain?.verifyingContract ?? null,
       domainName: typedData.domain?.name ?? null,
       domainVersion: typedData.domain?.version ?? null,
       primaryType: typedData.primaryType,
-      authorization: summarizeAuthorization(typedData.message)
+      authorization:
+        artifacts.method === 'permit2'
+          ? summarizePermit2Authorization(artifacts.payloadTemplate.permit2Authorization)
+          : summarizeAuthorization(typedData.message)
     };
 
     bankrDebug.stage = 'bankr_sign';
@@ -135,15 +144,23 @@ export default async function handler(req, res) {
     }
     const signature = signResult.signature;
 
+    const payloadBody =
+      artifacts.method === 'permit2'
+        ? {
+            ...artifacts.payloadTemplate,
+            signature
+          }
+        : {
+            ...artifacts.payloadTemplate,
+            signature
+          };
+
     const paymentPayload = {
       x402Version: paymentRequired?.x402Version ?? 2,
       scheme: accepted.scheme,
       network: accepted.network,
       accepted,
-      payload: {
-        authorization: typedData.message,
-        signature
-      }
+      payload: payloadBody
     };
     const encodedPayment = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
 
@@ -279,13 +296,76 @@ async function signTypedDataWithBankr({ bankrApiKey, typedData }) {
   };
 }
 
-function buildTypedData({ paymentRequired, accepted, payer }) {
+function buildSigningArtifacts({ paymentRequired, accepted, payer }) {
   const chainId = parseChainId(accepted.network);
   if (!chainId) {
     throw new Error(`Unsupported network format: ${accepted.network}`);
   }
 
+  const method = String(accepted?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
   const now = Math.floor(Date.now() / 1000);
+  if (method === 'permit2') {
+    const permit2Authorization = {
+      from: payer,
+      permitted: {
+        token: accepted.asset,
+        amount: accepted.amount
+      },
+      spender: X402_EXACT_PERMIT2_PROXY,
+      nonce: BigInt(`0x${crypto.randomBytes(32).toString('hex')}`).toString(),
+      deadline: String(now + Number(accepted.maxTimeoutSeconds || 300)),
+      witness: {
+        to: accepted.payTo,
+        validAfter: String(now - 600),
+        extra: '0x'
+      }
+    };
+
+    const approveData = new ethers.utils.Interface(['function approve(address spender, uint256 amount)']).encodeFunctionData(
+      'approve',
+      [PERMIT2_ADDRESS, MAX_UINT256_DEC]
+    );
+
+    return {
+      method: 'permit2',
+      typedData: {
+        domain: {
+          name: 'Permit2',
+          chainId,
+          verifyingContract: PERMIT2_ADDRESS
+        },
+        types: {
+          PermitWitnessTransferFrom: [
+            { name: 'permitted', type: 'TokenPermissions' },
+            { name: 'spender', type: 'address' },
+            { name: 'nonce', type: 'uint256' },
+            { name: 'deadline', type: 'uint256' },
+            { name: 'witness', type: 'Witness' }
+          ],
+          TokenPermissions: [
+            { name: 'token', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+          ],
+          Witness: [
+            { name: 'to', type: 'address' },
+            { name: 'validAfter', type: 'uint256' },
+            { name: 'extra', type: 'bytes' }
+          ]
+        },
+        primaryType: 'PermitWitnessTransferFrom',
+        message: permit2Authorization,
+        x402Version: paymentRequired?.x402Version ?? 2
+      },
+      payloadTemplate: {
+        permit2Authorization,
+        transaction: {
+          to: accepted.asset,
+          data: approveData
+        }
+      }
+    };
+  }
+
   const authorization = {
     from: payer,
     to: accepted.payTo,
@@ -296,25 +376,31 @@ function buildTypedData({ paymentRequired, accepted, payer }) {
   };
 
   return {
-    domain: {
-      name: accepted?.extra?.name || 'USD Coin',
-      version: accepted?.extra?.version || '2',
-      chainId,
-      verifyingContract: accepted.asset
+    method: 'eip3009',
+    typedData: {
+      domain: {
+        name: accepted?.extra?.name || 'USD Coin',
+        version: accepted?.extra?.version || '2',
+        chainId,
+        verifyingContract: accepted.asset
+      },
+      types: {
+        TransferWithAuthorization: [
+          { name: 'from', type: 'address' },
+          { name: 'to', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'validAfter', type: 'uint256' },
+          { name: 'validBefore', type: 'uint256' },
+          { name: 'nonce', type: 'bytes32' }
+        ]
+      },
+      primaryType: 'TransferWithAuthorization',
+      message: authorization,
+      x402Version: paymentRequired?.x402Version ?? 2
     },
-    types: {
-      TransferWithAuthorization: [
-        { name: 'from', type: 'address' },
-        { name: 'to', type: 'address' },
-        { name: 'value', type: 'uint256' },
-        { name: 'validAfter', type: 'uint256' },
-        { name: 'validBefore', type: 'uint256' },
-        { name: 'nonce', type: 'bytes32' }
-      ]
-    },
-    primaryType: 'TransferWithAuthorization',
-    message: authorization,
-    x402Version: paymentRequired?.x402Version ?? 2
+    payloadTemplate: {
+      authorization
+    }
   };
 }
 
@@ -363,6 +449,20 @@ function summarizeAuthorization(auth) {
     validAfter: auth.validAfter ?? null,
     validBefore: auth.validBefore ?? null,
     nonce_bytes32: typeof auth.nonce === 'string' && /^0x[0-9a-fA-F]{64}$/.test(auth.nonce)
+  };
+}
+
+function summarizePermit2Authorization(auth) {
+  if (!auth || typeof auth !== 'object') return null;
+  return {
+    from: auth.from ?? null,
+    token: auth.permitted?.token ?? null,
+    amount: auth.permitted?.amount ?? null,
+    spender: auth.spender ?? null,
+    nonce: auth.nonce ?? null,
+    deadline: auth.deadline ?? null,
+    witness_to: auth.witness?.to ?? null,
+    witness_validAfter: auth.witness?.validAfter ?? null
   };
 }
 

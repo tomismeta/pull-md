@@ -63,7 +63,9 @@ Paid retry headers:
 Wallet notes:
 
 - Standard wallet:
-sign EIP-712 `TransferWithAuthorization` using `PAYMENT-REQUIRED.accepts[0]`.
+read `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`:
+`permit2` -> sign `PermitWitnessTransferFrom` and include `permit2Authorization` + `transaction`,
+`eip3009` -> sign `TransferWithAuthorization`.
 - Bankr wallet:
 use Bankr Agent API `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then submit the resulting base64 payload.
 - Bankr server-side helper:
