@@ -1,4 +1,5 @@
 import { getSoul, loadSoulContent, soulIds } from '../../_lib/catalog.js';
+import { ethers } from 'ethers';
 import {
   buildAuthMessage,
   createPurchaseReceipt,
@@ -145,10 +146,15 @@ export default async function handler(req, res) {
     }
 
     if (!settlement.success) {
+      const settlementDiagnostics = await buildSettlementDiagnostics({
+        paymentPayload: result.paymentPayload,
+        paymentRequirements: result.paymentRequirements
+      });
       return res.status(402).json({
         error: 'Settlement failed',
         reason: settlement.errorReason,
-        message: settlement.errorMessage
+        message: settlement.errorMessage,
+        settlement_diagnostics: settlementDiagnostics
       });
     }
 
@@ -541,4 +547,94 @@ function extractX402Error(error) {
   };
 
   return result;
+}
+
+async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements }) {
+  const payload = paymentPayload?.payload || {};
+  const auth = payload.authorization || null;
+  const transferMethod = String(paymentRequirements?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
+  const nowSec = Math.floor(Date.now() / 1000);
+  const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
+
+  const diagnostics = {
+    transfer_method: transferMethod,
+    payer: auth?.from ?? null,
+    authorization: auth
+      ? {
+          from: auth.from ?? null,
+          to: auth.to ?? null,
+          value: auth.value ?? null,
+          validAfter: auth.validAfter ?? null,
+          validBefore: auth.validBefore ?? null,
+          nonce: auth.nonce ?? null
+        }
+      : null,
+    checks: {
+      has_authorization: Boolean(auth),
+      to_matches_payTo: auth ? equalAddress(auth.to, paymentRequirements?.payTo) : null,
+      value_gte_required: auth ? isBigIntGte(auth.value, paymentRequirements?.amount) : null,
+      valid_after_not_future: auth ? isBigIntLte(auth.validAfter, String(nowSec)) : null,
+      valid_before_not_expired: auth ? isBigIntGt(auth.validBefore, String(nowSec + 6)) : null,
+      nonce_hex_32bytes: auth?.nonce ? /^0x[0-9a-fA-F]{64}$/.test(String(auth.nonce)) : null
+    },
+    chain_prechecks: null
+  };
+
+  if (!auth || !paymentRequirements?.asset) {
+    return diagnostics;
+  }
+
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl, 8453);
+    const erc20Abi = [
+      'function balanceOf(address account) view returns (uint256)',
+      'function authorizationState(address authorizer, bytes32 nonce) view returns (bool)',
+      'function transferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce,bytes signature) returns (bool)'
+    ];
+    const usdc = new ethers.Contract(paymentRequirements.asset, erc20Abi, provider);
+    const balance = await usdc.balanceOf(auth.from);
+    let authorizationUsed = null;
+    try {
+      authorizationUsed = await usdc.authorizationState(auth.from, auth.nonce);
+    } catch (_) {
+      authorizationUsed = null;
+    }
+
+    // Simulate transferWithAuthorization to surface revert reason candidates.
+    let transfer_simulation = { ok: null, error: null };
+    try {
+      const data = usdc.interface.encodeFunctionData('transferWithAuthorization', [
+        auth.from,
+        auth.to,
+        auth.value,
+        auth.validAfter,
+        auth.validBefore,
+        auth.nonce,
+        payload.signature
+      ]);
+      await provider.call({
+        to: paymentRequirements.asset,
+        data
+      });
+      transfer_simulation = { ok: true, error: null };
+    } catch (error) {
+      transfer_simulation = { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+
+    diagnostics.chain_prechecks = {
+      rpc_url: rpcUrl,
+      usdc_balance: balance?.toString?.() ?? String(balance),
+      required_amount: String(paymentRequirements.amount),
+      balance_gte_required: isBigIntGte(balance?.toString?.() ?? null, paymentRequirements.amount),
+      authorization_used: authorizationUsed == null ? null : Boolean(authorizationUsed),
+      transfer_simulation
+    };
+  } catch (error) {
+    diagnostics.chain_prechecks = {
+      rpc_url: rpcUrl,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+
+  return diagnostics;
 }
