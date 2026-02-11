@@ -1,5 +1,10 @@
 {
   "version": 2,
+  "functions": {
+    "api/souls/[id]/download.js": {
+      "includeFiles": "souls/**/*.md"
+    }
+  },
   "routes": [
     {
       "src": "/api/mcp/manifest",

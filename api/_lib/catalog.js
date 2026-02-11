@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 export const SOUL_CATALOG = {
   'meta-starter-v1': {
@@ -132,11 +133,20 @@ export async function loadSoulContent(id) {
   const soul = getSoul(id);
   if (!soul) return null;
 
-  const diskPath = path.join(process.cwd(), soul.contentFile);
-  try {
-    return await fs.readFile(diskPath, 'utf-8');
-  } catch (_) {
-    const envKey = `SOUL_${id.replace(/-/g, '_').toUpperCase()}`;
-    return process.env[envKey] || null;
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.join(process.cwd(), soul.contentFile),
+    path.resolve(moduleDir, '../../', soul.contentFile)
+  ];
+
+  for (const diskPath of candidates) {
+    try {
+      return await fs.readFile(diskPath, 'utf-8');
+    } catch (_) {
+      continue;
+    }
   }
+
+  const envKey = `SOUL_${id.replace(/-/g, '_').toUpperCase()}`;
+  return process.env[envKey] || null;
 }
