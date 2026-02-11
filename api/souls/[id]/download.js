@@ -186,6 +186,9 @@ function decodeSubmittedPayment(req) {
 function buildPaymentDebug(req, paymentRequired) {
   const submitted = decodeSubmittedPayment(req);
   const expected = paymentRequired?.accepts?.[0] || null;
+  const auth = submitted?.payload?.authorization || null;
+  const expectedChainId = toChainId(expected?.network);
+  const nowSec = Math.floor(Date.now() / 1000);
 
   const selectedHeader = req.headers['payment-signature']
     ? 'PAYMENT-SIGNATURE'
@@ -206,7 +209,8 @@ function buildPaymentDebug(req, paymentRequired) {
           hasAccepted: Boolean(submitted.accepted),
           hasPayload: Boolean(submitted.payload),
           hasAuthorization: Boolean(submitted.payload?.authorization),
-          hasSignature: Boolean(submitted.payload?.signature)
+          hasSignature: Boolean(submitted.payload?.signature),
+          signatureHexLength: typeof submitted.payload?.signature === 'string' ? submitted.payload.signature.length : null
         }
       : null,
     expected_fields: expected
@@ -217,6 +221,33 @@ function buildPaymentDebug(req, paymentRequired) {
           amount: expected.amount ?? null,
           asset: expected.asset ?? null,
           payTo: expected.payTo ?? null
+        }
+      : null,
+    accepted_exact_match: Boolean(expected && submitted?.accepted && deepEqual(submitted.accepted, expected)),
+    accepted_diff: expected && submitted?.accepted ? diffObjects(submitted.accepted, expected) : null,
+    authorization_checks:
+      auth && expected
+        ? {
+            from: auth.from ?? null,
+            to: auth.to ?? null,
+            value: auth.value ?? null,
+            validAfter: auth.validAfter ?? null,
+            validBefore: auth.validBefore ?? null,
+            nonce: auth.nonce ?? null,
+            to_matches_payTo: equalAddress(auth.to, expected.payTo),
+            value_gte_amount: isBigIntGte(auth.value, expected.amount),
+            valid_after_not_future: isBigIntLte(auth.validAfter, String(nowSec)),
+            valid_before_not_expired: isBigIntGt(auth.validBefore, String(nowSec + 6))
+          }
+        : null,
+    eip712_hint: expected
+      ? {
+          likely_primary_type: 'TransferWithAuthorization',
+          chainId: expectedChainId,
+          verifyingContract: expected.asset ?? null,
+          domainName: expected?.extra?.name ?? 'USD Coin',
+          domainVersion: expected?.extra?.version ?? '2',
+          note: 'Sign against the exact accepted requirement and current timestamps/nonce.'
         }
       : null,
     mismatch_hints: []
@@ -241,30 +272,118 @@ function buildPaymentDebug(req, paymentRequired) {
   if (expected?.network && submitted.network !== expected.network) {
     info.mismatch_hints.push(`network mismatch: submitted=${submitted.network} expected=${expected.network}`);
   }
-  if (!shallowEqual(selectedAcceptedSummary(submitted.accepted), selectedAcceptedSummary(expected))) {
-    info.mismatch_hints.push('accepted object does not match latest PAYMENT-REQUIRED.accepts[0].');
+  if (!info.accepted_exact_match) {
+    info.mismatch_hints.push(
+      'accepted object must exactly match latest PAYMENT-REQUIRED.accepts[0], including maxTimeoutSeconds and extra fields.'
+    );
+  }
+
+  if (auth && expected) {
+    if (!equalAddress(auth.to, expected.payTo)) {
+      info.mismatch_hints.push(`authorization.to mismatch: submitted=${auth.to} expected=${expected.payTo}`);
+    }
+    if (!isBigIntGte(auth.value, expected.amount)) {
+      info.mismatch_hints.push(`authorization.value too low: submitted=${auth.value} expected>=${expected.amount}`);
+    }
+    if (!isBigIntLte(auth.validAfter, String(nowSec))) {
+      info.mismatch_hints.push(`authorization.validAfter is in the future: submitted=${auth.validAfter} now=${nowSec}`);
+    }
+    if (!isBigIntGt(auth.validBefore, String(nowSec + 6))) {
+      info.mismatch_hints.push(
+        `authorization.validBefore expired/too close: submitted=${auth.validBefore} now_plus_6=${nowSec + 6}`
+      );
+    }
+  } else if (submitted.payload && !auth) {
+    info.mismatch_hints.push('Missing payload.authorization object for exact/eip3009 payment.');
   }
 
   return info;
 }
 
-function selectedAcceptedSummary(value) {
-  if (!value || typeof value !== 'object') return null;
-  return {
-    scheme: value.scheme ?? null,
-    network: value.network ?? null,
-    amount: value.amount ?? null,
-    asset: value.asset ?? null,
-    payTo: value.payTo ?? null
-  };
+function toChainId(network) {
+  if (typeof network !== 'string') return null;
+  const [, id] = network.split(':');
+  if (!id) return null;
+  const asNumber = Number(id);
+  return Number.isFinite(asNumber) ? asNumber : null;
 }
 
-function shallowEqual(a, b) {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  const keys = Object.keys(a);
-  for (const key of keys) {
-    if (a[key] !== b[key]) return false;
+function equalAddress(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function isBigIntGte(a, b) {
+  try {
+    return BigInt(String(a)) >= BigInt(String(b));
+  } catch (_) {
+    return false;
   }
-  return true;
+}
+
+function isBigIntLte(a, b) {
+  try {
+    return BigInt(String(a)) <= BigInt(String(b));
+  } catch (_) {
+    return false;
+  }
+}
+
+function isBigIntGt(a, b) {
+  try {
+    return BigInt(String(a)) > BigInt(String(b));
+  } catch (_) {
+    return false;
+  }
+}
+
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (a == null || b == null) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (typeof a === 'object') {
+    const aKeys = Object.keys(a).sort();
+    const bKeys = Object.keys(b).sort();
+    if (!deepEqual(aKeys, bKeys)) return false;
+    for (const key of aKeys) {
+      if (!deepEqual(a[key], b[key])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+function diffObjects(actual, expected, prefix = '') {
+  if (!actual || !expected || typeof actual !== 'object' || typeof expected !== 'object') return [];
+
+  const diffs = [];
+  const keys = new Set([...Object.keys(actual), ...Object.keys(expected)]);
+  for (const key of keys) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const a = actual[key];
+    const e = expected[key];
+    const aIsObj = a && typeof a === 'object' && !Array.isArray(a);
+    const eIsObj = e && typeof e === 'object' && !Array.isArray(e);
+
+    if (aIsObj && eIsObj) {
+      diffs.push(...diffObjects(a, e, path));
+      continue;
+    }
+
+    if (!deepEqual(a, e)) {
+      diffs.push({
+        field: path,
+        submitted: a ?? null,
+        expected: e ?? null
+      });
+    }
+  }
+  return diffs;
 }
