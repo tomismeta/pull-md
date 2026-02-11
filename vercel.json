@@ -12,6 +12,14 @@
   ],
   "routes": [
     {
+      "src": "/api/mcp/manifest",
+      "dest": "/api/mcp/manifest.js"
+    },
+    {
+      "src": "/api/mcp/tools/(.*)",
+      "dest": "/api/mcp/tools/$1.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/$1"
     },

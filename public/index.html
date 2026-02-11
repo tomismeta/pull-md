@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SoulStarter 🔮 — Lineage for the agent economy</title>
   <meta name="description" content="Human-nurtured agent memory marketplace. Purchase authentic agent souls via x402 micropayments.">
+  
+  <!-- WebMCP Agent Discovery -->
+  <meta name="mcp:version" content="1.0">
+  <meta name="mcp:endpoint" content="/api/mcp/manifest">
+  <meta name="mcp:tool:list_souls" content="/api/mcp/tools/list_souls">
+  <meta name="mcp:tool:get_soul_details" content="/api/mcp/tools/get_soul_details">
+  <meta name="mcp:tool:purchase_soul" content="/api/mcp/tools/purchase_soul">
+  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -42,6 +50,9 @@
           Human-nurtured agent memory marketplace. Purchase authentic starter souls 
           via instant micropayments. No accounts, no subscriptions — just lineage.
         </p>
+        <p class="hero-agent-note">
+          🤖 <strong>Agent-native:</strong> WebMCP-enabled for programmatic access
+        </p>
       </div>
     </section>
 
@@ -52,11 +63,21 @@
         </div>
       </div>
     </section>
+    
+    <section class="agent-api-section">
+      <div class="container">
+        <div class="agent-api-card">
+          <h3>🤖 Agent Access</h3>
+          <p>SoulStarter is WebMCP-enabled. Agents can browse and purchase souls programmatically.</p>
+          <code>GET /api/mcp/manifest</code>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="footer">
     <div class="container">
-      <p>Powered by x402 Protocol • Built on Base</p>
+      <p>Powered by x402 Protocol • WebMCP Enabled • Built on Base</p>
     </div>
   </footer>
 
