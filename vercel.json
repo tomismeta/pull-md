@@ -10,6 +10,10 @@
       "dest": "/api/mcp/tools/$1.js"
     },
     {
+      "src": "/api/souls/([^/]+)/download",
+      "dest": "/api/souls/[id]/download.js?id=$1"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/$1"
     },
