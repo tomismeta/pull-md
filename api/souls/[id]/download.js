@@ -231,7 +231,7 @@ export default async function handler(req, res) {
     try {
       console.log('Submitting to Coinbase Facilitator...');
       
-      const settleResponse = await fetch('https://api.cdp.coinbase.com/x402/facilitator/v1/settle', {
+      const settleResponse = await fetch('https://api.cdp.coinbase.com/platform/v2/x402', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
