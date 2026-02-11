@@ -225,52 +225,38 @@ export default async function handler(req, res) {
     const s = '0x' + sig.slice(64, 128);
     const v = parseInt(sig.slice(128, 130), 16);
 
-    // Submit transferWithAuthorization transaction
+    // Submit to Coinbase Facilitator
     let txHash = null;
-    const serviceWalletKey = process.env.SERVICE_WALLET_KEY?.trim();
     
-    if (serviceWalletKey) {
-      try {
-        // Handle key format - ensure it has 0x prefix and no whitespace
-        const cleanKey = serviceWalletKey.replace(/\s/g, '');
-        const formattedKey = cleanKey.startsWith('0x') ? cleanKey : '0x' + cleanKey;
-        const serviceWallet = new ethers.Wallet(formattedKey, provider);
-        const usdcWithSigner = usdc.connect(serviceWallet);
-        
-        console.log('Submitting USDC transfer from', auth.from, 'to', auth.to, 'amount', auth.value);
-        
-        const tx = await usdcWithSigner.transferWithAuthorization(
-          auth.from,
-          auth.to,
-          auth.value,
-          auth.validAfter,
-          auth.validBefore,
-          auth.nonce,
-          v,
-          r,
-          s,
-          { gasLimit: 100000 }
-        );
-        
-        txHash = tx.hash;
-        console.log('USDC transfer submitted:', txHash);
-        
-        // Wait for confirmation
-        const receipt = await tx.wait();
-        console.log('USDC transfer confirmed in block:', receipt.blockNumber);
-      } catch (txError) {
-        console.error('Transaction submission failed:', txError.message);
-        console.error('Error code:', txError.code);
-        if (txError.error) {
-          console.error('Error details:', txError.error.message);
+    try {
+      console.log('Submitting to Coinbase Facilitator...');
+      
+      const settleResponse = await fetch('https://api.cdp.coinbase.com/x402/facilitator/v1/settle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          x402Version: 1,
+          scheme: 'exact',
+          network: 'eip155:8453',
+          payload: x402Payload.payload
+        })
+      });
+      
+      if (settleResponse.ok) {
+        const settleResult = await settleResponse.json();
+        if (settleResult.settled && settleResult.txHash) {
+          txHash = settleResult.txHash;
+          console.log('Facilitator settled:', txHash);
+        } else {
+          console.log('Facilitator did not settle:', settleResult);
         }
-        if (txError.transaction) {
-          console.error('Failed transaction:', txError.transaction);
-        }
-        // Continue anyway - authorization is valid, user can submit manually
+      } else {
+        const errorText = await settleResponse.text();
+        console.error('Facilitator error:', settleResponse.status, errorText);
       }
-    } else {
-      console.log('No service wallet configured - authorization valid but not submitted');
+    } catch (facilitatorError) {
+      console.error('Facilitator submission failed:', facilitatorError.message);
+      // Continue anyway - authorization is valid
     }
 
     // Mark nonce as used
