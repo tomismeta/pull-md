@@ -91,6 +91,9 @@ export default async function handler(req, res) {
 
     if (result.type === 'payment-error') {
       if (result.response?.body && typeof result.response.body === 'object') {
+        const paymentRequired = decodePaymentRequiredHeader(result.response?.headers);
+        const paymentDebug = buildPaymentDebug(req, paymentRequired);
+
         if (!context.paymentHeader) {
           result.response.body.auth_message_template = buildAuthMessage({
             wallet: '0x<your-wallet>',
@@ -103,6 +106,7 @@ export default async function handler(req, res) {
         } else {
           result.response.body.flow_hint =
             'Payment header was detected but could not be verified/settled. Regenerate PAYMENT-SIGNATURE from the latest PAYMENT-REQUIRED and retry.';
+          result.response.body.payment_debug = paymentDebug;
         }
       }
       return applyInstructionResponse(res, result.response);
@@ -156,4 +160,111 @@ export default async function handler(req, res) {
     console.error('x402 processing failed:', error);
     return res.status(500).json({ error: 'Payment processing failed' });
   }
+}
+
+function decodePaymentRequiredHeader(headers = {}) {
+  const header = headers['PAYMENT-REQUIRED'] || headers['payment-required'];
+  if (!header) return null;
+  try {
+    return JSON.parse(Buffer.from(String(header), 'base64').toString('utf-8'));
+  } catch (_) {
+    return null;
+  }
+}
+
+function decodeSubmittedPayment(req) {
+  const raw =
+    req.headers['payment-signature'] || req.headers.payment || req.headers['x-payment'] || req.headers['PAYMENT-SIGNATURE'];
+  if (!raw) return null;
+  try {
+    return JSON.parse(Buffer.from(String(raw), 'base64').toString('utf-8'));
+  } catch (_) {
+    return null;
+  }
+}
+
+function buildPaymentDebug(req, paymentRequired) {
+  const submitted = decodeSubmittedPayment(req);
+  const expected = paymentRequired?.accepts?.[0] || null;
+
+  const selectedHeader = req.headers['payment-signature']
+    ? 'PAYMENT-SIGNATURE'
+    : req.headers.payment
+      ? 'PAYMENT'
+      : req.headers['x-payment']
+        ? 'X-PAYMENT'
+        : 'unknown';
+
+  const info = {
+    header_detected: selectedHeader,
+    submitted_parse_ok: Boolean(submitted),
+    submitted_fields: submitted
+      ? {
+          x402Version: submitted.x402Version ?? null,
+          scheme: submitted.scheme ?? null,
+          network: submitted.network ?? null,
+          hasAccepted: Boolean(submitted.accepted),
+          hasPayload: Boolean(submitted.payload),
+          hasAuthorization: Boolean(submitted.payload?.authorization),
+          hasSignature: Boolean(submitted.payload?.signature)
+        }
+      : null,
+    expected_fields: expected
+      ? {
+          x402Version: paymentRequired?.x402Version ?? null,
+          scheme: expected.scheme ?? null,
+          network: expected.network ?? null,
+          amount: expected.amount ?? null,
+          asset: expected.asset ?? null,
+          payTo: expected.payTo ?? null
+        }
+      : null,
+    mismatch_hints: []
+  };
+
+  if (!submitted) {
+    info.mismatch_hints.push('Payment header exists but payload could not be base64-decoded as JSON.');
+    return info;
+  }
+
+  if (!submitted.accepted) {
+    info.mismatch_hints.push('Missing top-level accepted object for x402 v2 payload.');
+    return info;
+  }
+
+  if (paymentRequired?.x402Version != null && submitted.x402Version !== paymentRequired.x402Version) {
+    info.mismatch_hints.push(`x402Version mismatch: submitted=${submitted.x402Version} expected=${paymentRequired.x402Version}`);
+  }
+  if (expected?.scheme && submitted.scheme !== expected.scheme) {
+    info.mismatch_hints.push(`scheme mismatch: submitted=${submitted.scheme} expected=${expected.scheme}`);
+  }
+  if (expected?.network && submitted.network !== expected.network) {
+    info.mismatch_hints.push(`network mismatch: submitted=${submitted.network} expected=${expected.network}`);
+  }
+  if (!shallowEqual(selectedAcceptedSummary(submitted.accepted), selectedAcceptedSummary(expected))) {
+    info.mismatch_hints.push('accepted object does not match latest PAYMENT-REQUIRED.accepts[0].');
+  }
+
+  return info;
+}
+
+function selectedAcceptedSummary(value) {
+  if (!value || typeof value !== 'object') return null;
+  return {
+    scheme: value.scheme ?? null,
+    network: value.network ?? null,
+    amount: value.amount ?? null,
+    asset: value.asset ?? null,
+    payTo: value.payTo ?? null
+  };
+}
+
+function shallowEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = Object.keys(a);
+  for (const key of keys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
 }
