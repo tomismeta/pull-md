@@ -349,6 +349,11 @@ function buildPaymentDebug(req, paymentRequired) {
   }
 
   if (transferMethod === 'permit2' && permit2Auth && expected) {
+    if (submitted?.payload?.authorization) {
+      info.mismatch_hints.push(
+        'Permit2 mode detected but payload.authorization is also present. Remove payload.authorization so paymentPayload matches permit2 schema.'
+      );
+    }
     if (!equalAddress(permit2Auth.permitted?.token, expected.asset)) {
       info.mismatch_hints.push(
         `permit2.permitted.token mismatch: submitted=${permit2Auth.permitted?.token} expected=${expected.asset}`
@@ -397,6 +402,11 @@ function buildPaymentDebug(req, paymentRequired) {
       info.mismatch_hints.push('Detected payload.permit2. Rename this field to payload.permit2Authorization.');
     }
   } else if (auth && expected) {
+    if (submitted?.payload?.permit2Authorization) {
+      info.mismatch_hints.push(
+        'EIP-3009 mode detected but payload.permit2Authorization is also present. Remove permit2Authorization so paymentPayload matches eip3009 schema.'
+      );
+    }
     if (!equalAddress(auth.to, expected.payTo)) {
       info.mismatch_hints.push(`authorization.to mismatch: submitted=${auth.to} expected=${expected.payTo}`);
     }

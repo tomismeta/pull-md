@@ -152,7 +152,18 @@ async function facilitatorFetch(url, path, body) {
 function normalizeFacilitatorRequest(url, body) {
   if (!body || typeof body !== 'object') return body;
   if (!isCdpFacilitatorUrl(url)) return body;
-  return remapNetworkFields(body);
+  const remapped = remapNetworkFields(body);
+  if (!remapped?.paymentPayload || typeof remapped.paymentPayload !== 'object') {
+    return remapped;
+  }
+  const normalizedPaymentPayload = normalizePaymentPayloadShapeForFacilitator(
+    remapped.paymentPayload,
+    remapped.paymentRequirements
+  );
+  return {
+    ...remapped,
+    paymentPayload: normalizedPaymentPayload
+  };
 }
 
 function isCdpFacilitatorUrl(rawUrl) {
@@ -186,6 +197,43 @@ function remapNetworkValue(network) {
   if (network === 'eip155:8453') return 'base';
   if (network === 'eip155:84532') return 'base-sepolia';
   return network;
+}
+
+function normalizePaymentPayloadShapeForFacilitator(paymentPayload, paymentRequirements) {
+  if (!paymentPayload || typeof paymentPayload !== 'object') return paymentPayload;
+  const payload = paymentPayload?.payload;
+  if (!payload || typeof payload !== 'object') return paymentPayload;
+
+  const transferMethod = getTransferMethod(paymentPayload, paymentRequirements);
+  const nextPayload = { ...payload };
+
+  if (transferMethod === 'permit2') {
+    delete nextPayload.authorization;
+    if (nextPayload.permit2 && !nextPayload.permit2Authorization) {
+      nextPayload.permit2Authorization = nextPayload.permit2;
+    }
+    delete nextPayload.permit2;
+  } else if (transferMethod === 'eip3009') {
+    delete nextPayload.permit2Authorization;
+    delete nextPayload.permit2;
+  }
+
+  return {
+    ...paymentPayload,
+    payload: nextPayload
+  };
+}
+
+function getTransferMethod(paymentPayload, paymentRequirements) {
+  const fromRequirements = String(paymentRequirements?.extra?.assetTransferMethod || '').trim().toLowerCase();
+  if (fromRequirements === 'permit2' || fromRequirements === 'eip3009') return fromRequirements;
+
+  const fromAccepted = String(paymentPayload?.accepted?.extra?.assetTransferMethod || '').trim().toLowerCase();
+  if (fromAccepted === 'permit2' || fromAccepted === 'eip3009') return fromAccepted;
+
+  if (paymentPayload?.payload?.permit2Authorization || paymentPayload?.payload?.permit2) return 'permit2';
+  if (paymentPayload?.payload?.authorization) return 'eip3009';
+  return 'eip3009';
 }
 
 async function getDynamicFacilitatorAuthHeaders(baseUrl, endpointPath, method) {
@@ -350,6 +398,7 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
   try {
     const cdpMappedPayload = remapNetworkFields(paymentPayload);
     const cdpMappedRequirements = remapNetworkFields(paymentRequirements);
+    const cdpNormalizedPayload = normalizePaymentPayloadShapeForFacilitator(cdpMappedPayload, cdpMappedRequirements);
     const verify = await callFacilitator('verify', {
       x402Version: x402Version ?? paymentPayload.x402Version ?? 2,
       paymentPayload,
@@ -363,9 +412,18 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
         submitted_requirements_network: paymentRequirements?.network ?? null,
         cdp_payment_network: cdpMappedPayload?.network ?? null,
         cdp_requirements_network: cdpMappedRequirements?.network ?? null
+      },
+      facilitator_payload_shape: {
+        submitted_has_authorization: Boolean(paymentPayload?.payload?.authorization),
+        submitted_has_permit2_authorization: Boolean(paymentPayload?.payload?.permit2Authorization),
+        cdp_has_authorization: Boolean(cdpNormalizedPayload?.payload?.authorization),
+        cdp_has_permit2_authorization: Boolean(cdpNormalizedPayload?.payload?.permit2Authorization)
       }
     };
   } catch (error) {
+    const cdpMappedPayload = remapNetworkFields(paymentPayload);
+    const cdpMappedRequirements = remapNetworkFields(paymentRequirements);
+    const cdpNormalizedPayload = normalizePaymentPayloadShapeForFacilitator(cdpMappedPayload, cdpMappedRequirements);
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
@@ -373,8 +431,14 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
       network_mapping: {
         submitted_payment_network: paymentPayload?.network ?? null,
         submitted_requirements_network: paymentRequirements?.network ?? null,
-        cdp_payment_network: remapNetworkValue(paymentPayload?.network ?? ''),
-        cdp_requirements_network: remapNetworkValue(paymentRequirements?.network ?? '')
+        cdp_payment_network: cdpMappedPayload?.network ?? null,
+        cdp_requirements_network: cdpMappedRequirements?.network ?? null
+      },
+      facilitator_payload_shape: {
+        submitted_has_authorization: Boolean(paymentPayload?.payload?.authorization),
+        submitted_has_permit2_authorization: Boolean(paymentPayload?.payload?.permit2Authorization),
+        cdp_has_authorization: Boolean(cdpNormalizedPayload?.payload?.authorization),
+        cdp_has_permit2_authorization: Boolean(cdpNormalizedPayload?.payload?.permit2Authorization)
       }
     };
   }
