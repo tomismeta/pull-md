@@ -257,6 +257,7 @@ function buildPaymentDebug(req, paymentRequired) {
     permit2_checks:
       permit2Auth && expected
         ? {
+            top_level_from: submitted?.payload?.from ?? null,
             from: permit2Auth.from ?? null,
             token: permit2Auth.permitted?.token ?? null,
             amount: permit2Auth.permitted?.amount ?? null,
@@ -265,6 +266,9 @@ function buildPaymentDebug(req, paymentRequired) {
             deadline: permit2Auth.deadline ?? null,
             witness_to: permit2Auth.witness?.to ?? null,
             witness_validAfter: permit2Auth.witness?.validAfter ?? null,
+            has_transaction_object: Boolean(submitted?.payload?.transaction),
+            transaction_to: submitted?.payload?.transaction?.to ?? null,
+            transaction_data_empty: !submitted?.payload?.transaction?.data || submitted?.payload?.transaction?.data === '0x',
             token_matches_asset: equalAddress(permit2Auth.permitted?.token, expected.asset),
             witness_to_matches_payTo: equalAddress(permit2Auth.witness?.to, expected.payTo),
             amount_gte_required: isBigIntGte(permit2Auth.permitted?.amount, expected.amount),
@@ -321,6 +325,9 @@ function buildPaymentDebug(req, paymentRequired) {
     if (!equalAddress(permit2Auth.witness?.to, expected.payTo)) {
       info.mismatch_hints.push(`permit2.witness.to mismatch: submitted=${permit2Auth.witness?.to} expected=${expected.payTo}`);
     }
+    if (submitted?.payload?.from && !equalAddress(submitted.payload.from, permit2Auth.from)) {
+      info.mismatch_hints.push(`payload.from mismatch: submitted=${submitted.payload.from} permit2.from=${permit2Auth.from}`);
+    }
     if (!equalAddress(permit2Auth.spender, '0x4020615294c913F045dc10f0a5cdEbd86c280001')) {
       info.mismatch_hints.push(
         `permit2.spender mismatch: submitted=${permit2Auth.spender} expected=0x4020615294c913F045dc10f0a5cdEbd86c280001`
@@ -343,6 +350,8 @@ function buildPaymentDebug(req, paymentRequired) {
     }
     if (!submitted?.payload?.transaction) {
       info.mismatch_hints.push('Missing payload.transaction for permit2 payment.');
+    } else if (!submitted?.payload?.transaction?.data || submitted.payload.transaction.data === '0x') {
+      info.mismatch_hints.push('payload.transaction.data is empty. Provide ERC20 approve(PERMIT2_ADDRESS, MAX_UINT256) calldata.');
     }
   } else if (transferMethod === 'permit2' && submitted?.payload && !permit2Auth) {
     info.mismatch_hints.push('Missing payload.permit2Authorization object for permit2 payment.');

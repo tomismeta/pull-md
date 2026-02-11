@@ -93,6 +93,8 @@ Use these Bankr capabilities explicitly:
 2. `POST /agent/sign`:
 - Sign typed data based on `assetTransferMethod` (`PermitWitnessTransferFrom` for permit2, `TransferWithAuthorization` for eip3009).
 - Build final x402 JSON locally and send only `PAYMENT-SIGNATURE` to SoulStarter.
+For permit2 include `payload.from`, `payload.permit2Authorization`, `payload.transaction`, and `payload.signature`.
+Set `payload.transaction.data` to ERC20 `approve(PERMIT2_ADDRESS, MAX_UINT256)` calldata.
 
 3. `POST /agent/submit`:
 - Not required for SoulStarter purchase flow.

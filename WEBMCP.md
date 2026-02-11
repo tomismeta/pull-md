@@ -54,6 +54,7 @@ base64(JSON.stringify({
   accepted: PAYMENT_REQUIRED.accepts[0], // exact object, unchanged
   payload: {
     // if accepted.extra.assetTransferMethod === "permit2":
+    // from: "<buyer_wallet>",
     // permit2Authorization: { ...PermitWitnessTransferFrom message fields },
     // transaction: { to: accepted.asset, data: "0x..." },
     // signature: "0x..."
@@ -89,6 +90,8 @@ Only the SoulStarter server needs facilitator credentials.
 3. Call Bankr `GET /agent/me` and choose the EVM wallet signer.
 4. Read `accepted.extra.assetTransferMethod` and sign with Bankr `POST /agent/sign`:
    `permit2` -> `PermitWitnessTransferFrom`, `eip3009` -> `TransferWithAuthorization`.
+   For `permit2`, include all of: `payload.from`, `payload.permit2Authorization`, `payload.transaction`, `payload.signature`.
+   `payload.transaction.data` should be ERC20 `approve(PERMIT2_ADDRESS, MAX_UINT256)` calldata.
 5. Build x402 JSON payload, base64-encode it, and send:
    `PAYMENT-SIGNATURE: <base64(JSON payload)>`
 6. Save `X-PURCHASE-RECEIPT` from the `200` response for re-downloads.

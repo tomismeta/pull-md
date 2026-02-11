@@ -107,28 +107,57 @@ export default async function handler(req, res) {
         step_3:
           'Call Bankr POST /agent/sign (eth_signTypedData_v4) using permit2 or eip3009 typed data as required by assetTransferMethod.',
         step_4:
-          'Build x402 JSON, base64-encode it, and call GET /api/souls/{soul_id}/download with PAYMENT-SIGNATURE header.',
+          'Build x402 JSON (for permit2 include payload.from + payload.permit2Authorization + payload.transaction), base64-encode it, and call GET /api/souls/{soul_id}/download with PAYMENT-SIGNATURE header.',
         step_5: 'Store X-PURCHASE-RECEIPT from 200 response for no-repay re-download.',
         explicit_header_template: 'PAYMENT-SIGNATURE: <base64(JSON.stringify(x402_payload))>',
         key_boundary: 'Do not send Bankr API key, bearer token, or secrets to SoulStarter endpoints.'
       },
       payload_requirements: {
         critical: 'For x402 v2, include top-level accepted object. If accepted is missing or modified, server returns: No matching payment requirements.',
-        required_shape: {
-          x402Version: 2,
-          scheme: 'exact',
-          network: 'eip155:8453',
-          accepted: '<must equal PAYMENT-REQUIRED.accepts[0] exactly>',
-          payload: {
-            authorization: {
+        transfer_method: paymentRequired?.accepts?.[0]?.extra?.assetTransferMethod || 'eip3009',
+        permit2_constants: {
+          permit2_address: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
+          x402_exact_permit2_proxy: '0x4020615294c913F045dc10f0a5cdEbd86c280001'
+        },
+        method_specific_shape: {
+          permit2: {
+            x402Version: 2,
+            scheme: 'exact',
+            network: 'eip155:8453',
+            accepted: '<must equal PAYMENT-REQUIRED.accepts[0] exactly>',
+            payload: {
               from: '<buyer_wallet>',
-              to: '<payTo>',
-              value: '<amount>',
-              validAfter: '<unix_sec>',
-              validBefore: '<unix_sec>',
-              nonce: '0x<32byte>'
-            },
-            signature: '0x<eip712_signature>'
+              permit2Authorization: {
+                from: '<buyer_wallet>',
+                permitted: { token: '<asset>', amount: '<amount>' },
+                spender: '0x4020615294c913F045dc10f0a5cdEbd86c280001',
+                nonce: '<uint256_string>',
+                deadline: '<unix_sec>',
+                witness: { to: '<payTo>', validAfter: '<unix_sec>', extra: '0x' }
+              },
+              transaction: {
+                to: '<asset>',
+                data: '0x<erc20 approve(PERMIT2_ADDRESS, MAX_UINT256) calldata>'
+              },
+              signature: '0x<eip712_signature>'
+            }
+          },
+          eip3009: {
+            x402Version: 2,
+            scheme: 'exact',
+            network: 'eip155:8453',
+            accepted: '<must equal PAYMENT-REQUIRED.accepts[0] exactly>',
+            payload: {
+              authorization: {
+                from: '<buyer_wallet>',
+                to: '<payTo>',
+                value: '<amount>',
+                validAfter: '<unix_sec>',
+                validBefore: '<unix_sec>',
+                nonce: '0x<32byte>'
+              },
+              signature: '0x<eip712_signature>'
+            }
           }
         },
         latest_requirements: paymentRequired?.accepts?.[0] || null
