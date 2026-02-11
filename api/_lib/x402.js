@@ -217,7 +217,7 @@ function normalizePaymentPayloadShapeForFacilitator(paymentPayload, paymentRequi
       nextPayload.permit2Authorization = normalizePermit2Authorization(nextPayload.permit2Authorization);
     }
     if (nextPayload.permit2Authorization) {
-      nextPayload.authorization = normalizePermit2Authorization(nextPayload.permit2Authorization);
+      nextPayload.authorization = buildCdpAuthorizationForPermit2(nextPayload.permit2Authorization, paymentRequirements);
     }
     if (nextPayload.transaction && typeof nextPayload.transaction === 'object') {
       nextPayload.transaction = {
@@ -240,6 +240,24 @@ function normalizePaymentPayloadShapeForFacilitator(paymentPayload, paymentRequi
   return {
     ...paymentPayload,
     payload: nextPayload
+  };
+}
+
+function buildCdpAuthorizationForPermit2(permit2Auth, paymentRequirements) {
+  const from = permit2Auth?.from ?? null;
+  const to = permit2Auth?.witness?.to ?? paymentRequirements?.payTo ?? null;
+  const value = toStringNumber(permit2Auth?.permitted?.amount ?? paymentRequirements?.amount ?? null);
+  const validAfter = toStringNumber(permit2Auth?.witness?.validAfter ?? null);
+  const validBefore = toStringNumber(permit2Auth?.deadline ?? null);
+  const nonce = toStringNumber(permit2Auth?.nonce ?? null);
+
+  return {
+    from,
+    to,
+    value,
+    validAfter,
+    validBefore,
+    nonce
   };
 }
 
@@ -475,7 +493,9 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
         cdp_transaction_type: cdpNormalizedPayload?.payload?.transaction == null ? null : typeof cdpNormalizedPayload?.payload?.transaction,
         cdp_authorization_nonce: cdpNormalizedPayload?.payload?.authorization?.nonce ?? null,
         cdp_authorization_validAfter: cdpNormalizedPayload?.payload?.authorization?.validAfter ?? null,
-        cdp_authorization_validBefore: cdpNormalizedPayload?.payload?.authorization?.validBefore ?? null
+        cdp_authorization_validBefore: cdpNormalizedPayload?.payload?.authorization?.validBefore ?? null,
+        cdp_authorization_to: cdpNormalizedPayload?.payload?.authorization?.to ?? null,
+        cdp_authorization_value: cdpNormalizedPayload?.payload?.authorization?.value ?? null
       }
     };
   } catch (error) {
@@ -501,7 +521,9 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
         cdp_transaction_type: cdpNormalizedPayload?.payload?.transaction == null ? null : typeof cdpNormalizedPayload?.payload?.transaction,
         cdp_authorization_nonce: cdpNormalizedPayload?.payload?.authorization?.nonce ?? null,
         cdp_authorization_validAfter: cdpNormalizedPayload?.payload?.authorization?.validAfter ?? null,
-        cdp_authorization_validBefore: cdpNormalizedPayload?.payload?.authorization?.validBefore ?? null
+        cdp_authorization_validBefore: cdpNormalizedPayload?.payload?.authorization?.validBefore ?? null,
+        cdp_authorization_to: cdpNormalizedPayload?.payload?.authorization?.to ?? null,
+        cdp_authorization_value: cdpNormalizedPayload?.payload?.authorization?.value ?? null
       }
     };
   }
