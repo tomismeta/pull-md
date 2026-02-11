@@ -1,6 +1,6 @@
 /**
- * SoulStarter - Proper x402 Payment Implementation
- * Uses EIP-712 typed data signing with EIP-3009 authorization
+ * SoulStarter - Bankr-Powered x402 Payment Implementation
+ * Uses Bankr API for EIP-712 signing
  */
 
 // Configuration
@@ -9,6 +9,7 @@ const CONFIG = {
   chainId: 8453,
   usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   apiBase: '/api',
+  bankrApiUrl: 'https://api.bankr.bot',
   requestTimeout: 30000
 };
 
@@ -33,13 +34,28 @@ const TRANSFER_WITH_AUTHORIZATION_TYPE = {
 };
 
 // State
-let provider = null;
-let signer = null;
-let walletAddress = null;
-let walletType = null;
+let bankrApiKey = null;
+let bankrAddress = null;
 
-// WalletConnect Project ID (get from cloud.walletconnect.com)
-const WC_PROJECT_ID = 'YOUR_WC_PROJECT_ID';
+/**
+ * Initialize Bankr connection
+ */
+async function initBankr() {
+  try {
+    // Try to get API key from config
+    const response = await fetch('/api/bankr-config');
+    if (response.ok) {
+      const config = await response.json();
+      bankrApiKey = config.apiKey;
+      bankrAddress = config.address;
+      console.log('Bankr initialized:', bankrAddress);
+      return true;
+    }
+  } catch (e) {
+    console.error('Failed to init Bankr:', e);
+  }
+  return false;
+}
 
 /**
  * Wallet Connection Functions
@@ -53,6 +69,20 @@ function closeWalletModal() {
   document.getElementById('walletModal').style.display = 'none';
 }
 
+async function connectBankr() {
+  closeWalletModal();
+  
+  // Try to auto-init from server config
+  const initialized = await initBankr();
+  
+  if (initialized) {
+    updateWalletUI();
+    showToast('Connected to Bankr wallet!', 'success');
+  } else {
+    showToast('Bankr not configured. Please set up Bankr API key.', 'error');
+  }
+}
+
 async function connectMetaMask() {
   closeWalletModal();
   
@@ -63,194 +93,24 @@ async function connectMetaMask() {
   }
   
   try {
-    walletType = 'metamask';
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     
     if (accounts.length === 0) throw new Error('No accounts found');
     
-    walletAddress = accounts[0];
-    provider = new ethers.providers.Web3Provider(window.ethereum);
-    signer = provider.getSigner();
-    
-    await ensureCorrectNetwork();
-    setupMetaMaskListeners();
+    bankrAddress = accounts[0]; // Use as fallback
+    showToast('MetaMask connected!', 'success');
     updateWalletUI();
-    showToast('Connected to MetaMask!', 'success');
     
   } catch (error) {
     console.error('MetaMask connection failed:', error);
     showToast('Connection failed: ' + error.message, 'error');
-    resetWalletState();
   }
-}
-
-async function connectWalletConnect() {
-  closeWalletModal();
-  
-  if (WC_PROJECT_ID === 'YOUR_WC_PROJECT_ID') {
-    showToast('WalletConnect not configured', 'error');
-    return;
-  }
-  
-  try {
-    walletType = 'walletconnect';
-    
-    const ethereumProvider = await window.EthereumProvider.init({
-      projectId: WC_PROJECT_ID,
-      chains: [CONFIG.chainId],
-      showQrModal: true,
-      methods: ['eth_sendTransaction', 'eth_signTypedData_v4'],
-      metadata: {
-        name: 'SoulStarter',
-        description: 'Human-nurtured agent memory marketplace',
-        url: window.location.origin
-      }
-    });
-    
-    await ethereumProvider.enable();
-    
-    provider = new ethers.providers.Web3Provider(ethereumProvider);
-    signer = provider.getSigner();
-    walletAddress = await signer.getAddress();
-    
-    ethereumProvider.on('accountsChanged', (accounts) => {
-      if (accounts.length === 0) resetWalletState();
-      else { walletAddress = accounts[0]; updateWalletUI(); }
-    });
-    
-    ethereumProvider.on('disconnect', () => {
-      resetWalletState();
-      showToast('Wallet disconnected', 'info');
-    });
-    
-    updateWalletUI();
-    showToast('Wallet connected!', 'success');
-    
-  } catch (error) {
-    console.error('WalletConnect failed:', error);
-    showToast('Connection failed: ' + error.message, 'error');
-    resetWalletState();
-  }
-}
-
-async function connectCoinbase() {
-  closeWalletModal();
-  
-  const coinbaseWallet = window.ethereum?.providers?.find(p => p.isCoinbaseWallet) ||
-                         (window.ethereum?.isCoinbaseWallet ? window.ethereum : null);
-  
-  if (!coinbaseWallet && !window.ethereum) {
-    showToast('Coinbase Wallet not found', 'info');
-    window.open('https://www.coinbase.com/wallet', '_blank');
-    return;
-  }
-  
-  try {
-    walletType = 'coinbase';
-    const providerToUse = coinbaseWallet || window.ethereum;
-    
-    const accounts = await providerToUse.request({ method: 'eth_requestAccounts' });
-    if (accounts.length === 0) throw new Error('No accounts found');
-    
-    walletAddress = accounts[0];
-    provider = new ethers.providers.Web3Provider(providerToUse);
-    signer = provider.getSigner();
-    
-    await ensureCorrectNetwork();
-    setupMetaMaskListeners(providerToUse);
-    updateWalletUI();
-    showToast('Connected to Coinbase Wallet!', 'success');
-    
-  } catch (error) {
-    console.error('Coinbase connection failed:', error);
-    showToast('Connection failed: ' + error.message, 'error');
-    resetWalletState();
-  }
-}
-
-async function connectInjected() {
-  closeWalletModal();
-  
-  if (!window.ethereum) {
-    showToast('No wallet found', 'error');
-    return;
-  }
-  
-  try {
-    walletType = 'injected';
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    if (accounts.length === 0) throw new Error('No accounts found');
-    
-    walletAddress = accounts[0];
-    provider = new ethers.providers.Web3Provider(window.ethereum);
-    signer = provider.getSigner();
-    
-    await ensureCorrectNetwork();
-    setupMetaMaskListeners();
-    updateWalletUI();
-    showToast('Wallet connected!', 'success');
-    
-  } catch (error) {
-    console.error('Wallet connection failed:', error);
-    showToast('Connection failed: ' + error.message, 'error');
-    resetWalletState();
-  }
-}
-
-async function ensureCorrectNetwork() {
-  const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-  
-  if (parseInt(chainId) !== CONFIG.chainId) {
-    try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x2105' }]
-      });
-    } catch (switchError) {
-      if (switchError.code === 4902) {
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: '0x2105',
-            chainName: 'Base',
-            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-            rpcUrls: ['https://mainnet.base.org'],
-            blockExplorerUrls: ['https://basescan.org']
-          }]
-        });
-      } else {
-        throw switchError;
-      }
-    }
-  }
-}
-
-function setupMetaMaskListeners(ethereumProvider = window.ethereum) {
-  if (!ethereumProvider) return;
-  
-  ethereumProvider.on('accountsChanged', (accounts) => {
-    if (accounts.length === 0) {
-      resetWalletState();
-      showToast('Wallet disconnected', 'info');
-    } else {
-      walletAddress = accounts[0];
-      updateWalletUI();
-    }
-  });
-  
-  ethereumProvider.on('chainChanged', () => window.location.reload());
-}
-
-function resetWalletState() {
-  provider = null;
-  signer = null;
-  walletAddress = null;
-  walletType = null;
-  updateWalletUI();
 }
 
 function disconnectWallet() {
-  resetWalletState();
+  bankrApiKey = null;
+  bankrAddress = null;
+  updateWalletUI();
   showToast('Wallet disconnected', 'info');
 }
 
@@ -260,8 +120,8 @@ function updateWalletUI() {
   
   if (!btn || !text) return;
   
-  if (walletAddress) {
-    text.textContent = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+  if (bankrAddress) {
+    text.textContent = `${bankrAddress.slice(0, 6)}...${bankrAddress.slice(-4)}`;
     btn.classList.add('connected');
     btn.onclick = disconnectWallet;
   } else {
@@ -272,11 +132,11 @@ function updateWalletUI() {
 }
 
 /**
- * PROPER x402 Payment Implementation
+ * PROPER x402 Payment Implementation with Bankr Signing
  */
 
 async function purchaseSoul(soulId) {
-  if (!walletAddress || !signer) {
+  if (!bankrAddress) {
     showToast('Please connect your wallet first', 'warning');
     openWalletModal();
     return;
@@ -307,9 +167,9 @@ async function purchaseSoul(soulId) {
 
     const requirements = JSON.parse(atob(paymentRequiredB64));
     
-    // Step 2: Create proper x402 EIP-3009 authorization
-    showToast('Signing payment authorization...', 'info');
-    const x402Payload = await createX402Payment(requirements);
+    // Step 2: Create x402 payment using Bankr for signing
+    showToast('Signing payment with Bankr...', 'info');
+    const x402Payload = await createX402PaymentWithBankr(requirements);
     
     // Step 3: Submit signed payment
     showToast('Verifying payment...', 'info');
@@ -356,35 +216,101 @@ async function purchaseSoul(soulId) {
 }
 
 /**
- * Create proper x402 payment with EIP-712 typed data signature
+ * Create x402 payment using Bankr API for EIP-712 signing
  */
-async function createX402Payment(requirements) {
-  // Generate proper bytes32 nonce
-  const nonce = ethers.utils.hexlify(ethers.utils.randomBytes(32));
-  
-  // Set validity window (5 minutes)
+async function createX402PaymentWithBankr(requirements) {
   const now = Math.floor(Date.now() / 1000);
-  const validAfter = now - 60; // 1 minute ago (allows immediate use)
-  const validBefore = now + 300; // 5 minutes from now
+  const validAfter = now - 60;
+  const validBefore = now + 300;
   
-  // Create EIP-3009 authorization struct
-  const authorization = {
-    from: walletAddress,
-    to: requirements.payload.to,
-    value: requirements.payload.amount,
-    validAfter: validAfter,
-    validBefore: validBefore,
-    nonce: nonce
+  // Build EIP-712 typed data
+  const typedData = {
+    domain: USDC_DOMAIN,
+    types: {
+      EIP712Domain: [
+        { name: 'name', type: 'string' },
+        { name: 'version', type: 'string' },
+        { name: 'chainId', type: 'uint256' },
+        { name: 'verifyingContract', type: 'address' }
+      ],
+      ...TRANSFER_WITH_AUTHORIZATION_TYPE
+    },
+    primaryType: 'TransferWithAuthorization',
+    message: {
+      from: bankrAddress,
+      to: requirements.payload.to,
+      value: requirements.payload.amount,
+      validAfter: validAfter,
+      validBefore: validBefore,
+      nonce: requirements.payload.nonce
+    }
   };
   
-  // Sign with EIP-712 typed data
+  // Call Bankr API to sign
+  const signResponse = await fetch(`${CONFIG.bankrApiUrl}/agent/sign`, {
+    method: 'POST',
+    headers: {
+      'X-API-Key': bankrApiKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      signatureType: 'eth_signTypedData_v4',
+      typedData: typedData
+    })
+  });
+  
+  if (!signResponse.ok) {
+    const error = await signResponse.json().catch(() => ({}));
+    throw new Error(error.message || 'Bankr signing failed');
+  }
+  
+  const signResult = await signResponse.json();
+  
+  // Return proper x402 payload
+  return {
+    x402Version: 1,
+    scheme: 'exact',
+    network: requirements.network,
+    payload: {
+      signature: signResult.signature,
+      authorization: {
+        from: bankrAddress,
+        to: requirements.payload.to,
+        value: requirements.payload.amount,
+        validAfter: validAfter,
+        validBefore: validBefore,
+        nonce: requirements.payload.nonce
+      }
+    }
+  };
+}
+
+/**
+ * Fallback: Create x402 payment with MetaMask signing
+ */
+async function createX402PaymentWithMetaMask(requirements) {
+  if (!window.ethereum) {
+    throw new Error('MetaMask not available');
+  }
+  
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const signer = provider.getSigner();
+  
+  const authorization = {
+    from: await signer.getAddress(),
+    to: requirements.payload.to,
+    value: requirements.payload.amount,
+    validAfter: Math.floor(Date.now() / 1000) - 60,
+    validBefore: Math.floor(Date.now() / 1000) + 300,
+    nonce: requirements.payload.nonce
+  };
+  
   const signature = await signer._signTypedData(
     USDC_DOMAIN,
     TRANSFER_WITH_AUTHORIZATION_TYPE,
     authorization
   );
   
-  // Return proper x402 payload structure
   return {
     x402Version: 1,
     scheme: 'exact',
@@ -507,18 +433,14 @@ async function loadSouls() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-  if (window.ethereum && window.ethereum.selectedAddress) {
-    connectInjected().catch(console.error);
-  }
+  initBankr().then(() => updateWalletUI());
   loadSouls();
 });
 
 // Expose functions globally
 window.openWalletModal = openWalletModal;
 window.closeWalletModal = closeWalletModal;
+window.connectBankr = connectBankr;
 window.connectMetaMask = connectMetaMask;
-window.connectWalletConnect = connectWalletConnect;
-window.connectCoinbase = connectCoinbase;
-window.connectInjected = connectInjected;
 window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
