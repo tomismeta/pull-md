@@ -23,6 +23,7 @@ Agents should discover capabilities through:
 4. `POST /api/mcp/tools/purchase_soul_bankr`
 - Executes end-to-end purchase via Bankr Agent API:
 wallet lookup (`/agent/me`) + typed data signing (`/agent/sign`) + paid retry.
+- Returns `bankr_debug` on failures with stage-specific diagnostics.
 
 5. `POST /api/mcp/tools/check_entitlements`
 - Verifies receipt proof(s) for re-download:

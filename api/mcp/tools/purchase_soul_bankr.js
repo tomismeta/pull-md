@@ -18,53 +18,122 @@ export default async function handler(req, res) {
 
   const { soul_id: soulId, wallet_address: walletAddress, bankr_api_key: bodyApiKey } = req.body || {};
   const bankrApiKey = req.headers['x-bankr-api-key'] || bodyApiKey || process.env.BANKR_API_KEY;
+  const bankrDebug = {
+    flow: 'purchase_soul_bankr',
+    stage: 'init',
+    time: new Date().toISOString(),
+    input: {
+      soul_id: soulId || null,
+      wallet_address_provided: Boolean(walletAddress),
+      bankr_api_key_present: Boolean(bankrApiKey)
+    },
+    payment_required: null,
+    bankr_me: null,
+    sign: null,
+    submit: null,
+    mismatch: null
+  };
 
   if (!soulId) {
-    return res.status(400).json({ error: 'Missing required parameter: soul_id' });
+    return res.status(400).json({ error: 'Missing required parameter: soul_id', bankr_debug: bankrDebug });
   }
   if (!bankrApiKey || typeof bankrApiKey !== 'string') {
     return res.status(400).json({
       error: 'Missing Bankr API key',
-      expected: 'Provide bankr_api_key in body or X-BANKR-API-KEY header'
+      expected: 'Provide bankr_api_key in body or X-BANKR-API-KEY header',
+      bankr_debug: bankrDebug
     });
   }
 
   const soul = getSoul(soulId);
   if (!soul) {
-    return res.status(404).json({ error: 'Soul not found', available_souls: soulIds() });
+    return res.status(404).json({ error: 'Soul not found', available_souls: soulIds(), bankr_debug: bankrDebug });
   }
 
   const sellerAddress = getSellerAddress();
   if (!sellerAddress) {
-    return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required' });
+    return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required', bankr_debug: bankrDebug });
   }
 
   try {
+    bankrDebug.stage = 'fetch_payment_required';
     const paymentRequired = await fetchPaymentRequired({ req, soulId, soul, sellerAddress });
     const accepted = paymentRequired?.accepts?.[0];
+    bankrDebug.payment_required = summarizePaymentRequired(paymentRequired);
+
     if (!accepted) {
-      return res.status(500).json({ error: 'PAYMENT-REQUIRED missing accepts[0]' });
+      return res.status(500).json({ error: 'PAYMENT-REQUIRED missing accepts[0]', bankr_debug: bankrDebug });
     }
 
-    const bankrWallet = await fetchBankrWalletAddress(bankrApiKey);
+    bankrDebug.stage = 'bankr_me';
+    const meResult = await fetchBankrWalletAddress(bankrApiKey);
+    bankrDebug.bankr_me = {
+      ok: meResult.ok,
+      status: meResult.status,
+      body_summary: summarizeObject(meResult.body),
+      evm_wallet: meResult.wallet || null
+    };
+    if (!meResult.ok) {
+      return res.status(502).json({
+        error: 'Bankr wallet lookup failed. Ensure API key has Agent API access.',
+        bankr_debug: bankrDebug
+      });
+    }
+
+    const bankrWallet = meResult.wallet;
     if (!bankrWallet) {
-      return res.status(502).json({ error: 'Bankr wallet lookup failed. Ensure API key has Agent API access.' });
+      return res.status(502).json({
+        error: 'Bankr wallet lookup did not return an EVM wallet',
+        bankr_debug: bankrDebug
+      });
     }
 
     const payer = walletAddress || bankrWallet;
     if (!isAddress(payer)) {
-      return res.status(400).json({ error: 'Invalid wallet address format' });
+      bankrDebug.mismatch = { type: 'wallet_format', payer };
+      return res.status(400).json({ error: 'Invalid wallet address format', bankr_debug: bankrDebug });
     }
     if (walletAddress && walletAddress.toLowerCase() !== bankrWallet.toLowerCase()) {
+      bankrDebug.mismatch = {
+        type: 'wallet_mismatch',
+        wallet_address: walletAddress,
+        bankr_wallet: bankrWallet
+      };
       return res.status(400).json({
         error: 'wallet_address does not match Bankr account wallet',
         wallet_address: walletAddress,
-        bankr_wallet: bankrWallet
+        bankr_wallet: bankrWallet,
+        bankr_debug: bankrDebug
       });
     }
 
+    bankrDebug.stage = 'build_typed_data';
     const typedData = buildTypedData({ paymentRequired, accepted, payer });
-    const signature = await signTypedDataWithBankr({ bankrApiKey, typedData });
+    bankrDebug.sign = {
+      chainId: typedData.domain?.chainId ?? null,
+      verifyingContract: typedData.domain?.verifyingContract ?? null,
+      domainName: typedData.domain?.name ?? null,
+      domainVersion: typedData.domain?.version ?? null,
+      primaryType: typedData.primaryType,
+      authorization: summarizeAuthorization(typedData.message)
+    };
+
+    bankrDebug.stage = 'bankr_sign';
+    const signResult = await signTypedDataWithBankr({ bankrApiKey, typedData });
+    bankrDebug.sign = {
+      ...bankrDebug.sign,
+      ok: signResult.ok,
+      status: signResult.status,
+      response_summary: summarizeObject(signResult.body),
+      signature_length: signResult.signature ? signResult.signature.length : null
+    };
+    if (!signResult.ok || !signResult.signature) {
+      return res.status(502).json({
+        error: 'Bankr typed-data signing failed',
+        bankr_debug: bankrDebug
+      });
+    }
+    const signature = signResult.signature;
 
     const paymentPayload = {
       x402Version: paymentRequired?.x402Version ?? 2,
@@ -80,6 +149,7 @@ export default async function handler(req, res) {
 
     const baseUrl = requestBaseUrl(req);
     const downloadUrl = `${baseUrl}/api/souls/${encodeURIComponent(soulId)}/download`;
+    bankrDebug.stage = 'submit_payment';
     const purchaseResponse = await fetch(downloadUrl, {
       method: 'GET',
       headers: {
@@ -92,6 +162,12 @@ export default async function handler(req, res) {
     const purchaseReceipt = purchaseResponse.headers.get('x-purchase-receipt');
     const contentType = purchaseResponse.headers.get('content-type') || '';
     const responseText = await purchaseResponse.text();
+    bankrDebug.submit = {
+      status: purchaseResponse.status,
+      content_type: contentType,
+      has_payment_response_header: Boolean(paymentResponseHeader),
+      has_purchase_receipt: Boolean(purchaseReceipt)
+    };
 
     if (!purchaseResponse.ok) {
       let body = null;
@@ -100,13 +176,15 @@ export default async function handler(req, res) {
       } catch (_) {
         body = { raw: responseText };
       }
+      bankrDebug.submit.response_summary = summarizeObject(body);
 
       return res.status(purchaseResponse.status).json({
         error: 'Bankr signed payment was not accepted',
         soul_id: soulId,
         bankr_wallet: bankrWallet,
         upstream_status: purchaseResponse.status,
-        upstream_body: body
+        upstream_body: body,
+        bankr_debug: bankrDebug
       });
     }
 
@@ -126,13 +204,16 @@ export default async function handler(req, res) {
       purchase_receipt: purchaseReceipt || null,
       payment_response: paymentResponse,
       content_type: contentType,
-      soul_markdown: responseText
+      soul_markdown: responseText,
+      bankr_debug: { ...bankrDebug, stage: 'complete' }
     });
   } catch (error) {
     console.error('Bankr purchase flow failed:', error);
+    bankrDebug.stage = 'exception';
     return res.status(500).json({
       error: 'Bankr purchase flow failed',
-      detail: error instanceof Error ? error.message : String(error)
+      detail: error instanceof Error ? error.message : String(error),
+      bankr_debug: bankrDebug
     });
   }
 }
@@ -163,14 +244,15 @@ async function fetchBankrWalletAddress(apiKey) {
     }
   });
 
-  if (!response.ok) {
-    throw new Error(`Bankr /agent/me failed with status ${response.status}`);
-  }
-
-  const body = await response.json();
+  const body = await response.json().catch(() => ({}));
   const wallets = Array.isArray(body?.wallets) ? body.wallets : [];
   const evmWallet = wallets.find((item) => item && item.chain === 'evm' && isAddress(item.address));
-  return evmWallet?.address || null;
+  return {
+    ok: response.ok,
+    status: response.status,
+    body,
+    wallet: evmWallet?.address || null
+  };
 }
 
 async function signTypedDataWithBankr({ bankrApiKey, typedData }) {
@@ -188,15 +270,13 @@ async function signTypedDataWithBankr({ bankrApiKey, typedData }) {
   });
 
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(`Bankr /agent/sign failed with status ${response.status}`);
-  }
-
   const signature = body?.signature || body?.data?.signature;
-  if (!isHexSignature(signature)) {
-    throw new Error('Bankr /agent/sign response did not include a valid signature');
-  }
-  return signature;
+  return {
+    ok: response.ok && isHexSignature(signature),
+    status: response.status,
+    body,
+    signature: isHexSignature(signature) ? signature : null
+  };
 }
 
 function buildTypedData({ paymentRequired, accepted, payer }) {
@@ -258,4 +338,53 @@ function isAddress(value) {
 
 function isHexSignature(value) {
   return typeof value === 'string' && /^0x[a-fA-F0-9]+$/.test(value) && value.length >= 132;
+}
+
+function summarizePaymentRequired(paymentRequired) {
+  const accepted = paymentRequired?.accepts?.[0];
+  if (!accepted) return null;
+  return {
+    x402Version: paymentRequired?.x402Version ?? null,
+    scheme: accepted.scheme ?? null,
+    network: accepted.network ?? null,
+    amount: accepted.amount ?? null,
+    asset: accepted.asset ?? null,
+    payTo: accepted.payTo ?? null,
+    maxTimeoutSeconds: accepted.maxTimeoutSeconds ?? null
+  };
+}
+
+function summarizeAuthorization(auth) {
+  if (!auth || typeof auth !== 'object') return null;
+  return {
+    from: auth.from ?? null,
+    to: auth.to ?? null,
+    value: auth.value ?? null,
+    validAfter: auth.validAfter ?? null,
+    validBefore: auth.validBefore ?? null,
+    nonce_bytes32: typeof auth.nonce === 'string' && /^0x[0-9a-fA-F]{64}$/.test(auth.nonce)
+  };
+}
+
+function summarizeObject(value) {
+  if (!value || typeof value !== 'object') return value ?? null;
+  const summary = {};
+  const keys = ['error', 'message', 'detail', 'code', 'status', 'reason', 'type', 'ok'];
+  for (const key of keys) {
+    if (value[key] != null) summary[key] = value[key];
+  }
+  if (Array.isArray(value.wallets)) {
+    summary.wallets_count = value.wallets.length;
+    summary.wallet_chains = value.wallets.map((item) => item?.chain).filter(Boolean);
+  }
+  if (value.data && typeof value.data === 'object') {
+    summary.data_keys = Object.keys(value.data).slice(0, 10);
+    if (typeof value.data.signature === 'string') {
+      summary.data_signature_length = value.data.signature.length;
+    }
+  }
+  if (typeof value.signature === 'string') {
+    summary.signature_length = value.signature.length;
+  }
+  return Object.keys(summary).length > 0 ? summary : { keys: Object.keys(value).slice(0, 12) };
 }

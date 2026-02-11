@@ -68,6 +68,7 @@ sign EIP-712 `TransferWithAuthorization` using `PAYMENT-REQUIRED.accepts[0]`.
 use Bankr Agent API `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then submit the resulting base64 payload.
 - Bankr server-side helper:
 `POST /api/mcp/tools/purchase_soul_bankr` performs wallet lookup (`/agent/me`) and signing (`/agent/sign`) before submitting the strict x402 header.
+On failure it returns `bankr_debug` with stage-level diagnostics for triage.
 - Bankr capability mapping:
 `/agent/me` for wallet discovery, `/agent/sign` for typed-data signing, and no `/agent/submit` call for SoulStarter purchase settlement.
 
