@@ -85,7 +85,22 @@ export default function handler(req, res) {
             description: 'Optional wallet to assert; must match Bankr evm wallet if provided'
           }
         },
-        returns: { type: 'object', description: 'Purchased soul markdown, receipt, and settlement response' }
+        returns: {
+          type: 'object',
+          description:
+            'Purchased soul markdown, receipt, and settlement response. On non-200 responses includes bankr_debug for triage.',
+          success_fields: ['success', 'soul_id', 'wallet_address', 'purchase_receipt', 'payment_response', 'soul_markdown'],
+          failure_fields: ['error', 'detail', 'upstream_status', 'upstream_body', 'bankr_debug'],
+          bankr_debug_stages: [
+            'init',
+            'fetch_payment_required',
+            'bankr_me',
+            'build_typed_data',
+            'bankr_sign',
+            'submit_payment',
+            'exception'
+          ]
+        }
       },
       {
         name: 'check_entitlements',
