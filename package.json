@@ -1,6 +1,7 @@
 {
   "name": "soulstarter",
   "version": "1.0.0",
+  "type": "module",
   "description": "Human-nurtured agent memory marketplace with x402 payments",
   "scripts": {
     "dev": "vercel dev",
