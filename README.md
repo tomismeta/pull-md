@@ -6,7 +6,7 @@ SoulStarter is an agent-focused marketplace for purchasing and re-downloading AI
 
 - Strict x402 v2 purchase flow on `GET /api/souls/{id}/download`
 - Required x402 headers for payment flow:
-`PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE`
+`PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE` (or `PAYMENT` / `X-PAYMENT`), `PAYMENT-RESPONSE`
 - Re-download flow (no second payment) uses:
 `X-WALLET-ADDRESS`, `X-AUTH-SIGNATURE`, `X-AUTH-TIMESTAMP`, `X-PURCHASE-RECEIPT`
 - Facilitator resiliency includes:
@@ -47,6 +47,26 @@ preflight checks, multi-endpoint failover, timeout, circuit breaker
 `GET /api/health/facilitator`
 - Forced live check:
 `GET /api/health/facilitator?force=1`
+
+## x402 Header Formatting
+
+Paid retry headers:
+
+- Preferred:
+`PAYMENT-SIGNATURE: <base64(JSON x402 payload)>`
+- Also accepted:
+`PAYMENT: <base64(JSON x402 payload)>`
+`X-PAYMENT: <base64(JSON x402 payload)>`
+
+Wallet notes:
+
+- Standard wallet:
+sign EIP-712 `TransferWithAuthorization` using `PAYMENT-REQUIRED.accepts[0]`.
+- Bankr wallet:
+use Bankr's x402 exact EVM signer output and submit the resulting base64 payload.
+
+If a `402` body contains `auth_message_template`, treat it as optional re-download helper text.
+It does **not** replace the purchase flow.
 
 ## Local Run
 

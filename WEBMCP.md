@@ -35,10 +35,37 @@ Agents should discover capabilities through:
 - Header `PAYMENT-REQUIRED` (base64 JSON payment requirements)
 
 2. Paid retry:
-- Header `PAYMENT-SIGNATURE` (base64 JSON payment payload)
+- Header `PAYMENT-SIGNATURE` (preferred), or `PAYMENT`, or `X-PAYMENT`
+- Value format for all three:
+base64(JSON x402 payload)
 - Response `200` with soul file
 - Header `PAYMENT-RESPONSE` (base64 JSON settlement response)
 - Header `X-PURCHASE-RECEIPT` (for no-repay re-downloads)
+
+#### Agent Header Formatting
+
+The paid retry header value must be:
+
+```text
+base64(JSON.stringify({
+  x402Version: 2,
+  scheme: "exact",
+  network: "eip155:8453",
+  payload: {
+    authorization: { ...TransferWithAuthorization },
+    signature: "0x..."
+  }
+}))
+```
+
+#### Wallet Notes
+
+- Standard wallet:
+Build EIP-712 domain/types/message from `PAYMENT-REQUIRED.accepts[0]`, sign typed data, send base64 JSON payload.
+- Bankr wallet:
+Use Bankr's x402 exact EVM signer output directly, then send its base64 JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
+- Buyers do **not** need CDP credentials.
+Only the SoulStarter server needs facilitator credentials.
 
 ### Re-download (no repay)
 
@@ -50,6 +77,12 @@ Headers required:
 - `X-PURCHASE-RECEIPT`
 
 If receipt and wallet auth are valid, response is `200` with soul file.
+
+## Common Misread
+
+If you see `auth_message_template` in a `402` body, that does **not** mean purchase is unavailable.
+It is helper text for optional re-download auth.
+Purchase still succeeds when a valid paid header is submitted.
 
 ## Re-download Auth Message
 

@@ -91,12 +91,19 @@ export default async function handler(req, res) {
 
     if (result.type === 'payment-error') {
       if (result.response?.body && typeof result.response.body === 'object') {
-        result.response.body.auth_message_template = buildAuthMessage({
-          wallet: '0x<your-wallet>',
-          soulId,
-          action: 'redownload',
-          timestamp: Date.now()
-        });
+        if (!context.paymentHeader) {
+          result.response.body.auth_message_template = buildAuthMessage({
+            wallet: '0x<your-wallet>',
+            soulId,
+            action: 'redownload',
+            timestamp: Date.now()
+          });
+          result.response.body.flow_hint =
+            'No payment header was detected. Send PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload for purchase.';
+        } else {
+          result.response.body.flow_hint =
+            'Payment header was detected but could not be verified/settled. Regenerate PAYMENT-SIGNATURE from the latest PAYMENT-REQUIRED and retry.';
+        }
       }
       return applyInstructionResponse(res, result.response);
     }

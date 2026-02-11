@@ -58,11 +58,21 @@ If `401` or `402`, continue to purchase flow.
 
 2. Decode `PAYMENT-REQUIRED` and create x402 payment payload.
 3. Retry same endpoint with header:
-- `PAYMENT-SIGNATURE: <base64-json-payload>`
+- Preferred:
+`PAYMENT-SIGNATURE: <base64-json-payload>`
+- Also accepted:
+`PAYMENT: <base64-json-payload>` or `X-PAYMENT: <base64-json-payload>`
 4. On success:
 - Read soul content from response body.
 - Read settlement details from `PAYMENT-RESPONSE`.
 - Persist `X-PURCHASE-RECEIPT`.
+
+### Wallet-specific signing notes
+
+- Standard wallet:
+Create EIP-712 `TransferWithAuthorization` typed data from `PAYMENT-REQUIRED.accepts[0]` and sign with the buyer wallet.
+- Bankr wallet:
+Use Bankr's x402 exact EVM flow and pass its final base64-encoded JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
 
 ## 4. Optional Entitlement Verification Tool
 

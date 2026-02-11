@@ -28,11 +28,14 @@ export default function handler(req, res) {
       network: 'eip155:8453',
       currency: 'USDC',
       headers: [
+        'PAYMENT',
+        'X-PAYMENT',
         'PAYMENT-SIGNATURE',
         'PAYMENT-REQUIRED',
         'PAYMENT-RESPONSE'
       ],
-      redownload_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP', 'X-PURCHASE-RECEIPT']
+      redownload_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP', 'X-PURCHASE-RECEIPT'],
+      purchase_header_preference: ['PAYMENT-SIGNATURE', 'PAYMENT', 'X-PAYMENT']
     },
     tools: [
       {
@@ -79,8 +82,9 @@ export default function handler(req, res) {
       endpoint_pattern: '/api/souls/{id}/download',
       method: 'GET',
       first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
-      claim_request: 'Include PAYMENT-SIGNATURE with x402 payload to claim entitlement and download',
-      redownload_request: 'Include X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, and X-PURCHASE-RECEIPT'
+      claim_request: 'Include PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload to claim entitlement and download',
+      redownload_request: 'Include X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, and X-PURCHASE-RECEIPT',
+      note: 'auth_message_template may appear in a 402 response as helper text; purchase still requires payment header submission.'
     },
     contact: {
       name: 'SoulStarter Support',

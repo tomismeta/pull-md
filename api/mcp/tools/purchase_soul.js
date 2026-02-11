@@ -70,9 +70,18 @@ export default async function handler(req, res) {
         recipient: sellerAddress
       },
       instructions: {
-        step_1: 'Create PAYMENT-SIGNATURE from PAYMENT-REQUIRED requirements using x402 exact EVM flow',
-        step_2: 'Retry GET /api/souls/{soul_id}/download with PAYMENT-SIGNATURE header',
-        step_3: 'On success, store X-PURCHASE-RECEIPT for future re-downloads'
+        step_1: 'Decode PAYMENT-REQUIRED (base64 JSON) and use accepts[0] values for EIP-712 signing',
+        step_2: 'Create x402 payment payload JSON and base64-encode it',
+        step_3: 'Retry GET /api/souls/{soul_id}/download with header PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT)',
+        step_4: 'On success, store X-PURCHASE-RECEIPT for future re-downloads'
+      },
+      header_format: {
+        preferred: 'PAYMENT-SIGNATURE: <base64(JSON x402 payload)>',
+        accepted_alternatives: ['PAYMENT: <base64(JSON x402 payload)>', 'X-PAYMENT: <base64(JSON x402 payload)>']
+      },
+      wallet_examples: {
+        standard_wallet: 'Sign TransferWithAuthorization typed data from PAYMENT-REQUIRED.accepts[0], then send payload in PAYMENT-SIGNATURE.',
+        bankr_wallet: 'Use Bankr x402 exact EVM signer output and submit resulting base64 JSON in PAYMENT-SIGNATURE (or PAYMENT).'
       }
     });
   } catch (error) {
