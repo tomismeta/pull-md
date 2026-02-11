@@ -121,22 +121,22 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Transaction failed on-chain' });
     }
     
-    // Verify it's a USDC transfer to the seller
+    // Verify USDC transfer in logs (handle smart contract wallets)
     const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-    if (receipt.to.toLowerCase() !== USDC_ADDRESS.toLowerCase()) {
-      return res.status(400).json({ error: 'Transaction is not a USDC transfer' });
-    }
-    
-    // Parse Transfer event logs
     const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+    
+    // Look for USDC Transfer event to seller
     const transferLog = receipt.logs.find(log => 
       log.address.toLowerCase() === USDC_ADDRESS.toLowerCase() &&
       log.topics[0] === transferTopic &&
-      log.topics[2] === '0x000000000000000000000000' + CONFIG.sellerAddress.slice(2).toLowerCase()
+      log.topics[2] && log.topics[2].toLowerCase() === '0x000000000000000000000000' + CONFIG.sellerAddress.slice(2).toLowerCase()
     );
     
     if (!transferLog) {
-      return res.status(400).json({ error: 'Transaction is not a transfer to the seller address' });
+      return res.status(400).json({ 
+        error: 'No USDC transfer to seller found in transaction logs',
+        hint: 'Transaction may be a smart contract interaction. Looking for Transfer event to: ' + CONFIG.sellerAddress
+      });
     }
     
     // Verify amount
