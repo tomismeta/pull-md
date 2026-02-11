@@ -86,10 +86,16 @@ function base64UrlDecode(input) {
 }
 
 function receiptSecret() {
-  return process.env.PURCHASE_RECEIPT_SECRET || 'dev-only-insecure-secret-change-me';
+  const secret = process.env.PURCHASE_RECEIPT_SECRET?.trim();
+  return secret || null;
 }
 
 export function createPurchaseReceipt({ wallet, soulId, transaction }) {
+  const secret = receiptSecret();
+  if (!secret) {
+    throw new Error('Server configuration error: PURCHASE_RECEIPT_SECRET is required');
+  }
+
   const payload = JSON.stringify({
     wallet: wallet.toLowerCase(),
     soulId,
@@ -97,19 +103,24 @@ export function createPurchaseReceipt({ wallet, soulId, transaction }) {
     iat: Date.now()
   });
   const payloadB64 = base64UrlEncode(payload);
-  const sig = crypto.createHmac('sha256', receiptSecret()).update(payloadB64).digest('base64');
+  const sig = crypto.createHmac('sha256', secret).update(payloadB64).digest('base64');
   const sigB64 = sig.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
   return `${payloadB64}.${sigB64}`;
 }
 
 export function verifyPurchaseReceipt({ receipt, wallet, soulId }) {
+  const secret = receiptSecret();
+  if (!secret) {
+    return { ok: false, error: 'Server configuration error: PURCHASE_RECEIPT_SECRET is required' };
+  }
+
   if (!receipt || typeof receipt !== 'string' || !receipt.includes('.')) {
     return { ok: false, error: 'Missing purchase receipt' };
   }
 
   const [payloadB64, sigB64] = receipt.split('.');
   const expected = crypto
-    .createHmac('sha256', receiptSecret())
+    .createHmac('sha256', secret)
     .update(payloadB64)
     .digest('base64')
     .replace(/\+/g, '-')

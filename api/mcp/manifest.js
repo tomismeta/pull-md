@@ -69,16 +69,11 @@ export default function handler(req, res) {
       },
       {
         name: 'purchase_soul_bankr',
-        description: 'Execute full x402 purchase using Bankr Agent API typed-data signing',
+        description: 'Execute full x402 purchase using Bankr Agent API typed-data signing (requires X-BANKR-API-KEY header)',
         endpoint: '/api/mcp/tools/purchase_soul_bankr',
         method: 'POST',
         parameters: {
           soul_id: { type: 'string', required: true, description: 'Soul identifier to purchase' },
-          bankr_api_key: {
-            type: 'string',
-            required: false,
-            description: 'Bankr API key (or pass X-BANKR-API-KEY header)'
-          },
           wallet_address: {
             type: 'string',
             required: false,

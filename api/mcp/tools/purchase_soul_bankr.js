@@ -20,8 +20,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { soul_id: soulId, wallet_address: walletAddress, bankr_api_key: bodyApiKey } = req.body || {};
-  const bankrApiKey = req.headers['x-bankr-api-key'] || bodyApiKey || process.env.BANKR_API_KEY;
+  const { soul_id: soulId, wallet_address: walletAddress } = req.body || {};
+  const bankrApiKey = req.headers['x-bankr-api-key'];
   const bankrDebug = {
     flow: 'purchase_soul_bankr',
     stage: 'init',
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
   if (!bankrApiKey || typeof bankrApiKey !== 'string') {
     return res.status(400).json({
       error: 'Missing Bankr API key',
-      expected: 'Provide bankr_api_key in body or X-BANKR-API-KEY header',
+      expected: 'Provide X-BANKR-API-KEY header',
       bankr_debug: bankrDebug
     });
   }
@@ -164,7 +164,7 @@ export default async function handler(req, res) {
     };
     const encodedPayment = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
 
-    const baseUrl = requestBaseUrl(req);
+    const baseUrl = requestBaseUrl();
     const downloadUrl = `${baseUrl}/api/souls/${encodeURIComponent(soulId)}/download`;
     bankrDebug.stage = 'submit_payment';
     const purchaseResponse = await fetch(downloadUrl, {
@@ -253,7 +253,7 @@ async function fetchPaymentRequired({ req, soulId, soul, sellerAddress }) {
 }
 
 async function fetchBankrWalletAddress(apiKey) {
-  const response = await fetch(`${BANKR_API_BASE}/agent/me`, {
+  const response = await fetchWithRetry(`${BANKR_API_BASE}/agent/me`, {
     method: 'GET',
     headers: {
       Accept: 'application/json',
@@ -273,7 +273,7 @@ async function fetchBankrWalletAddress(apiKey) {
 }
 
 async function signTypedDataWithBankr({ bankrApiKey, typedData }) {
-  const response = await fetch(`${BANKR_API_BASE}/agent/sign`, {
+  const response = await fetchWithRetry(`${BANKR_API_BASE}/agent/sign`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -404,10 +404,8 @@ function buildSigningArtifacts({ paymentRequired, accepted, payer }) {
   };
 }
 
-function requestBaseUrl(req) {
-  const proto = req.headers['x-forwarded-proto'] || 'https';
-  const host = req.headers.host || 'soulstarter.vercel.app';
-  return `${proto}://${host}`;
+function requestBaseUrl() {
+  return process.env.PUBLIC_BASE_URL || 'https://soulstarter.vercel.app';
 }
 
 function parseChainId(network) {
@@ -488,4 +486,30 @@ function summarizeObject(value) {
     summary.signature_length = value.signature.length;
   }
   return Object.keys(summary).length > 0 ? summary : { keys: Object.keys(value).slice(0, 12) };
+}
+
+async function fetchWithRetry(url, options = {}) {
+  const attempts = [0, 1];
+  let lastError = null;
+
+  for (const attempt of attempts) {
+    try {
+      return await fetchWithTimeout(url, options, Number(process.env.BANKR_HTTP_TIMEOUT_MS || '10000'));
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts[attempts.length - 1]) break;
+    }
+  }
+
+  throw lastError || new Error(`Request failed for ${url}`);
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }

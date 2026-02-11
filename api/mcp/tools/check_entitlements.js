@@ -8,22 +8,10 @@ export default function handler(req, res) {
     return res.status(200).end();
   }
 
-  const payload =
-    req.method === 'POST'
-      ? req.body || {}
-      : {
-          wallet_address: req.query.wallet_address,
-          proofs: [
-            {
-              soul_id: req.query.soul_id,
-              receipt: req.query.receipt
-            }
-          ]
-        };
-
-  if (req.method !== 'GET' && req.method !== 'POST') {
+  if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+  const payload = req.body || {};
 
   const walletAddress = String(payload.wallet_address || '').trim().toLowerCase();
   if (!/^0x[a-f0-9]{40}$/i.test(walletAddress)) {

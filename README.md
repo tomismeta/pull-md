@@ -39,8 +39,9 @@ preflight checks, multi-endpoint failover, timeout, circuit breaker
 | `FACILITATOR_MAX_FAILURES` | optional | Failures before endpoint circuit opens (default `3`) |
 | `FACILITATOR_COOLDOWN_MS` | optional | Circuit cooldown duration (default `60000`) |
 | `FACILITATOR_PREFLIGHT_TTL_MS` | optional | Cached preflight TTL (default `120000`) |
+| `PUBLIC_BASE_URL` | recommended | Canonical app URL used for server-side purchase submission (default `https://soulstarter.vercel.app`) |
+| `BANKR_HTTP_TIMEOUT_MS` | optional | Timeout for Bankr API calls in ms (default `10000`) |
 | `WALLETCONNECT_PROJECT_ID` | optional | WalletConnect Cloud project ID for browser wallet UX |
-| `BANKR_API_KEY` | optional | Bankr API key used by `purchase_soul_bankr` when request key is not supplied |
 | `SOUL_META_STARTER_V1` | optional | Env fallback content for `meta-starter-v1` |
 
 ## Facilitator Health Checks
@@ -69,7 +70,7 @@ read `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`:
 - Bankr wallet:
 use Bankr Agent API `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then submit the resulting base64 payload.
 - Bankr server-side helper:
-`POST /api/mcp/tools/purchase_soul_bankr` performs wallet lookup (`/agent/me`) and signing (`/agent/sign`) before submitting the strict x402 header.
+`POST /api/mcp/tools/purchase_soul_bankr` performs wallet lookup (`/agent/me`) and signing (`/agent/sign`) before submitting the strict x402 header. Provide Bankr API key via `X-BANKR-API-KEY` request header.
 On failure it returns `bankr_debug` with stage-level diagnostics for triage.
 - Bankr capability mapping:
 `/agent/me` for wallet discovery, `/agent/sign` for typed-data signing, and no `/agent/submit` call for SoulStarter purchase settlement.
