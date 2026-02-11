@@ -276,6 +276,27 @@ function buildPaymentDebug(req, paymentRequired) {
             deadline_not_expired: isBigIntGt(permit2Auth.deadline, String(nowSec + 6))
           }
         : null,
+    permit2_expected_payload_shape:
+      transferMethod === 'permit2'
+        ? {
+            payload: {
+              from: '<buyer_wallet>',
+              permit2Authorization: {
+                from: '<buyer_wallet>',
+                permitted: { token: '<asset>', amount: '<amount>' },
+                spender: '0x4020615294c913F045dc10f0a5cdEbd86c280001',
+                nonce: '<uint256_string>',
+                deadline: '<unix_sec>',
+                witness: { to: '<payTo>', validAfter: '<unix_sec>', extra: '0x' }
+              },
+              signature: '0x<eip712_signature>',
+              transaction: {
+                to: '<asset>',
+                data: '0x<erc20 approve(PERMIT2_ADDRESS, MAX_UINT256) calldata>'
+              }
+            }
+          }
+        : null,
     eip712_hint: expected
       ? {
           likely_primary_type: transferMethod === 'permit2' ? 'PermitWitnessTransferFrom' : 'TransferWithAuthorization',
@@ -353,8 +374,17 @@ function buildPaymentDebug(req, paymentRequired) {
     } else if (!submitted?.payload?.transaction?.data || submitted.payload.transaction.data === '0x') {
       info.mismatch_hints.push('payload.transaction.data is empty. Provide ERC20 approve(PERMIT2_ADDRESS, MAX_UINT256) calldata.');
     }
+    if (!submitted?.payload?.signature || typeof submitted.payload.signature !== 'string') {
+      info.mismatch_hints.push('Missing payload.signature as top-level hex string for permit2 payment.');
+    }
+    if (submitted?.payload?.permit2 && !submitted?.payload?.permit2Authorization) {
+      info.mismatch_hints.push('Use payload.permit2Authorization (not payload.permit2).');
+    }
   } else if (transferMethod === 'permit2' && submitted?.payload && !permit2Auth) {
     info.mismatch_hints.push('Missing payload.permit2Authorization object for permit2 payment.');
+    if (submitted?.payload?.permit2) {
+      info.mismatch_hints.push('Detected payload.permit2. Rename this field to payload.permit2Authorization.');
+    }
   } else if (auth && expected) {
     if (!equalAddress(auth.to, expected.payTo)) {
       info.mismatch_hints.push(`authorization.to mismatch: submitted=${auth.to} expected=${expected.payTo}`);
