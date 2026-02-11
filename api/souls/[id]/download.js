@@ -425,6 +425,12 @@ function buildPaymentDebug(req, paymentRequired) {
     info.mismatch_hints.push('Missing payload.authorization object for exact/eip3009 payment.');
   }
 
+  if (transferMethod === 'eip3009' && permit2Auth && !auth) {
+    info.mismatch_hints.push(
+      'Server currently expects eip3009 for this quote, but payload contains permit2Authorization only. Re-sign with TransferWithAuthorization using the latest PAYMENT-REQUIRED.'
+    );
+  }
+
   return info;
 }
 
