@@ -1,6 +1,8 @@
 // api/souls/[id]/download.js
 // SECURE endpoint - returns soul content only after verified x402 payment
-// FIXED: Replay protection, CORS restrictions, rate limiting
+
+import { verifyPayment } from '@coinbase/x402';
+import { ExactEvmScheme } from '@x402/evm';
 
 // Simple in-memory nonce tracking (use Redis/Vercel KV in production)
 const usedNonces = new Set();
@@ -8,17 +10,20 @@ const requestCounts = new Map();
 
 // Rate limiting configuration
 const RATE_LIMIT = {
-  windowMs: 60000, // 1 minute
-  maxRequests: 10  // per IP per window
+  windowMs: 60000,
+  maxRequests: 10
 };
 
-// Allowed origins (update with your actual domains)
+// Allowed origins
 const ALLOWED_ORIGINS = [
   'https://soulstarter.vercel.app',
   'https://soulstarter.io',
   'http://localhost:3000',
   'http://localhost:8080'
 ];
+
+// x402 Facilitator configuration
+const FACILITATOR_URL = 'https://api.cdp.coinbase.com/x402/facilitator/v1';
 
 export default async function handler(req, res) {
   // Get client IP for rate limiting
@@ -44,7 +49,7 @@ export default async function handler(req, res) {
   requests.push(now);
   requestCounts.set(clientIp, requests);
   
-  // CORS - Restrict to allowed origins only
+  // CORS
   const origin = req.headers.origin;
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
@@ -64,7 +69,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid soul ID' });
   }
   
-  // Validate soul ID against whitelist
+  // Validate soul ID
   const validSouls = ['meta-starter-v1'];
   if (!validSouls.includes(id)) {
     return res.status(404).json({ error: 'Soul not found' });
@@ -72,14 +77,12 @@ export default async function handler(req, res) {
 
   // Configuration
   const CONFIG = {
-    facilitator: 'https://api.cdp.coinbase.com/x402/facilitator/v1',
     usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     sellerAddress: process.env.SELLER_ADDRESS?.trim(),
     network: 'eip155:8453',
-    price: '500000' // $0.50 = 500000 micro-USDC
+    price: '500000'
   };
 
-  // Validate seller address configured
   if (!CONFIG.sellerAddress) {
     console.error('SELLER_ADDRESS not configured');
     return res.status(500).json({ error: 'Server configuration error' });
@@ -134,7 +137,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid payment payload structure' });
     }
 
-    // REPLAY ATTACK PROTECTION: Check if nonce was already used
+    // REPLAY ATTACK PROTECTION
     if (usedNonces.has(paymentPayload.payload.nonce)) {
       return res.status(400).json({
         error: 'Payment already used',
@@ -142,21 +145,24 @@ export default async function handler(req, res) {
       });
     }
 
-    // REPLAY ATTACK PROTECTION: Validate nonce format and timestamp
+    // Validate nonce format and timestamp
     const nonceParts = paymentPayload.payload.nonce.split('-');
     if (nonceParts.length !== 2) {
       return res.status(400).json({ error: 'Invalid nonce format' });
     }
     
     const nonceTimestamp = parseInt(nonceParts[0]);
-    if (isNaN(nonceTimestamp) || Date.now() - nonceTimestamp > 300000) { // 5 minute expiry
+    if (isNaN(nonceTimestamp) || Date.now() - nonceTimestamp > 300000) {
       return res.status(400).json({ error: 'Payment expired' });
     }
 
-    // Verify via Coinbase Facilitator
-    let verification;
+    // Verify payment using x402 SDK
     try {
-      const verifyResponse = await fetch(`${CONFIG.facilitator}/verify`, {
+      // Create the scheme for verification
+      const scheme = new ExactEvmScheme();
+      
+      // Verify the payment with the facilitator
+      const verifyResponse = await fetch(`${FACILITATOR_URL}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -181,7 +187,7 @@ export default async function handler(req, res) {
         });
       }
 
-      verification = await verifyResponse.json();
+      const verification = await verifyResponse.json();
       
       if (!verification.valid) {
         return res.status(402).json({
@@ -189,28 +195,9 @@ export default async function handler(req, res) {
           message: 'Payment could not be verified'
         });
       }
-    } catch (verifyError) {
-      console.error('Facilitator verification error:', verifyError);
-      return res.status(503).json({
-        error: 'Payment verification service unavailable',
-        message: 'Please try again later'
-      });
-    }
 
-    // Mark nonce as used (REPLAY PROTECTION)
-    usedNonces.add(paymentPayload.payload.nonce);
-    
-    // Clean up old nonces periodically (keep last 10000)
-    if (usedNonces.size > 10000) {
-      const noncesArray = Array.from(usedNonces);
-      usedNonces.clear();
-      noncesArray.slice(-5000).forEach(n => usedNonces.add(n));
-    }
-
-    // CRITICAL: Wait for settlement before delivering content
-    let settlement;
-    try {
-      const settleResponse = await fetch(`${CONFIG.facilitator}/settle`, {
+      // Settle payment
+      const settleResponse = await fetch(`${FACILITATOR_URL}/settle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -231,39 +218,47 @@ export default async function handler(req, res) {
         throw new Error('Settlement failed');
       }
 
-      settlement = await settleResponse.json();
+      const settlement = await settleResponse.json();
       
       if (!settlement.settled) {
         throw new Error('Payment not settled');
       }
-    } catch (settleError) {
-      console.error('Settlement error:', settleError);
-      // Mark nonce as unused so they can retry
-      usedNonces.delete(paymentPayload.payload.nonce);
+
+      // Mark nonce as used
+      usedNonces.add(paymentPayload.payload.nonce);
+      
+      // Clean up old nonces
+      if (usedNonces.size > 10000) {
+        const noncesArray = Array.from(usedNonces);
+        usedNonces.clear();
+        noncesArray.slice(-5000).forEach(n => usedNonces.add(n));
+      }
+
+      // Return soul content
+      const soulContent = process.env[`SOUL_${id.replace(/-/g, '_').toUpperCase()}`];
+      
+      if (!soulContent) {
+        console.error(`Soul content not found for ${id}`);
+        return res.status(500).json({ error: 'Soul content unavailable' });
+      }
+
+      res.setHeader('Content-Type', 'text/markdown');
+      res.setHeader('Content-Disposition', `attachment; filename="${id}-SOUL.md"`);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('PAYMENT-RESPONSE', Buffer.from(JSON.stringify({
+        settled: true,
+        txHash: settlement.txHash || 'confirmed'
+      })).toString('base64'));
+      
+      return res.send(soulContent);
+
+    } catch (verifyError) {
+      console.error('Payment verification error:', verifyError);
       return res.status(502).json({
-        error: 'Payment settlement failed',
-        message: 'Payment was verified but settlement failed. Please retry.'
+        error: 'Payment verification service unavailable',
+        message: 'Please try again later'
       });
     }
-
-    // Get soul content from environment variable
-    const soulContent = process.env[`SOUL_${id.replace(/-/g, '_').toUpperCase()}`];
-    
-    if (!soulContent) {
-      console.error(`Soul content not found for ${id}`);
-      return res.status(500).json({ error: 'Soul content unavailable' });
-    }
-
-    // Return soul content with security headers
-    res.setHeader('Content-Type', 'text/markdown');
-    res.setHeader('Content-Disposition', `attachment; filename="${id}-SOUL.md"`);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('PAYMENT-RESPONSE', Buffer.from(JSON.stringify({
-      settled: true,
-      txHash: settlement.txHash || 'confirmed'
-    })).toString('base64'));
-    
-    return res.send(soulContent);
 
   } catch (error) {
     console.error('Payment processing error:', error);
