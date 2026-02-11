@@ -112,6 +112,17 @@ export default async function handler(req, res) {
         explicit_header_template: 'PAYMENT-SIGNATURE: <base64(JSON.stringify(x402_payload))>',
         key_boundary: 'Do not send Bankr API key, bearer token, or secrets to SoulStarter endpoints.'
       },
+      common_failure_traps: {
+        network_value:
+          'Top-level x402 network must be "eip155:8453" (from accepted.network). Do not send "base" at top level.',
+        permit2_field_name: 'For permit2 use payload.permit2Authorization (not payload.permit2).',
+        permit2_mode_only:
+          'When assetTransferMethod=permit2, do not include payload.authorization. Use permit2Authorization + signature + transaction.',
+        numeric_types:
+          'For permit2, send permitted.amount, nonce, deadline, and witness.validAfter as strings in JSON.',
+        transaction_data:
+          'For permit2, payload.transaction.data must be ERC20 approve(PERMIT2_ADDRESS, MAX_UINT256) calldata, not empty 0x.'
+      },
       payload_requirements: {
         critical: 'For x402 v2, include top-level accepted object. If accepted is missing or modified, server returns: No matching payment requirements.',
         transfer_method: paymentRequired?.accepts?.[0]?.extra?.assetTransferMethod || 'eip3009',

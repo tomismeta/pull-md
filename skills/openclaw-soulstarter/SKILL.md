@@ -95,6 +95,9 @@ Use these Bankr capabilities explicitly:
 - Build final x402 JSON locally and send only `PAYMENT-SIGNATURE` to SoulStarter.
 For permit2 include `payload.from`, `payload.permit2Authorization`, `payload.transaction`, and `payload.signature`.
 Set `payload.transaction.data` to ERC20 `approve(PERMIT2_ADDRESS, MAX_UINT256)` calldata.
+Set top-level `network` to `eip155:8453` (from `accepted.network`), not `base`.
+Do not include `payload.authorization` in permit2 mode.
+Send permit2 numeric fields (`amount`, `nonce`, `deadline`, `validAfter`) as strings.
 
 3. `POST /agent/submit`:
 - Not required for SoulStarter purchase flow.

@@ -88,7 +88,14 @@ export default function handler(req, res) {
       claim_request: 'Include PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload to claim entitlement and download',
       redownload_request: 'Include X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, and X-PURCHASE-RECEIPT',
       note: 'auth_message_template may appear in a 402 response as helper text; purchase still requires payment header submission.',
-      v2_requirement: 'Submitted payment JSON must include accepted matching PAYMENT-REQUIRED.accepts[0] exactly.'
+      v2_requirement: 'Submitted payment JSON must include accepted matching PAYMENT-REQUIRED.accepts[0] exactly.',
+      permit2_pitfalls: [
+        'Set top-level network to accepted.network (eip155:8453), not "base".',
+        'Use payload.permit2Authorization (not payload.permit2).',
+        'Do not include payload.authorization in permit2 mode.',
+        'Send permit2 numeric fields as strings.',
+        'Set payload.transaction.data to ERC20 approve calldata; do not send empty 0x.'
+      ]
     },
     contact: {
       name: 'SoulStarter Support',

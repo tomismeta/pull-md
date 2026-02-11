@@ -70,6 +70,8 @@ use Bankr Agent API `POST /agent/sign` with `signatureType=eth_signTypedData_v4`
 `/agent/me` for wallet discovery, `/agent/sign` for typed-data signing, and no `/agent/submit` call for SoulStarter purchase settlement.
 - Security boundary:
 Bankr API keys and signer secrets stay in the agent/Bankr runtime only and must never be sent to SoulStarter.
+- Common permit2 pitfalls to avoid:
+top-level `network` must be `eip155:8453` (not `base`), use `payload.permit2Authorization` (not `payload.permit2`), do not include `payload.authorization` in permit2 mode, send permit2 numeric fields as strings, and set non-empty approve calldata in `payload.transaction.data`.
 
 Critical v2 payload requirement:
 - Include `accepted` exactly as `PAYMENT-REQUIRED.accepts[0]` in the submitted payment JSON.

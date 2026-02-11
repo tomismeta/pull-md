@@ -92,6 +92,9 @@ Only the SoulStarter server needs facilitator credentials.
    `permit2` -> `PermitWitnessTransferFrom`, `eip3009` -> `TransferWithAuthorization`.
    For `permit2`, include all of: `payload.from`, `payload.permit2Authorization`, `payload.transaction`, `payload.signature`.
    `payload.transaction.data` should be ERC20 `approve(PERMIT2_ADDRESS, MAX_UINT256)` calldata.
+   Keep top-level `network` as `eip155:8453` (from `accepted.network`), not `base`.
+   Do not include `payload.authorization` when in permit2 mode.
+   Send permit2 numeric fields as strings.
 5. Build x402 JSON payload, base64-encode it, and send:
    `PAYMENT-SIGNATURE: <base64(JSON payload)>`
 6. Save `X-PURCHASE-RECEIPT` from the `200` response for re-downloads.
