@@ -29,6 +29,8 @@ preflight checks, multi-endpoint failover, timeout, circuit breaker
 |---|---|---|
 | `SELLER_ADDRESS` | yes | Recipient wallet for soul purchases |
 | `PURCHASE_RECEIPT_SECRET` | yes | HMAC secret for signed re-download receipts |
+| `CDP_API_KEY_ID` | required for Base mainnet | CDP Secret API key ID used for facilitator JWT auth |
+| `CDP_API_KEY_SECRET` | required for Base mainnet | CDP Secret API key secret (multiline supported) |
 | `FACILITATOR_URLS` | recommended | Comma-separated facilitator URLs in priority order |
 | `FACILITATOR_URL` | optional | Single facilitator URL fallback if `FACILITATOR_URLS` is unset |
 | `FACILITATOR_AUTH_HEADERS_JSON` | optional | JSON map of extra facilitator auth headers |

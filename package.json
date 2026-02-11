@@ -8,6 +8,7 @@
     "deploy": "vercel --prod"
   },
   "dependencies": {
+    "@coinbase/cdp-sdk": "^1.44.0",
     "@x402/core": "^2.3.0",
     "@x402/evm": "^2.3.0",
     "@x402/next": "^2.3.0",

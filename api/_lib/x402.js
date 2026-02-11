@@ -1,5 +1,6 @@
 import { x402HTTPResourceServer, x402ResourceServer } from '@x402/core/server';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
+import { generateJwt } from '@coinbase/cdp-sdk/auth';
 
 const DEFAULT_FACILITATORS = [
   // Production facilitator (requires proper CDP auth if your account/workspace enforces it)
@@ -14,6 +15,7 @@ const FACILITATOR_COOLDOWN_MS = Number(process.env.FACILITATOR_COOLDOWN_MS || '6
 const FACILITATOR_PREFLIGHT_TTL_MS = Number(process.env.FACILITATOR_PREFLIGHT_TTL_MS || '120000');
 
 function getConfiguredFacilitatorUrls() {
+  const hasCdpCredentials = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
   const fromList = (process.env.FACILITATOR_URLS || '')
     .split(',')
     .map((item) => item.trim())
@@ -21,6 +23,9 @@ function getConfiguredFacilitatorUrls() {
 
   if (fromList.length > 0) return fromList;
   if (process.env.FACILITATOR_URL) return [process.env.FACILITATOR_URL.trim()];
+  if (hasCdpCredentials) {
+    return ['https://api.cdp.coinbase.com/platform/v2/x402'];
+  }
   return DEFAULT_FACILITATORS;
 }
 
@@ -44,6 +49,8 @@ function getStaticAuthHeaders() {
 
 const FACILITATOR_URLS = getConfiguredFacilitatorUrls();
 const FACILITATOR_AUTH_HEADERS = getStaticAuthHeaders();
+const CDP_API_KEY_ID = process.env.CDP_API_KEY_ID || null;
+const CDP_API_KEY_SECRET = process.env.CDP_API_KEY_SECRET || null;
 
 const facilitatorState = new Map(
   FACILITATOR_URLS.map((url) => [url, { failures: 0, openUntil: 0, lastError: null, lastOkAt: 0 }])
@@ -109,10 +116,13 @@ function markFailure(url, errorMessage) {
 async function facilitatorFetch(url, path, body) {
   const { signal, done } = withTimeoutSignal(FACILITATOR_TIMEOUT_MS);
   try {
+    const method = body ? 'POST' : 'GET';
+    const authHeaders = await getDynamicFacilitatorAuthHeaders(url, path, method);
     const response = await fetch(`${url}/${path}`, {
-      method: body ? 'POST' : 'GET',
+      method,
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...FACILITATOR_AUTH_HEADERS
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
@@ -135,6 +145,33 @@ async function facilitatorFetch(url, path, body) {
   } finally {
     done();
   }
+}
+
+async function getDynamicFacilitatorAuthHeaders(baseUrl, endpointPath, method) {
+  if (!CDP_API_KEY_ID || !CDP_API_KEY_SECRET) {
+    return {};
+  }
+
+  const url = new URL(baseUrl);
+  if (url.hostname !== 'api.cdp.coinbase.com') {
+    return {};
+  }
+
+  const normalizedBasePath = url.pathname.replace(/\/$/, '');
+  const normalizedEndpointPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+  const requestPath = `${normalizedBasePath}${normalizedEndpointPath}`;
+
+  const jwt = await generateJwt({
+    apiKeyId: CDP_API_KEY_ID,
+    apiKeySecret: CDP_API_KEY_SECRET,
+    requestMethod: method,
+    requestHost: url.host,
+    requestPath
+  });
+
+  return {
+    Authorization: `Bearer ${jwt}`
+  };
 }
 
 async function callFacilitator(path, body) {
@@ -198,12 +235,16 @@ class FallbackFacilitatorClient {
     return response;
   }
 
-  async supported() {
+  async getSupported() {
     const response = await callFacilitator('supported');
     if (!response || typeof response !== 'object' || !Array.isArray(response.kinds)) {
       throw new Error('Invalid supported response from facilitator');
     }
     return response;
+  }
+
+  async supported() {
+    return this.getSupported();
   }
 }
 
@@ -218,7 +259,7 @@ export async function ensureFacilitatorReachable(force = false) {
     return preflight;
   }
 
-  await facilitatorClient.supported();
+  await facilitatorClient.getSupported();
   return preflight;
 }
 
@@ -244,7 +285,7 @@ export function getFacilitatorHealth() {
       max_failures: FACILITATOR_MAX_FAILURES,
       cooldown_ms: FACILITATOR_COOLDOWN_MS,
       preflight_ttl_ms: FACILITATOR_PREFLIGHT_TTL_MS,
-      has_auth_headers: Object.keys(FACILITATOR_AUTH_HEADERS).length > 0
+      has_auth_headers: Object.keys(FACILITATOR_AUTH_HEADERS).length > 0 || Boolean(CDP_API_KEY_ID && CDP_API_KEY_SECRET)
     },
     preflight,
     endpoints
