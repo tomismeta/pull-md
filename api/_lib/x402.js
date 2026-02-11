@@ -744,8 +744,8 @@ function routeConfigForSoul({ soulId, soul, sellerAddress }) {
 }
 
 function getAssetTransferMethod() {
-  const raw = String(process.env.X402_ASSET_TRANSFER_METHOD || 'permit2').trim().toLowerCase();
-  return raw === 'eip3009' ? 'eip3009' : 'permit2';
+  const raw = String(process.env.X402_ASSET_TRANSFER_METHOD || 'eip3009').trim().toLowerCase();
+  return raw === 'permit2' ? 'permit2' : 'eip3009';
 }
 
 export async function getX402HTTPServer({ soulId, soul, sellerAddress }) {

@@ -38,6 +38,7 @@ preflight checks, multi-endpoint failover, timeout, circuit breaker
 | `FACILITATOR_MAX_FAILURES` | optional | Failures before endpoint circuit opens (default `3`) |
 | `FACILITATOR_COOLDOWN_MS` | optional | Circuit cooldown duration (default `60000`) |
 | `FACILITATOR_PREFLIGHT_TTL_MS` | optional | Cached preflight TTL (default `120000`) |
+| `X402_ASSET_TRANSFER_METHOD` | optional | `eip3009` (default) or `permit2`; use `eip3009` for CDP Base mainnet compatibility |
 | `WALLETCONNECT_PROJECT_ID` | optional | WalletConnect Cloud project ID for browser wallet UX |
 | `SOUL_META_STARTER_V1` | optional | Env fallback content for `meta-starter-v1` |
 
@@ -101,6 +102,8 @@ top-level `network` must be `eip155:8453` exactly.
 - CDP facilitator network enum behavior:
 agents must still submit CAIP-2 `eip155:8453` in x402 payloads.
 SoulStarter normalizes facilitator-bound requests to CDP enum `base` server-side.
+- CDP error `permit2 payments are disabled`:
+set `X402_ASSET_TRANSFER_METHOD=eip3009` (or leave unset; default is `eip3009`).
 
 ## Local Run
 
