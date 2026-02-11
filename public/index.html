@@ -17,6 +17,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
+  
+  <!-- WalletConnect Ethereum Provider -->
+  <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.23.1/dist/index.umd.js"></script>
+  <!-- Ethers.js for wallet interactions -->
+  <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 </head>
 <body>
   <header class="header">
@@ -29,7 +34,7 @@
         <nav class="nav">
           <a href="/" class="nav-link">Browse</a>
           <a href="#create" class="nav-link" onclick="showToast('Creator portal coming soon', 'info')">Create</a>
-          <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">
+          <button class="wallet-btn" id="walletBtn" onclick="openWalletModal()">
             <span>💳</span>
             <span id="walletText">Connect Wallet</span>
           </button>
@@ -80,6 +85,51 @@
       <p>Powered by x402 Protocol • WebMCP Enabled • Built on Base</p>
     </div>
   </footer>
+
+  <!-- Wallet Selection Modal -->
+  <div class="modal" id="walletModal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Connect Wallet</h3>
+        <button class="modal-close" onclick="closeWalletModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="wallet-options">
+          <button class="wallet-option" onclick="connectMetaMask()">
+            <span class="wallet-icon">🦊</span>
+            <div class="wallet-info">
+              <span class="wallet-name">MetaMask</span>
+              <span class="wallet-desc">Browser extension</span>
+            </div>
+          </button>
+          
+          <button class="wallet-option" onclick="connectWalletConnect()">
+            <span class="wallet-icon">🔗</span>
+            <div class="wallet-info">
+              <span class="wallet-name">WalletConnect</span>
+              <span class="wallet-desc">Mobile & desktop wallets</span>
+            </div>
+          </button>
+          
+          <button class="wallet-option" onclick="connectCoinbase()">
+            <span class="wallet-icon">🔵</span>
+            <div class="wallet-info">
+              <span class="wallet-name">Coinbase Wallet</span>
+              <span class="wallet-desc">Coinbase extension or app</span>
+            </div>
+          </button>
+          
+          <button class="wallet-option" onclick="connectInjected()">
+            <span class="wallet-icon">💼</span>
+            <div class="wallet-info">
+              <span class="wallet-name">Browser Wallet</span>
+              <span class="wallet-desc">Rainbow, Trust, or other injected wallet</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="toast-container" id="toastContainer"></div>
 

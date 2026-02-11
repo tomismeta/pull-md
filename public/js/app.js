@@ -1,12 +1,6 @@
 /**
- * SoulStarter - x402 Payment Integration (SECURE VERSION)
- * Handles wallet connection and secure soul purchases
- * 
- * SECURITY FIXES:
- * - XSS protection via HTML escaping
- * - Base64 error handling
- * - Chain change monitoring
- * - Fetch timeouts
+ * SoulStarter - Multi-Wallet x402 Payment Integration
+ * Supports MetaMask, WalletConnect, Coinbase, and injected wallets
  */
 
 // Configuration
@@ -14,18 +8,455 @@ const CONFIG = {
   network: 'eip155:8453',
   usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   chainId: '0x2105',
+  chainIdDecimal: 8453,
   apiBase: '/api',
-  requestTimeout: 30000 // 30 second timeout
+  requestTimeout: 30000
 };
 
+// WalletConnect Project ID (replace with your own from https://cloud.walletconnect.com)
+const WC_PROJECT_ID = 'YOUR_WC_PROJECT_ID'; // Get free from cloud.walletconnect.com
+
 // State
-let wallet = null;
+let provider = null;
+let signer = null;
 let walletAddress = null;
-let currentChainId = null;
+let walletType = null;
 
 /**
- * Escape HTML to prevent XSS
+ * Wallet Connection Functions
  */
+
+function openWalletModal() {
+  document.getElementById('walletModal').style.display = 'flex';
+}
+
+function closeWalletModal() {
+  document.getElementById('walletModal').style.display = 'none';
+}
+
+async function connectMetaMask() {
+  closeWalletModal();
+  
+  if (!window.ethereum) {
+    showToast('MetaMask not found. Please install it.', 'error');
+    window.open('https://metamask.io/download/', '_blank');
+    return;
+  }
+  
+  try {
+    walletType = 'metamask';
+    
+    // Request account access
+    const accounts = await window.ethereum.request({
+      method: 'eth_requestAccounts'
+    });
+    
+    if (accounts.length === 0) {
+      throw new Error('No accounts found');
+    }
+    
+    walletAddress = accounts[0];
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    signer = provider.getSigner();
+    
+    // Check and switch to Base
+    await ensureCorrectNetwork(window.ethereum);
+    
+    // Setup listeners
+    setupMetaMaskListeners();
+    
+    updateWalletUI();
+    showToast('Connected to MetaMask!', 'success');
+    
+  } catch (error) {
+    console.error('MetaMask connection failed:', error);
+    showToast('Connection failed: ' + error.message, 'error');
+    resetWalletState();
+  }
+}
+
+async function connectWalletConnect() {
+  closeWalletModal();
+  
+  if (WC_PROJECT_ID === 'YOUR_WC_PROJECT_ID') {
+    showToast('WalletConnect not configured. Please set up a project at cloud.walletconnect.com', 'error');
+    return;
+  }
+  
+  try {
+    walletType = 'walletconnect';
+    
+    const ethereumProvider = await window.EthereumProvider.init({
+      projectId: WC_PROJECT_ID,
+      chains: [CONFIG.chainIdDecimal],
+      showQrModal: true,
+      methods: ['eth_sendTransaction', 'eth_sign', 'personal_sign'],
+      events: ['chainChanged', 'accountsChanged'],
+      metadata: {
+        name: 'SoulStarter',
+        description: 'Human-nurtured agent memory marketplace',
+        url: window.location.origin,
+        icons: [window.location.origin + '/favicon.ico']
+      }
+    });
+    
+    await ethereumProvider.enable();
+    
+    provider = new ethers.providers.Web3Provider(ethereumProvider);
+    signer = provider.getSigner();
+    walletAddress = await signer.getAddress();
+    
+    // WalletConnect handles network switching in the app
+    
+    // Setup listeners
+    ethereumProvider.on('accountsChanged', (accounts) => {
+      if (accounts.length === 0) {
+        resetWalletState();
+      } else {
+        walletAddress = accounts[0];
+        updateWalletUI();
+      }
+    });
+    
+    ethereumProvider.on('disconnect', () => {
+      resetWalletState();
+      showToast('Wallet disconnected', 'info');
+    });
+    
+    updateWalletUI();
+    showToast('Wallet connected!', 'success');
+    
+  } catch (error) {
+    console.error('WalletConnect failed:', error);
+    showToast('Connection failed: ' + error.message, 'error');
+    resetWalletState();
+  }
+}
+
+async function connectCoinbase() {
+  closeWalletModal();
+  
+  // Check for Coinbase Wallet
+  const coinbaseWallet = window.ethereum?.providers?.find(p => p.isCoinbaseWallet) ||
+                         (window.ethereum?.isCoinbaseWallet ? window.ethereum : null);
+  
+  if (!coinbaseWallet && !window.ethereum) {
+    showToast('Coinbase Wallet not found. Opening download page...', 'info');
+    window.open('https://www.coinbase.com/wallet', '_blank');
+    return;
+  }
+  
+  try {
+    walletType = 'coinbase';
+    
+    const providerToUse = coinbaseWallet || window.ethereum;
+    
+    const accounts = await providerToUse.request({
+      method: 'eth_requestAccounts'
+    });
+    
+    if (accounts.length === 0) {
+      throw new Error('No accounts found');
+    }
+    
+    walletAddress = accounts[0];
+    provider = new ethers.providers.Web3Provider(providerToUse);
+    signer = provider.getSigner();
+    
+    await ensureCorrectNetwork(providerToUse);
+    
+    setupMetaMaskListeners(providerToUse);
+    
+    updateWalletUI();
+    showToast('Connected to Coinbase Wallet!', 'success');
+    
+  } catch (error) {
+    console.error('Coinbase connection failed:', error);
+    showToast('Connection failed: ' + error.message, 'error');
+    resetWalletState();
+  }
+}
+
+async function connectInjected() {
+  closeWalletModal();
+  
+  if (!window.ethereum) {
+    showToast('No wallet found. Please install MetaMask, Rainbow, or another wallet.', 'error');
+    return;
+  }
+  
+  try {
+    walletType = 'injected';
+    
+    const accounts = await window.ethereum.request({
+      method: 'eth_requestAccounts'
+    });
+    
+    if (accounts.length === 0) {
+      throw new Error('No accounts found');
+    }
+    
+    walletAddress = accounts[0];
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    signer = provider.getSigner();
+    
+    await ensureCorrectNetwork(window.ethereum);
+    
+    setupMetaMaskListeners();
+    
+    updateWalletUI();
+    showToast('Wallet connected!', 'success');
+    
+  } catch (error) {
+    console.error('Wallet connection failed:', error);
+    showToast('Connection failed: ' + error.message, 'error');
+    resetWalletState();
+  }
+}
+
+async function ensureCorrectNetwork(ethereumProvider) {
+  const chainId = await ethereumProvider.request({ method: 'eth_chainId' });
+  
+  if (chainId !== CONFIG.chainId) {
+    try {
+      await ethereumProvider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: CONFIG.chainId }]
+      });
+    } catch (switchError) {
+      if (switchError.code === 4902) {
+        await ethereumProvider.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: CONFIG.chainId,
+            chainName: 'Base',
+            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://mainnet.base.org'],
+            blockExplorerUrls: ['https://basescan.org']
+          }]
+        });
+      } else {
+        throw switchError;
+      }
+    }
+  }
+}
+
+function setupMetaMaskListeners(ethereumProvider = window.ethereum) {
+  if (!ethereumProvider) return;
+  
+  ethereumProvider.on('accountsChanged', (accounts) => {
+    if (accounts.length === 0) {
+      resetWalletState();
+      showToast('Wallet disconnected', 'info');
+    } else {
+      walletAddress = accounts[0];
+      updateWalletUI();
+    }
+  });
+  
+  ethereumProvider.on('chainChanged', () => {
+    window.location.reload();
+  });
+}
+
+function resetWalletState() {
+  provider = null;
+  signer = null;
+  walletAddress = null;
+  walletType = null;
+  updateWalletUI();
+}
+
+function disconnectWallet() {
+  resetWalletState();
+  showToast('Wallet disconnected', 'info');
+}
+
+function updateWalletUI() {
+  const btn = document.getElementById('walletBtn');
+  const text = document.getElementById('walletText');
+  
+  if (!btn || !text) return;
+  
+  if (walletAddress) {
+    text.textContent = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+    btn.classList.add('connected');
+    btn.onclick = disconnectWallet;
+  } else {
+    text.textContent = 'Connect Wallet';
+    btn.classList.remove('connected');
+    btn.onclick = openWalletModal;
+  }
+}
+
+/**
+ * Purchase Functions
+ */
+
+async function purchaseSoul(soulId) {
+  if (!walletAddress || !signer) {
+    showToast('Please connect your wallet first', 'warning');
+    openWalletModal();
+    return;
+  }
+
+  const btn = document.getElementById('buyBtn');
+  
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Processing...';
+    }
+
+    // Step 1: Get payment requirements
+    showToast('Requesting payment details...', 'info');
+    const response = await fetchWithTimeout(
+      `${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`
+    );
+
+    if (response.status === 500) {
+      throw new Error('Server error. Please try again later.');
+    }
+    
+    if (response.status === 429) {
+      throw new Error('Too many requests. Please wait a moment.');
+    }
+
+    if (response.status !== 402) {
+      throw new Error('Unexpected response from server');
+    }
+
+    const paymentRequiredB64 = response.headers.get('PAYMENT-REQUIRED');
+    if (!paymentRequiredB64) {
+      throw new Error('No payment requirements received');
+    }
+
+    let requirements;
+    try {
+      requirements = JSON.parse(atob(paymentRequiredB64));
+    } catch (e) {
+      throw new Error('Invalid payment requirements');
+    }
+    
+    if (!requirements.payload || !requirements.payload.amount) {
+      throw new Error('Invalid payment data');
+    }
+
+    // Step 2: Create and sign payment
+    showToast('Please sign the payment in your wallet', 'info');
+    const paymentPayload = await createPaymentPayload(requirements);
+    
+    // Step 3: Send payment and get soul
+    showToast('Verifying payment...', 'info');
+    const paymentResponse = await fetchWithTimeout(
+      `${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`,
+      {
+        method: 'GET',
+        headers: {
+          'PAYMENT-SIGNATURE': btoa(JSON.stringify(paymentPayload)),
+          'Accept': 'text/markdown'
+        }
+      }
+    );
+
+    if (!paymentResponse.ok) {
+      let errorMessage = 'Payment failed';
+      try {
+        const error = await paymentResponse.json();
+        errorMessage = error.message || errorMessage;
+      } catch (e) {}
+      
+      if (paymentResponse.status === 402) {
+        throw new Error('Payment was rejected: ' + errorMessage);
+      } else {
+        throw new Error(errorMessage);
+      }
+    }
+
+    const soulContent = await paymentResponse.text();
+    
+    let txHash = 'pending';
+    const paymentResponseB64 = paymentResponse.headers.get('PAYMENT-RESPONSE');
+    if (paymentResponseB64) {
+      try {
+        const paymentResult = JSON.parse(atob(paymentResponseB64));
+        txHash = paymentResult.txHash || 'pending';
+      } catch (e) {
+        console.warn('Failed to parse payment response');
+      }
+    }
+
+    showPaymentSuccess(soulContent, txHash, soulId);
+    showToast('Soul acquired successfully!', 'success');
+
+  } catch (error) {
+    console.error('Purchase failed:', error);
+    showToast('Purchase failed: ' + (error.message || 'Unknown error'), 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Buy Soul';
+    }
+  }
+}
+
+async function createPaymentPayload(requirements) {
+  const message = JSON.stringify(requirements.payload);
+  
+  // Sign with ethers signer (works with all wallet types)
+  const signature = await signer.signMessage(message);
+
+  return {
+    scheme: requirements.scheme,
+    network: requirements.network,
+    payload: requirements.payload,
+    signature,
+    from: walletAddress
+  };
+}
+
+function showPaymentSuccess(content, txHash, soulId) {
+  const purchaseCard = document.getElementById('purchaseCard');
+  if (purchaseCard) {
+    purchaseCard.style.display = 'none';
+  }
+
+  const successCard = document.getElementById('successCard');
+  if (successCard) {
+    successCard.style.display = 'block';
+    
+    const downloadLink = document.getElementById('downloadLink');
+    if (downloadLink) {
+      const blob = new Blob([content], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      downloadLink.href = url;
+      downloadLink.download = `${soulId}-SOUL.md`;
+      setTimeout(() => downloadLink.click(), 500);
+    }
+    
+    const txHashEl = document.getElementById('txHash');
+    if (txHashEl) {
+      if (txHash && txHash !== 'pending') {
+        txHashEl.textContent = 'Transaction: ';
+        const link = document.createElement('a');
+        link.href = `https://basescan.org/tx/${txHash}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = txHash.slice(0, 10) + '...' + txHash.slice(-8);
+        link.style.color = 'var(--accent-secondary)';
+        txHashEl.appendChild(link);
+      } else {
+        txHashEl.textContent = 'Transaction: Pending confirmation';
+      }
+    }
+  }
+}
+
+/**
+ * Utility Functions
+ */
+
 function escapeHtml(text) {
   if (typeof text !== 'string') return '';
   const div = document.createElement('div');
@@ -33,21 +464,6 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-/**
- * Safe base64 decode with error handling
- */
-function safeBase64Decode(str) {
-  try {
-    return atob(str);
-  } catch (e) {
-    console.error('Base64 decode failed:', e);
-    throw new Error('Invalid payment data received');
-  }
-}
-
-/**
- * Fetch with timeout
- */
 async function fetchWithTimeout(url, options = {}, timeout = CONFIG.requestTimeout) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -68,387 +484,26 @@ async function fetchWithTimeout(url, options = {}, timeout = CONFIG.requestTimeo
   }
 }
 
-/**
- * Initialize wallet connection
- */
-async function connectWallet() {
-  try {
-    if (!window.ethereum) {
-      showToast('Please install MetaMask to purchase souls', 'error');
-      // Use direct link instead of window.open to avoid popup blockers
-      const installLink = document.createElement('a');
-      installLink.href = 'https://metamask.io';
-      installLink.target = '_blank';
-      installLink.rel = 'noopener noreferrer';
-      installLink.click();
-      return;
-    }
-
-    // Request account access
-    const accounts = await window.ethereum.request({ 
-      method: 'eth_requestAccounts' 
-    });
-
-    if (accounts.length === 0) {
-      showToast('No accounts found', 'error');
-      return;
-    }
-
-    walletAddress = accounts[0];
-    wallet = window.ethereum;
-
-    // Get current chain
-    currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
-
-    // Switch to Base if needed
-    if (currentChainId !== CONFIG.chainId) {
-      await switchToBase();
-    }
-
-    // Update UI
-    updateWalletUI();
-    showToast('Wallet connected!', 'success');
-
-    // Listen for account changes
-    window.ethereum.on('accountsChanged', handleAccountsChanged);
-    
-    // Listen for chain changes
-    window.ethereum.on('chainChanged', handleChainChanged);
-
-  } catch (error) {
-    console.error('Wallet connection failed:', error);
-    showToast('Failed to connect wallet: ' + (error.message || 'Unknown error'), 'error');
-  }
-}
-
-/**
- * Handle account changes
- */
-function handleAccountsChanged(newAccounts) {
-  walletAddress = newAccounts[0] || null;
-  if (!walletAddress) {
-    showToast('Wallet disconnected', 'warning');
-  }
-  updateWalletUI();
-}
-
-/**
- * Handle chain changes
- */
-function handleChainChanged(newChainId) {
-  currentChainId = newChainId;
-  if (newChainId !== CONFIG.chainId) {
-    showToast('Please switch to Base network to continue', 'warning');
-    updateWalletUI();
-  } else {
-    showToast('Connected to Base network', 'success');
-  }
-}
-
-/**
- * Switch to Base network
- */
-async function switchToBase() {
-  try {
-    await window.ethereum.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: CONFIG.chainId }]
-    });
-    currentChainId = CONFIG.chainId;
-  } catch (switchError) {
-    if (switchError.code === 4902) {
-      // Add Base network
-      try {
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: CONFIG.chainId,
-            chainName: 'Base',
-            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-            rpcUrls: ['https://mainnet.base.org'],
-            blockExplorerUrls: ['https://basescan.org']
-          }]
-        });
-      } catch (addError) {
-        throw new Error('Failed to add Base network to wallet');
-      }
-    } else if (switchError.code === 4001) {
-      // User rejected
-      throw new Error('Please approve the network switch to Base');
-    } else {
-      throw switchError;
-    }
-  }
-}
-
-/**
- * Update wallet button UI
- */
-function updateWalletUI() {
-  const btn = document.getElementById('walletBtn');
-  const text = document.getElementById('walletText');
-  
-  if (!btn || !text) return;
-  
-  if (walletAddress) {
-    const isCorrectNetwork = currentChainId === CONFIG.chainId;
-    text.textContent = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
-    btn.classList.add('connected');
-    
-    if (!isCorrectNetwork) {
-      btn.classList.add('wrong-network');
-      text.textContent += ' (Wrong Network)';
-    } else {
-      btn.classList.remove('wrong-network');
-    }
-  } else {
-    text.textContent = 'Connect Wallet';
-    btn.classList.remove('connected', 'wrong-network');
-  }
-}
-
-/**
- * Validate network before payment
- */
-async function validateNetwork() {
-  if (!walletAddress) {
-    throw new Error('Please connect your wallet first');
-  }
-  
-  currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
-  
-  if (currentChainId !== CONFIG.chainId) {
-    showToast('Switching to Base network...', 'info');
-    await switchToBase();
-  }
-}
-
-/**
- * Purchase a soul via x402
- */
-async function purchaseSoul(soulId) {
-  const btn = document.getElementById('buyBtn');
-  
-  try {
-    // Validate inputs
-    if (!soulId || typeof soulId !== 'string') {
-      throw new Error('Invalid soul ID');
-    }
-    
-    // Validate network
-    await validateNetwork();
-    
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Processing...';
-    }
-
-    // Step 1: Request payment requirements
-    showToast('Requesting payment details...', 'info');
-    const response = await fetchWithTimeout(
-      `${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`,
-      {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      }
-    );
-
-    if (response.status === 500) {
-      throw new Error('Server error. Please try again later.');
-    }
-    
-    if (response.status === 429) {
-      throw new Error('Too many requests. Please wait a moment.');
-    }
-
-    if (response.status !== 402) {
-      throw new Error('Unexpected response from server');
-    }
-
-    // Parse payment requirements safely
-    const paymentRequiredB64 = response.headers.get('PAYMENT-REQUIRED');
-    if (!paymentRequiredB64) {
-      throw new Error('No payment requirements received');
-    }
-
-    let requirements;
-    try {
-      requirements = JSON.parse(safeBase64Decode(paymentRequiredB64));
-    } catch (e) {
-      throw new Error('Invalid payment requirements');
-    }
-    
-    // Validate requirements
-    if (!requirements.payload || !requirements.payload.amount) {
-      throw new Error('Invalid payment data');
-    }
-    
-    // Step 2: Create and sign payment
-    showToast('Please sign the payment in your wallet', 'info');
-    const paymentPayload = await createPaymentPayload(requirements);
-    
-    // Step 3: Send payment and get soul content
-    showToast('Verifying payment...', 'info');
-    const paymentResponse = await fetchWithTimeout(
-      `${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`,
-      {
-        method: 'GET',
-        headers: {
-          'PAYMENT-SIGNATURE': btoa(JSON.stringify(paymentPayload)),
-          'Accept': 'text/markdown'
-        }
-      }
-    );
-
-    if (!paymentResponse.ok) {
-      let errorMessage = 'Payment failed';
-      try {
-        const error = await paymentResponse.json();
-        errorMessage = error.message || errorMessage;
-      } catch (e) {
-        // Use default message
-      }
-      
-      if (paymentResponse.status === 402) {
-        throw new Error('Payment was rejected: ' + errorMessage);
-      } else if (paymentResponse.status === 400) {
-        throw new Error('Invalid payment: ' + errorMessage);
-      } else {
-        throw new Error(errorMessage);
-      }
-    }
-
-    // Get soul content
-    const soulContent = await paymentResponse.text();
-    
-    // Get transaction hash from response header
-    let txHash = 'pending';
-    const paymentResponseB64 = paymentResponse.headers.get('PAYMENT-RESPONSE');
-    if (paymentResponseB64) {
-      try {
-        const paymentResult = JSON.parse(safeBase64Decode(paymentResponseB64));
-        txHash = paymentResult.txHash || 'pending';
-      } catch (e) {
-        console.warn('Failed to parse payment response');
-      }
-    }
-
-    // Show success and trigger download
-    showPaymentSuccess(soulContent, txHash, soulId);
-    showToast('Soul acquired successfully!', 'success');
-
-  } catch (error) {
-    console.error('Purchase failed:', error);
-    showToast('Purchase failed: ' + (error.message || 'Unknown error'), 'error');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Buy Soul';
-    }
-  }
-}
-
-/**
- * Create payment payload for x402
- */
-async function createPaymentPayload(requirements) {
-  const paymentData = {
-    scheme: requirements.scheme,
-    network: requirements.network,
-    payload: requirements.payload
-  };
-
-  // Create message to sign
-  const message = JSON.stringify(paymentData.payload);
-  
-  // Sign with wallet
-  const signature = await window.ethereum.request({
-    method: 'personal_sign',
-    params: [message, walletAddress]
-  });
-
-  return {
-    ...paymentData,
-    signature,
-    from: walletAddress
-  };
-}
-
-/**
- * Show payment success UI and trigger download
- */
-function showPaymentSuccess(content, txHash, soulId) {
-  // Hide purchase card
-  const purchaseCard = document.getElementById('purchaseCard');
-  if (purchaseCard) {
-    purchaseCard.style.display = 'none';
-  }
-
-  // Show success card
-  const successCard = document.getElementById('successCard');
-  if (successCard) {
-    successCard.style.display = 'block';
-    
-    // Set download link
-    const downloadLink = document.getElementById('downloadLink');
-    if (downloadLink) {
-      const blob = new Blob([content], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      downloadLink.href = url;
-      downloadLink.download = `${escapeHtml(soulId)}-SOUL.md`;
-      
-      // Auto-trigger download
-      setTimeout(() => downloadLink.click(), 500);
-    }
-    
-    // Show transaction hash
-    const txHashEl = document.getElementById('txHash');
-    if (txHashEl) {
-      if (txHash && txHash !== 'pending') {
-        // Use textContent to avoid XSS
-        txHashEl.textContent = 'Transaction: ';
-        const link = document.createElement('a');
-        link.href = `https://basescan.org/tx/${encodeURIComponent(txHash)}`;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = txHash.slice(0, 10) + '...' + txHash.slice(-8);
-        link.style.color = 'var(--accent-secondary)';
-        txHashEl.appendChild(link);
-      } else {
-        txHashEl.textContent = 'Transaction: Pending confirmation';
-      }
-    }
-  }
-}
-
-/**
- * Show toast notification (XSS-safe)
- */
 function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
   if (!container) return;
   
   const toast = document.createElement('div');
-  toast.className = `toast toast-${escapeHtml(type)}`;
-  toast.textContent = message; // Safe: uses textContent
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
   
   container.appendChild(toast);
   
-  // Animate in
   requestAnimationFrame(() => {
     toast.classList.add('show');
   });
   
-  // Remove after 4 seconds
   setTimeout(() => {
     toast.classList.remove('show');
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
 
-/**
- * Load soul cards on index page (XSS-safe)
- */
 async function loadSouls() {
   const grid = document.getElementById('soulsGrid');
   if (!grid) return;
@@ -465,15 +520,8 @@ async function loadSouls() {
     }
   ];
 
-  // Clear grid
-  grid.innerHTML = '';
-  
-  // Create cards safely
-  souls.forEach(soul => {
-    const card = document.createElement('article');
-    card.className = 'soul-card';
-    
-    card.innerHTML = `
+  grid.innerHTML = souls.map(soul => `
+    <article class="soul-card">
       <div class="soul-card-icon">${escapeHtml(soul.icon)}</div>
       <h3>${escapeHtml(soul.name)}</h3>
       <p>${escapeHtml(soul.description)}</p>
@@ -487,34 +535,27 @@ async function loadSouls() {
           <span class="currency">USDC</span>
         </div>
       </div>
-    `;
-    
-    const link = document.createElement('a');
-    link.href = '/soul.html';
-    link.className = 'btn btn-primary btn-full';
-    link.textContent = 'View Soul';
-    card.appendChild(link);
-    
-    grid.appendChild(card);
-  });
+      <a href="/soul.html" class="btn btn-primary btn-full">View Soul</a>
+    </article>
+  `).join('');
 }
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-  // Check for existing wallet connection
+  // Check for existing connection
   if (window.ethereum && window.ethereum.selectedAddress) {
-    walletAddress = window.ethereum.selectedAddress;
-    wallet = window.ethereum;
-    window.ethereum.request({ method: 'eth_chainId' }).then(chainId => {
-      currentChainId = chainId;
-      updateWalletUI();
-    });
+    connectInjected().catch(console.error);
   }
   
-  // Load souls if on index page
   loadSouls();
 });
 
 // Expose functions globally
-window.connectWallet = connectWallet;
+window.openWalletModal = openWalletModal;
+window.closeWalletModal = closeWalletModal;
+window.connectMetaMask = connectMetaMask;
+window.connectWalletConnect = connectWalletConnect;
+window.connectCoinbase = connectCoinbase;
+window.connectInjected = connectInjected;
+window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
