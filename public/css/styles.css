@@ -373,6 +373,22 @@ main {
   margin-bottom: 14px;
 }
 
+.soul-source-link {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.66rem;
+  color: #b8c9ff;
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(184, 201, 255, 0.45);
+}
+
+.soul-source-link:hover {
+  color: #d9e3ff;
+  border-bottom-color: rgba(217, 227, 255, 0.9);
+}
+
 .soul-card-meta {
   display: flex;
   justify-content: space-between;

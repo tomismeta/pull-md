@@ -30,6 +30,8 @@ export const SOUL_CATALOG = {
     provenance: { type: 'synthetic', raised_by: 'Prompt remix lab', days_nurtured: 9 },
     compatibility: { runtimes: ['OpenClaw', 'ElizaOS', 'Olas'], min_memory: '8MB', min_context: 4000 },
     preview: 'Have a take. Keep it short. No corporate fluff. Be sharp, useful, and human.',
+    sourceLabel: 'Peter on X',
+    sourceUrl: 'https://x.com/steipete/status/2020704611640705485',
     contentFile: 'souls/sassy-starter-v1.md'
   },
   'pattern-weaver-v1': {
@@ -111,6 +113,8 @@ export function listSouls() {
     provenance: soul.provenance,
     compatibility: soul.compatibility,
     preview: { available: true, excerpt: soul.preview },
+    source_label: soul.sourceLabel || null,
+    source_url: soul.sourceUrl || null,
     purchase_endpoint: `/api/souls/${soul.id}/download`,
     payment_protocol: 'x402'
   }));

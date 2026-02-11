@@ -463,6 +463,13 @@ async function loadSouls() {
         <div class="soul-card-icon">${escapeHtml(soul.icon || '🔮')}</div>
         <h3>${escapeHtml(soul.name)}</h3>
         <p>${escapeHtml(soul.description)}</p>
+        ${
+          soul.source_url
+            ? `<a class="soul-source-link" href="${escapeHtml(soul.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+                soul.source_label || 'Source'
+              )}</a>`
+            : ''
+        }
         <div class="soul-card-meta">
           <div class="soul-lineage">
             <span class="badge badge-${escapeHtml((soul.provenance?.type || 'hybrid').toLowerCase())}">${escapeHtml(soul.provenance?.type || 'Hybrid')}</span>
