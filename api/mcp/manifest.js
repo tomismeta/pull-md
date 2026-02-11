@@ -84,7 +84,8 @@ export default function handler(req, res) {
       first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
       claim_request: 'Include PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload to claim entitlement and download',
       redownload_request: 'Include X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, and X-PURCHASE-RECEIPT',
-      note: 'auth_message_template may appear in a 402 response as helper text; purchase still requires payment header submission.'
+      note: 'auth_message_template may appear in a 402 response as helper text; purchase still requires payment header submission.',
+      v2_requirement: 'Submitted payment JSON must include accepted matching PAYMENT-REQUIRED.accepts[0] exactly.'
     },
     contact: {
       name: 'SoulStarter Support',

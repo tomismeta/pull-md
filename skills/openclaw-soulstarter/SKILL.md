@@ -57,6 +57,8 @@ If `401` or `402`, continue to purchase flow.
 - Expect `402` with `PAYMENT-REQUIRED`.
 
 2. Decode `PAYMENT-REQUIRED` and create x402 payment payload.
+   - For v2, include:
+   `accepted: PAYMENT_REQUIRED.accepts[0]` (exact object, unchanged)
 3. Retry same endpoint with header:
 - Preferred:
 `PAYMENT-SIGNATURE: <base64-json-payload>`
@@ -73,6 +75,10 @@ If `401` or `402`, continue to purchase flow.
 Create EIP-712 `TransferWithAuthorization` typed data from `PAYMENT-REQUIRED.accepts[0]` and sign with the buyer wallet.
 - Bankr wallet:
 Use Bankr's x402 exact EVM flow and pass its final base64-encoded JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
+
+If you get `No matching payment requirements`:
+- You likely omitted or mutated `accepted`.
+- Rebuild payload from the latest `PAYMENT-REQUIRED` and retry.
 
 ### Bankr Capability Mapping
 

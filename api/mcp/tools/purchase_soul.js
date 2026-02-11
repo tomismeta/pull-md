@@ -59,6 +59,16 @@ export default async function handler(req, res) {
       }
     }
 
+    let paymentRequired = null;
+    const paymentRequiredHeader = result.response.headers?.['PAYMENT-REQUIRED'] || result.response.headers?.['payment-required'];
+    if (paymentRequiredHeader) {
+      try {
+        paymentRequired = JSON.parse(Buffer.from(paymentRequiredHeader, 'base64').toString('utf-8'));
+      } catch (_) {
+        paymentRequired = null;
+      }
+    }
+
     const body = result.response.body && typeof result.response.body === 'object' ? result.response.body : {};
     return res.status(402).json({
       ...body,
@@ -70,8 +80,8 @@ export default async function handler(req, res) {
         recipient: sellerAddress
       },
       instructions: {
-        step_1: 'Decode PAYMENT-REQUIRED (base64 JSON) and use accepts[0] values for EIP-712 signing',
-        step_2: 'Create x402 payment payload JSON and base64-encode it',
+        step_1: 'Decode PAYMENT-REQUIRED (base64 JSON) and keep accepts[0] exactly (do not edit fields/order)',
+        step_2: 'Sign EIP-712 TransferWithAuthorization from accepts[0], then build x402 payload including accepted',
         step_3: 'Retry GET /api/souls/{soul_id}/download with header PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT)',
         step_4: 'On success, store X-PURCHASE-RECEIPT for future re-downloads'
       },
@@ -82,6 +92,27 @@ export default async function handler(req, res) {
       wallet_examples: {
         standard_wallet: 'Sign TransferWithAuthorization typed data from PAYMENT-REQUIRED.accepts[0], then send payload in PAYMENT-SIGNATURE.',
         bankr_wallet: 'Use Bankr x402 exact EVM signer output and submit resulting base64 JSON in PAYMENT-SIGNATURE (or PAYMENT).'
+      },
+      payload_requirements: {
+        critical: 'For x402 v2, include top-level accepted object. If accepted is missing or modified, server returns: No matching payment requirements.',
+        required_shape: {
+          x402Version: 2,
+          scheme: 'exact',
+          network: 'eip155:8453',
+          accepted: '<must equal PAYMENT-REQUIRED.accepts[0] exactly>',
+          payload: {
+            authorization: {
+              from: '<buyer_wallet>',
+              to: '<payTo>',
+              value: '<amount>',
+              validAfter: '<unix_sec>',
+              validBefore: '<unix_sec>',
+              nonce: '0x<32byte>'
+            },
+            signature: '0x<eip712_signature>'
+          }
+        },
+        latest_requirements: paymentRequired?.accepts?.[0] || null
       }
     });
   } catch (error) {

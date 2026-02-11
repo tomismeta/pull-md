@@ -67,6 +67,10 @@ use Bankr's x402 exact EVM signer output and submit the resulting base64 payload
 - Bankr capability mapping:
 `/agent/prompt` + `/agent/job/{jobId}` for async orchestration, `/agent/sign` for explicit signing, and no `/agent/submit` call for SoulStarter purchase settlement.
 
+Critical v2 payload requirement:
+- Include `accepted` exactly as `PAYMENT-REQUIRED.accepts[0]` in the submitted payment JSON.
+- If missing or modified, server returns `No matching payment requirements`.
+
 If a `402` body contains `auth_message_template`, treat it as optional re-download helper text.
 It does **not** replace the purchase flow.
 

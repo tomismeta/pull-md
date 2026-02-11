@@ -51,12 +51,17 @@ base64(JSON.stringify({
   x402Version: 2,
   scheme: "exact",
   network: "eip155:8453",
+  accepted: PAYMENT_REQUIRED.accepts[0], // exact object, unchanged
   payload: {
     authorization: { ...TransferWithAuthorization },
     signature: "0x..."
   }
 }))
 ```
+
+Important:
+- `accepted` is mandatory for v2 in this implementation.
+- If `accepted` is missing or altered, server returns `No matching payment requirements`.
 
 #### Wallet Notes
 
