@@ -61,7 +61,7 @@ export default async function handler(req, res) {
   // Configuration
   const CONFIG = {
     usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    sellerAddress: process.env.SELLER_ADDRESS,
+    sellerAddress: process.env.SELLER_ADDRESS?.trim(),
     network: 'eip155:8453',
     price: '500000' // $0.50 = 500000 micro-USDC
   };
