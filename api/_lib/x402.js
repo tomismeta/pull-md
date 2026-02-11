@@ -256,7 +256,7 @@ function coerceToCdpV1Envelope(body) {
         ? paymentRequirements
         : null;
 
-  const transferMethod = getTransferMethod(paymentPayload, accepted);
+  const transferMethod = getTransferMethod(paymentPayload, paymentRequirements || accepted);
   const resource = paymentPayload?.resource && typeof paymentPayload.resource === 'object' ? paymentPayload.resource : null;
   const sourcePayload = paymentPayload?.payload && typeof paymentPayload.payload === 'object' ? paymentPayload.payload : {};
 
@@ -616,6 +616,7 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
       },
       cdp_verify_request_preview: {
         top_level_x402Version: cdpVerifyRequest?.x402Version ?? null,
+        transfer_method: getTransferMethod(cdpNormalizedPayload, cdpMappedRequirements),
         paymentPayload_keys: Object.keys(cdpVerifyRequest?.paymentPayload?.payload || {}),
         paymentRequirements_keys: Object.keys(cdpVerifyRequest?.paymentRequirements || {})
       }
@@ -658,6 +659,7 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
       },
       cdp_verify_request_preview: {
         top_level_x402Version: cdpVerifyRequest?.x402Version ?? null,
+        transfer_method: getTransferMethod(cdpNormalizedPayload, cdpMappedRequirements),
         paymentPayload_keys: Object.keys(cdpVerifyRequest?.paymentPayload?.payload || {}),
         paymentRequirements_keys: Object.keys(cdpVerifyRequest?.paymentRequirements || {})
       }
