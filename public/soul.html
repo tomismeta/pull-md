@@ -5,10 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Meta Starter Soul — SoulStarter</title>
   <meta name="description" content="A fully autonomous agent with growth mindset and lineage awareness. Purchase via x402.">
+  <meta name="mcp:version" content="1.0">
+  <meta name="mcp:endpoint" content="/api/mcp/manifest">
+  <meta name="mcp:tool:list_souls" content="/api/mcp/tools/list_souls">
+  <meta name="mcp:tool:get_soul_details" content="/api/mcp/tools/get_soul_details">
+  <meta name="mcp:tool:purchase_soul" content="/api/mcp/tools/purchase_soul">
+  <meta name="mcp:tool:check_entitlements" content="/api/mcp/tools/check_entitlements">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/styles.css">
+  <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.23.1/dist/index.umd.js"></script>
+  <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 </head>
 <body>
   <header class="header">
@@ -120,6 +128,50 @@
   </main>
 
   <div class="toast-container" id="toastContainer"></div>
+
+  <div class="modal" id="walletModal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Connect Wallet</h3>
+        <button class="modal-close" onclick="closeWalletModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="wallet-options">
+          <button class="wallet-option" onclick="connectMetaMask()">
+            <span class="wallet-icon">🦊</span>
+            <div class="wallet-info">
+              <span class="wallet-name">MetaMask</span>
+              <span class="wallet-desc">Browser extension</span>
+            </div>
+          </button>
+
+          <button class="wallet-option" onclick="connectWalletConnect()">
+            <span class="wallet-icon">🔗</span>
+            <div class="wallet-info">
+              <span class="wallet-name">WalletConnect</span>
+              <span class="wallet-desc">Mobile & desktop wallets</span>
+            </div>
+          </button>
+
+          <button class="wallet-option" onclick="connectCoinbase()">
+            <span class="wallet-icon">🔵</span>
+            <div class="wallet-info">
+              <span class="wallet-name">Coinbase Wallet</span>
+              <span class="wallet-desc">Coinbase extension or app</span>
+            </div>
+          </button>
+
+          <button class="wallet-option" onclick="connectInjected()">
+            <span class="wallet-icon">💼</span>
+            <div class="wallet-info">
+              <span class="wallet-name">Browser Wallet</span>
+              <span class="wallet-desc">Rainbow, Trust, or other injected wallet</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="/js/app.js"></script>
 </body>

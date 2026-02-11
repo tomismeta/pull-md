@@ -1,108 +1,152 @@
-// api/souls/[id]/download.js
-// Simple ERC20 transfer verification - delivers single soul
-
-import { ethers } from 'ethers';
-import { promises as fs } from 'fs';
-import path from 'path';
-
-const SOUL_CATALOG = {
-  'meta-starter-v1': { price: '500000', priceDisplay: '$0.50' },
-  'midnight-coder-v1': { price: '100000', priceDisplay: '$0.10' },
-  'pattern-weaver-v1': { price: '250000', priceDisplay: '$0.25' }
-};
-
-const usedTxs = new Set();
+import { getSoul, loadSoulContent, soulIds } from '../../_lib/catalog.js';
+import {
+  buildAuthMessage,
+  createPurchaseReceipt,
+  getSellerAddress,
+  setCors,
+  verifyPurchaseReceipt,
+  verifyWalletAuth
+} from '../../_lib/payments.js';
+import { applyInstructionResponse, createRequestContext, getX402HTTPServer } from '../../_lib/x402.js';
 
 export default async function handler(req, res) {
-  const origin = req.headers.origin;
-  if (['https://soulstarter-vercel.vercel.app', 'https://soulstarter.io', 'http://localhost:3000'].includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+  setCors(res, req.headers.origin);
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { id } = req.query;
-  if (!id || !SOUL_CATALOG[id]) return res.status(404).json({ error: 'Soul not found' });
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-  const sellerAddress = process.env.SELLER_ADDRESS?.trim()?.replace(/\s/g, '');
-  if (!sellerAddress) return res.status(500).json({ error: 'Server error' });
+  const soulId = req.query.id;
+  const soul = getSoul(soulId);
+  if (!soul) {
+    return res.status(404).json({ error: 'Soul not found', available_souls: soulIds() });
+  }
 
-  const txHash = req.headers['payment-txhash'];
-  if (!txHash) {
-    return res.status(402).json({
-      error: 'Payment required',
-      paymentDetails: {
-        to: sellerAddress,
-        amount: SOUL_CATALOG[id].priceDisplay,
-        token: 'USDC',
-        network: 'Base'
-      }
+  const sellerAddress = getSellerAddress();
+  if (!sellerAddress) {
+    return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required' });
+  }
+
+  // Re-download path: wallet re-auth + signed purchase receipt.
+  const wallet = req.headers['x-wallet-address'];
+  const authSignature = req.headers['x-auth-signature'];
+  const authTimestamp = req.headers['x-auth-timestamp'];
+  const receipt = req.headers['x-purchase-receipt'];
+  const paymentSignature = req.headers['payment-signature'];
+
+  if (wallet && authSignature && authTimestamp && receipt && !paymentSignature) {
+    const authCheck = verifyWalletAuth({
+      wallet,
+      soulId,
+      action: 'redownload',
+      timestamp: authTimestamp,
+      signature: authSignature
     });
+
+    if (!authCheck.ok) {
+      return res.status(401).json({ error: authCheck.error });
+    }
+
+    const receiptCheck = verifyPurchaseReceipt({
+      receipt,
+      wallet: authCheck.wallet,
+      soulId
+    });
+
+    if (!receiptCheck.ok) {
+      return res.status(401).json({ error: receiptCheck.error });
+    }
+
+    const content = await loadSoulContent(soulId);
+    if (!content) {
+      return res.status(500).json({ error: 'Soul unavailable' });
+    }
+
+    res.setHeader('Content-Type', 'text/markdown');
+    res.setHeader('Content-Disposition', `attachment; filename="${soulId}-SOUL.md"`);
+    res.setHeader(
+      'PAYMENT-RESPONSE',
+      Buffer.from(
+        JSON.stringify({
+          success: true,
+          transaction: receiptCheck.transaction || 'prior-entitlement',
+          network: 'eip155:8453',
+          soulDelivered: soulId,
+          entitlementSource: 'receipt'
+        })
+      ).toString('base64')
+    );
+
+    return res.status(200).send(content);
   }
 
   try {
-    if (!/^0x[a-f0-9]{64}$/i.test(txHash)) {
-      return res.status(400).json({ error: 'Invalid tx hash' });
+    const httpServer = await getX402HTTPServer({ soulId, soul, sellerAddress });
+    const context = createRequestContext(req);
+    const result = await httpServer.processHTTPRequest(context);
+
+    if (result.type === 'payment-error') {
+      if (result.response?.body && typeof result.response.body === 'object') {
+        result.response.body.auth_message_template = buildAuthMessage({
+          wallet: '0x<your-wallet>',
+          soulId,
+          action: 'redownload',
+          timestamp: Date.now()
+        });
+      }
+      return applyInstructionResponse(res, result.response);
     }
-    if (usedTxs.has(txHash)) return res.status(400).json({ error: 'Tx already used' });
 
-    const provider = new ethers.providers.JsonRpcProvider('https://mainnet.base.org');
-    const receipt = await provider.getTransactionReceipt(txHash);
-    
-    if (!receipt) return res.status(400).json({ error: 'Tx not found' });
-    if (receipt.status !== 1) return res.status(400).json({ error: 'Tx failed' });
+    if (result.type !== 'payment-verified') {
+      return res.status(500).json({ error: 'Unexpected x402 processing state' });
+    }
 
-    // Find USDC transfer to seller
-    const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-    const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
-    const sellerTopic = '0x000000000000000000000000' + sellerAddress.slice(2).toLowerCase();
-    
-    const transferLog = receipt.logs.find(log => 
-      log.address.toLowerCase() === USDC.toLowerCase() &&
-      log.topics[0] === transferTopic &&
-      log.topics[2]?.toLowerCase() === sellerTopic
+    const content = await loadSoulContent(soulId);
+    if (!content) {
+      return res.status(500).json({ error: 'Soul unavailable' });
+    }
+
+    const settlement = await httpServer.processSettlement(
+      result.paymentPayload,
+      result.paymentRequirements,
+      result.declaredExtensions
     );
-    
-    if (!transferLog) return res.status(400).json({ error: 'No USDC transfer found' });
-    
-    const amount = ethers.BigNumber.from(transferLog.data);
-    const required = ethers.BigNumber.from(SOUL_CATALOG[id].price);
-    
-    if (!amount.gte(required)) {
-      return res.status(400).json({ 
-        error: 'Insufficient payment',
-        required: SOUL_CATALOG[id].priceDisplay,
-        sent: (amount.toNumber() / 1000000).toFixed(2) + ' USDC'
+
+    if (!settlement.success) {
+      return res.status(402).json({
+        error: 'Settlement failed',
+        reason: settlement.errorReason,
+        message: settlement.errorMessage
       });
     }
 
-    usedTxs.add(txHash);
-    
-    // Load ONLY the purchased soul
-    let soulContent;
-    try {
-      const soulPath = path.join(process.cwd(), 'souls', `${id}.md`);
-      soulContent = await fs.readFile(soulPath, 'utf-8');
-    } catch (e) {
-      soulContent = process.env[`SOUL_${id.replace(/-/g, '_').toUpperCase()}`];
+    for (const [key, value] of Object.entries(settlement.headers || {})) {
+      if (value != null) {
+        res.setHeader(key, value);
+      }
     }
-    
-    if (!soulContent) return res.status(500).json({ error: 'Soul unavailable' });
+
+    const receiptToken = settlement.payer
+      ? createPurchaseReceipt({
+          wallet: settlement.payer,
+          soulId,
+          transaction: settlement.transaction
+        })
+      : null;
+
+    if (receiptToken) {
+      res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
+    }
 
     res.setHeader('Content-Type', 'text/markdown');
-    res.setHeader('Content-Disposition', `attachment; filename="${id}-SOUL.md"`);
-    res.setHeader('PAYMENT-RESPONSE', Buffer.from(JSON.stringify({
-      settled: true,
-      txHash: txHash,
-      soulDelivered: id
-    })).toString('base64'));
-    
-    return res.send(soulContent);
-
+    res.setHeader('Content-Disposition', `attachment; filename="${soulId}-SOUL.md"`);
+    return res.status(200).send(content);
   } catch (error) {
-    console.error('Error:', error);
-    return res.status(500).json({ error: 'Verification failed' });
+    console.error('x402 processing failed:', error);
+    return res.status(500).json({ error: 'Payment processing failed' });
   }
 }

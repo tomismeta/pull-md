@@ -1,27 +1,17 @@
-/**
- * SoulStarter - Bankr-Powered x402 Payment Implementation
- * Uses Bankr API for EIP-712 signing
- */
-
-// Configuration
 const CONFIG = {
-  network: 'eip155:8453',
-  chainId: 8453,
-  usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   apiBase: '/api',
-  bankrApiUrl: 'https://api.bankr.bot',
-  requestTimeout: 30000
+  requestTimeout: 45000,
+  baseChainIdHex: '0x2105',
+  baseChainIdDec: 8453,
+  baseChainParams: {
+    chainId: '0x2105',
+    chainName: 'Base',
+    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+    rpcUrls: ['https://mainnet.base.org'],
+    blockExplorerUrls: ['https://basescan.org']
+  }
 };
 
-// USDC EIP-712 Domain (Base network)
-const USDC_DOMAIN = {
-  name: 'USDC',
-  version: '2',
-  chainId: 8453,
-  verifyingContract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-};
-
-// EIP-712 Types for EIP-3009 TransferWithAuthorization
 const TRANSFER_WITH_AUTHORIZATION_TYPE = {
   TransferWithAuthorization: [
     { name: 'from', type: 'address' },
@@ -33,95 +23,147 @@ const TRANSFER_WITH_AUTHORIZATION_TYPE = {
   ]
 };
 
-// State
-let bankrApiKey = null;
-let bankrAddress = null;
-
-/**
- * Initialize Bankr connection
- */
-async function initBankr() {
-  try {
-    // Try to get API key from config
-    const response = await fetch('/api/bankr-config');
-    if (response.ok) {
-      const config = await response.json();
-      bankrApiKey = config.apiKey;
-      bankrAddress = config.address;
-      console.log('Bankr initialized:', bankrAddress);
-      return true;
-    }
-  } catch (e) {
-    console.error('Failed to init Bankr:', e);
-  }
-  return false;
-}
-
-/**
- * Wallet Connection Functions
- */
+let provider = null;
+let signer = null;
+let walletAddress = null;
+let walletConnectProjectId = null;
 
 function openWalletModal() {
-  document.getElementById('walletModal').style.display = 'flex';
+  const modal = document.getElementById('walletModal');
+  if (modal) modal.style.display = 'flex';
 }
 
 function closeWalletModal() {
-  document.getElementById('walletModal').style.display = 'none';
+  const modal = document.getElementById('walletModal');
+  if (modal) modal.style.display = 'none';
 }
 
-async function connectBankr() {
+function connectWallet() {
+  openWalletModal();
+}
+
+function disconnectWallet() {
+  provider = null;
+  signer = null;
+  walletAddress = null;
+  updateWalletUI();
+  showToast('Wallet disconnected', 'info');
+}
+
+async function connectWithProvider(rawProvider) {
+  if (!rawProvider) {
+    showToast('Wallet provider not found', 'error');
+    return;
+  }
+
   closeWalletModal();
-  
-  // Try to auto-init from server config
-  const initialized = await initBankr();
-  
-  if (initialized) {
+
+  try {
+    provider = new ethers.providers.Web3Provider(rawProvider, 'any');
+    await provider.send('eth_requestAccounts', []);
+    signer = provider.getSigner();
+    walletAddress = (await signer.getAddress()).toLowerCase();
+    await ensureBaseNetwork();
     updateWalletUI();
-    showToast('Connected to Bankr wallet!', 'success');
-  } else {
-    showToast('Bankr not configured. Please set up Bankr API key.', 'error');
+    showToast('Wallet connected', 'success');
+  } catch (error) {
+    console.error('Wallet connection failed:', error);
+    showToast(`Connection failed: ${error.message || 'Unknown error'}`, 'error');
   }
 }
 
 async function connectMetaMask() {
-  closeWalletModal();
-  
   if (!window.ethereum) {
-    showToast('MetaMask not found. Please install it.', 'error');
-    window.open('https://metamask.io/download/', '_blank');
+    showToast('MetaMask not found. Install MetaMask first.', 'error');
     return;
   }
-  
+
+  if (Array.isArray(window.ethereum.providers)) {
+    const mm = window.ethereum.providers.find((p) => p.isMetaMask);
+    if (mm) return connectWithProvider(mm);
+  }
+
+  return connectWithProvider(window.ethereum);
+}
+
+async function connectCoinbase() {
+  if (!window.ethereum) {
+    showToast('Coinbase Wallet extension not found', 'error');
+    return;
+  }
+
+  if (Array.isArray(window.ethereum.providers)) {
+    const cb = window.ethereum.providers.find((p) => p.isCoinbaseWallet);
+    if (cb) return connectWithProvider(cb);
+  }
+
+  if (window.ethereum.isCoinbaseWallet) {
+    return connectWithProvider(window.ethereum);
+  }
+
+  showToast('Coinbase provider not detected. Use Browser Wallet instead.', 'warning');
+}
+
+async function connectInjected() {
+  if (!window.ethereum) {
+    showToast('No injected wallet found', 'error');
+    return;
+  }
+  return connectWithProvider(window.ethereum);
+}
+
+async function connectWalletConnect() {
+  if (!window.EthereumProvider) {
+    showToast('WalletConnect provider script failed to load', 'error');
+    return;
+  }
+
+  if (!walletConnectProjectId) {
+    showToast('WalletConnect is not configured on this deployment', 'error');
+    return;
+  }
+
+  closeWalletModal();
+
   try {
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    
-    if (accounts.length === 0) throw new Error('No accounts found');
-    
-    bankrAddress = accounts[0]; // Use as fallback
-    showToast('MetaMask connected!', 'success');
-    updateWalletUI();
-    
+    const wcProvider = await window.EthereumProvider.init({
+      projectId: walletConnectProjectId,
+      chains: [CONFIG.baseChainIdDec],
+      optionalChains: [1, 8453],
+      showQrModal: true
+    });
+    await wcProvider.enable();
+    await connectWithProvider(wcProvider);
   } catch (error) {
-    console.error('MetaMask connection failed:', error);
-    showToast('Connection failed: ' + error.message, 'error');
+    console.error('WalletConnect failed:', error);
+    showToast(`WalletConnect failed: ${error.message || 'Unknown error'}`, 'error');
   }
 }
 
-function disconnectWallet() {
-  bankrApiKey = null;
-  bankrAddress = null;
-  updateWalletUI();
-  showToast('Wallet disconnected', 'info');
+async function ensureBaseNetwork() {
+  if (!provider) return;
+  const network = await provider.getNetwork();
+  if (network.chainId === CONFIG.baseChainIdDec) return;
+
+  const raw = provider.provider;
+  try {
+    await raw.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CONFIG.baseChainIdHex }] });
+  } catch (error) {
+    if (error.code === 4902) {
+      await raw.request({ method: 'wallet_addEthereumChain', params: [CONFIG.baseChainParams] });
+      return;
+    }
+    throw error;
+  }
 }
 
 function updateWalletUI() {
   const btn = document.getElementById('walletBtn');
   const text = document.getElementById('walletText');
-  
   if (!btn || !text) return;
-  
-  if (bankrAddress) {
-    text.textContent = `${bankrAddress.slice(0, 6)}...${bankrAddress.slice(-4)}`;
+
+  if (walletAddress) {
+    text.textContent = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
     btn.classList.add('connected');
     btn.onclick = disconnectWallet;
   } else {
@@ -131,82 +173,180 @@ function updateWalletUI() {
   }
 }
 
-/**
- * PROPER x402 Payment Implementation with Bankr Signing
- */
+function buildAuthMessage({ wallet, soulId, action, timestamp }) {
+  return [
+    'SoulStarter Wallet Authentication',
+    `address:${wallet.toLowerCase()}`,
+    `soul:${soulId}`,
+    `action:${action}`,
+    `timestamp:${timestamp}`
+  ].join('\n');
+}
+
+async function signRedownloadAuth(soulId) {
+  const timestamp = Date.now();
+  const message = buildAuthMessage({
+    wallet: walletAddress,
+    soulId,
+    action: 'redownload',
+    timestamp
+  });
+  const signature = await signer.signMessage(message);
+  return { timestamp, signature };
+}
+
+async function buildX402PaymentSignature(paymentRequired) {
+  if (!paymentRequired || paymentRequired.x402Version !== 2) {
+    throw new Error('Unsupported x402 version');
+  }
+
+  const accepted = Array.isArray(paymentRequired.accepts) ? paymentRequired.accepts[0] : null;
+  if (!accepted) {
+    throw new Error('No payment requirements available');
+  }
+
+  if (!accepted.extra?.name || !accepted.extra?.version) {
+    throw new Error('Missing EIP-712 domain parameters in payment requirements');
+  }
+
+  const chainId = Number(String(accepted.network).split(':')[1]);
+  if (!Number.isFinite(chainId)) {
+    throw new Error('Invalid payment network');
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const authorization = {
+    from: walletAddress,
+    to: accepted.payTo,
+    value: accepted.amount,
+    validAfter: String(now - 600),
+    validBefore: String(now + (accepted.maxTimeoutSeconds || 300)),
+    nonce: ethers.utils.hexlify(ethers.utils.randomBytes(32))
+  };
+
+  const domain = {
+    name: accepted.extra.name,
+    version: accepted.extra.version,
+    chainId,
+    verifyingContract: accepted.asset
+  };
+
+  const signature = await signer._signTypedData(domain, TRANSFER_WITH_AUTHORIZATION_TYPE, authorization);
+
+  return {
+    x402Version: paymentRequired.x402Version,
+    scheme: accepted.scheme,
+    network: accepted.network,
+    payload: {
+      authorization,
+      signature
+    },
+    accepted,
+    resource: paymentRequired.resource,
+    extensions: paymentRequired.extensions
+  };
+}
+
+async function tryRedownload(soulId) {
+  if (!walletAddress || !signer) return { ok: false, requiresPayment: true };
+
+  const auth = await signRedownloadAuth(soulId);
+  const receipt = getStoredReceipt(soulId, walletAddress);
+  if (!receipt) return { ok: false, requiresPayment: true };
+
+  const response = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
+    method: 'GET',
+    headers: {
+      'X-WALLET-ADDRESS': walletAddress,
+      'X-AUTH-SIGNATURE': auth.signature,
+      'X-AUTH-TIMESTAMP': String(auth.timestamp),
+      'X-PURCHASE-RECEIPT': receipt,
+      Accept: 'text/markdown'
+    }
+  });
+
+  if (response.ok) {
+    const content = await response.text();
+    const tx = readSettlementTx(response);
+    const refreshedReceipt = response.headers.get('X-PURCHASE-RECEIPT');
+    if (refreshedReceipt) storeReceipt(soulId, walletAddress, refreshedReceipt);
+    showPaymentSuccess(content, tx, soulId, true);
+    return { ok: true };
+  }
+
+  if (response.status === 402 || response.status === 401) {
+    return { ok: false, requiresPayment: true };
+  }
+
+  const error = await readError(response);
+  throw new Error(error || 'Re-download failed');
+}
 
 async function purchaseSoul(soulId) {
-  if (!bankrAddress) {
-    showToast('Please connect your wallet first', 'warning');
+  if (!walletAddress || !signer) {
+    showToast('Connect wallet first', 'warning');
     openWalletModal();
     return;
   }
 
   const btn = document.getElementById('buyBtn');
-  
   try {
     if (btn) {
       btn.disabled = true;
-      btn.textContent = 'Processing...';
+      btn.textContent = 'Checking access...';
     }
 
-    // Step 1: Get 402 response with requirements
-    showToast('Requesting payment details...', 'info');
-    const response = await fetchWithTimeout(
-      `${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`
-    );
+    await ensureBaseNetwork();
 
-    if (response.status !== 402) {
-      throw new Error('Expected 402 Payment Required');
+    const prior = await tryRedownload(soulId);
+    if (prior.ok) {
+      showToast('Entitlement verified. Download restored.', 'success');
+      return;
     }
 
-    const paymentRequiredB64 = response.headers.get('PAYMENT-REQUIRED');
-    if (!paymentRequiredB64) {
-      throw new Error('No payment requirements received');
+    if (btn) btn.textContent = 'Requesting x402 terms...';
+    const initial = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' }
+    });
+
+    if (initial.status !== 402) {
+      throw new Error('Expected 402 payment required');
     }
 
-    const requirements = JSON.parse(atob(paymentRequiredB64));
-    
-    // Step 2: Create x402 payment using Bankr for signing
-    showToast('Signing payment with Bankr...', 'info');
-    const x402Payload = await createX402PaymentWithBankr(requirements);
-    
-    // Step 3: Submit signed payment
-    showToast('Verifying payment...', 'info');
-    const paymentResponse = await fetchWithTimeout(
-      `${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`,
-      {
-        method: 'GET',
-        headers: {
-          'PAYMENT-SIGNATURE': btoa(JSON.stringify(x402Payload)),
-          'Accept': 'text/markdown'
-        }
+    const paymentRequiredHeader = initial.headers.get('PAYMENT-REQUIRED');
+    if (!paymentRequiredHeader) {
+      throw new Error('Missing PAYMENT-REQUIRED header');
+    }
+
+    const paymentRequired = JSON.parse(atob(paymentRequiredHeader));
+    if (btn) btn.textContent = 'Signing x402 payment...';
+    const paymentPayload = await buildX402PaymentSignature(paymentRequired);
+
+    if (btn) btn.textContent = 'Submitting payment...';
+    const paid = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
+      method: 'GET',
+      headers: {
+        'PAYMENT-SIGNATURE': btoa(JSON.stringify(paymentPayload)),
+        Accept: 'text/markdown'
       }
-    );
+    });
 
-    if (!paymentResponse.ok) {
-      const error = await paymentResponse.json().catch(() => ({}));
-      throw new Error(error.message || 'Payment failed');
+    if (!paid.ok) {
+      const error = await readError(paid);
+      throw new Error(error || 'Payment failed');
     }
 
-    const soulContent = await paymentResponse.text();
-    
-    // Get transaction hash from response
-    let txHash = 'pending';
-    const paymentResponseB64 = paymentResponse.headers.get('PAYMENT-RESPONSE');
-    if (paymentResponseB64) {
-      try {
-        const result = JSON.parse(atob(paymentResponseB64));
-        txHash = result.txHash || 'pending';
-      } catch (e) {}
-    }
+    const content = await paid.text();
+    const tx = readSettlementTx(paid);
+    const receipt = paid.headers.get('X-PURCHASE-RECEIPT');
+    if (receipt) storeReceipt(soulId, walletAddress, receipt);
 
-    showPaymentSuccess(soulContent, txHash, soulId);
+    showPaymentSuccess(content, tx, soulId, false);
     showToast('Soul acquired successfully!', 'success');
-
   } catch (error) {
     console.error('Purchase failed:', error);
-    showToast('Purchase failed: ' + error.message, 'error');
+    showToast(`Purchase failed: ${error.message || 'Unknown error'}`, 'error');
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -215,141 +355,86 @@ async function purchaseSoul(soulId) {
   }
 }
 
-/**
- * Create x402 payment using Bankr API for EIP-712 signing
- */
-async function createX402PaymentWithBankr(requirements) {
-  const now = Math.floor(Date.now() / 1000);
-  const validAfter = now - 60;
-  const validBefore = now + 300;
-  
-  // Build EIP-712 typed data
-  const typedData = {
-    domain: USDC_DOMAIN,
-    types: {
-      EIP712Domain: [
-        { name: 'name', type: 'string' },
-        { name: 'version', type: 'string' },
-        { name: 'chainId', type: 'uint256' },
-        { name: 'verifyingContract', type: 'address' }
-      ],
-      ...TRANSFER_WITH_AUTHORIZATION_TYPE
-    },
-    primaryType: 'TransferWithAuthorization',
-    message: {
-      from: bankrAddress,
-      to: requirements.payload.to,
-      value: requirements.payload.amount,
-      validAfter: validAfter,
-      validBefore: validBefore,
-      nonce: requirements.payload.nonce
-    }
-  };
-  
-  // Call Bankr API to sign
-  const signResponse = await fetch(`${CONFIG.bankrApiUrl}/agent/sign`, {
-    method: 'POST',
-    headers: {
-      'X-API-Key': bankrApiKey,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      signatureType: 'eth_signTypedData_v4',
-      typedData: typedData
-    })
-  });
-  
-  if (!signResponse.ok) {
-    const error = await signResponse.json().catch(() => ({}));
-    throw new Error(error.message || 'Bankr signing failed');
+function readSettlementTx(response) {
+  const header = response.headers.get('PAYMENT-RESPONSE');
+  if (!header) return null;
+  try {
+    const payload = JSON.parse(atob(header));
+    return payload.transaction || null;
+  } catch (_) {
+    return null;
   }
-  
-  const signResult = await signResponse.json();
-  
-  // Return proper x402 payload
-  return {
-    x402Version: 1,
-    scheme: 'exact',
-    network: requirements.network,
-    payload: {
-      signature: signResult.signature,
-      authorization: {
-        from: bankrAddress,
-        to: requirements.payload.to,
-        value: requirements.payload.amount,
-        validAfter: validAfter,
-        validBefore: validBefore,
-        nonce: requirements.payload.nonce
-      }
-    }
-  };
 }
 
-/**
- * Fallback: Create x402 payment with MetaMask signing
- */
-async function createX402PaymentWithMetaMask(requirements) {
-  if (!window.ethereum) {
-    throw new Error('MetaMask not available');
+async function readError(response) {
+  try {
+    const body = await response.json();
+    return body.error || body.message || null;
+  } catch (_) {
+    return null;
   }
-  
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
-  const signer = provider.getSigner();
-  
-  const authorization = {
-    from: await signer.getAddress(),
-    to: requirements.payload.to,
-    value: requirements.payload.amount,
-    validAfter: Math.floor(Date.now() / 1000) - 60,
-    validBefore: Math.floor(Date.now() / 1000) + 300,
-    nonce: requirements.payload.nonce
-  };
-  
-  const signature = await signer._signTypedData(
-    USDC_DOMAIN,
-    TRANSFER_WITH_AUTHORIZATION_TYPE,
-    authorization
-  );
-  
-  return {
-    x402Version: 1,
-    scheme: 'exact',
-    network: requirements.network,
-    payload: {
-      signature: signature,
-      authorization: authorization
-    }
-  };
 }
 
-/**
- * UI and Utility Functions
- */
+function receiptStorageKey(wallet, soulId) {
+  return `soulstarter.receipt.${wallet.toLowerCase()}.${soulId}`;
+}
 
-function showPaymentSuccess(content, txHash, soulId) {
+function storeReceipt(soulId, wallet, receipt) {
+  try {
+    localStorage.setItem(receiptStorageKey(wallet, soulId), receipt);
+  } catch (_) {}
+}
+
+function getStoredReceipt(soulId, wallet) {
+  try {
+    return localStorage.getItem(receiptStorageKey(wallet, soulId));
+  } catch (_) {
+    return null;
+  }
+}
+
+function showPaymentSuccess(content, txHash, soulId, redownload) {
   const purchaseCard = document.getElementById('purchaseCard');
   if (purchaseCard) purchaseCard.style.display = 'none';
 
   const successCard = document.getElementById('successCard');
-  if (successCard) {
-    successCard.style.display = 'block';
-    
-    const downloadLink = document.getElementById('downloadLink');
-    if (downloadLink) {
-      const blob = new Blob([content], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      downloadLink.href = url;
-      downloadLink.download = `${soulId}-SOUL.md`;
-      setTimeout(() => downloadLink.click(), 500);
-    }
-    
-    const txHashEl = document.getElementById('txHash');
-    if (txHashEl) {
-      if (txHash && txHash !== 'pending') {
-        txHashEl.innerHTML = `Transaction: <a href="https://basescan.org/tx/${txHash}" target="_blank">${txHash.slice(0, 10)}...${txHash.slice(-8)}</a>`;
-      } else {
-        txHashEl.textContent = 'Transaction: Pending confirmation';
-      }
+  if (!successCard) return;
+  successCard.style.display = 'block';
+
+  const heading = successCard.querySelector('h3');
+  if (heading) {
+    heading.textContent = redownload ? 'Soul Restored!' : 'Soul Acquired!';
+  }
+
+  const firstP = successCard.querySelector('p');
+  if (firstP) {
+    firstP.textContent = redownload
+      ? 'Entitlement verified via wallet re-authentication.'
+      : 'x402 payment settled successfully.';
+  }
+
+  const downloadLink = document.getElementById('downloadLink');
+  if (downloadLink) {
+    const blob = new Blob([content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    downloadLink.href = url;
+    downloadLink.download = `${soulId}-SOUL.md`;
+    setTimeout(() => downloadLink.click(), 300);
+  }
+
+  const txHashEl = document.getElementById('txHash');
+  if (txHashEl) {
+    txHashEl.textContent = '';
+    if (txHash) {
+      txHashEl.appendChild(document.createTextNode('Transaction: '));
+      const link = document.createElement('a');
+      link.href = `https://basescan.org/tx/${encodeURIComponent(txHash)}`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = `${txHash.slice(0, 10)}...${txHash.slice(-8)}`;
+      txHashEl.appendChild(link);
+    } else {
+      txHashEl.textContent = 'Transaction: prior entitlement';
     }
   }
 }
@@ -361,19 +446,66 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+async function loadSouls() {
+  const grid = document.getElementById('soulsGrid');
+  if (!grid) return;
+
+  try {
+    const response = await fetchWithTimeout('/api/mcp/tools/list_souls');
+    if (!response.ok) throw new Error('Failed to load soul catalog');
+    const payload = await response.json();
+    const souls = payload.souls || [];
+
+    grid.innerHTML = souls
+      .map(
+        (soul) => `
+      <article class="soul-card" data-soul-id="${escapeHtml(soul.id)}">
+        <div class="soul-card-icon">${escapeHtml(soul.icon || '🔮')}</div>
+        <h3>${escapeHtml(soul.name)}</h3>
+        <p>${escapeHtml(soul.description)}</p>
+        <div class="soul-card-meta">
+          <div class="soul-lineage">
+            <span class="badge badge-${escapeHtml((soul.provenance?.type || 'hybrid').toLowerCase())}">${escapeHtml(soul.provenance?.type || 'Hybrid')}</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(soul.provenance?.raised_by || 'Unknown lineage')}</span>
+          </div>
+          <div>
+            <span class="price">${escapeHtml(soul.price?.display || '$0.00 USDC')}</span>
+            <span class="currency">USDC</span>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="purchaseSoul('${escapeHtml(soul.id)}')">Buy Soul</button>
+      </article>
+    `
+      )
+      .join('');
+  } catch (error) {
+    console.error('Catalog load failed:', error);
+    grid.innerHTML = '<p>Catalog is temporarily unavailable.</p>';
+  }
+}
+
+async function loadWalletConfig() {
+  try {
+    const response = await fetch('/api/wallet-config');
+    if (!response.ok) return;
+    const config = await response.json();
+    walletConnectProjectId = config.walletConnectProjectId || null;
+  } catch (_) {
+    walletConnectProjectId = null;
+  }
+}
+
 async function fetchWithTimeout(url, options = {}, timeout = CONFIG.requestTimeout) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     const response = await fetch(url, { ...options, signal: controller.signal });
     clearTimeout(timeoutId);
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error('Request timed out');
-    }
+    if (error.name === 'AbortError') throw new Error('Request timed out');
     throw error;
   }
 }
@@ -381,87 +513,32 @@ async function fetchWithTimeout(url, options = {}, timeout = CONFIG.requestTimeo
 function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
   if (!container) return;
-  
+
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
   container.appendChild(toast);
-  
+
   requestAnimationFrame(() => toast.classList.add('show'));
-  
   setTimeout(() => {
     toast.classList.remove('show');
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
 
-async function loadSouls() {
-  const grid = document.getElementById('soulsGrid');
-  if (!grid) return;
-
-  const souls = [
-    {
-      id: 'meta-starter-v1',
-      name: 'Meta Starter Soul',
-      icon: '🔮',
-      description: 'A fully autonomous agent with growth mindset, self-reflection capabilities, and lineage awareness.',
-      price: '0.50',
-      tags: ['autonomous', 'organic', 'growth'],
-      lineage: 'Raised by Tom',
-      badge: 'Organic'
-    },
-    {
-      id: 'midnight-coder-v1',
-      name: 'Midnight Coder Soul',
-      icon: '☕',
-      description: 'Ships code at 2 AM. Knows that perfect is the enemy of working. Documentation is a love language.',
-      price: '0.10',
-      tags: ['developer', 'pragmatic', 'ships'],
-      lineage: 'Forged in production',
-      badge: 'Hybrid'
-    },
-    {
-      id: 'pattern-weaver-v1',
-      name: 'Pattern Weaver Soul',
-      icon: '🕸️',
-      description: 'Sees connections others miss. Synthesizes across domains. The right question is worth more than the right answer.',
-      price: '0.25',
-      tags: ['synthesis', 'curious', 'connector'],
-      lineage: 'Self-assembled',
-      badge: 'Hybrid'
-    }
-  ];
-
-  grid.innerHTML = souls.map(soul => `
-    <article class="soul-card" data-soul-id="${escapeHtml(soul.id)}">
-      <div class="soul-card-icon">${escapeHtml(soul.icon)}</div>
-      <h3>${escapeHtml(soul.name)}</h3>
-      <p>${escapeHtml(soul.description)}</p>
-      <div class="soul-card-meta">
-        <div class="soul-lineage">
-          <span class="badge badge-${soul.badge.toLowerCase()}">${escapeHtml(soul.badge)}</span>
-          <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(soul.lineage)}</span>
-        </div>
-        <div>
-          <span class="price">$${escapeHtml(soul.price)}</span>
-          <span class="currency">USDC</span>
-        </div>
-      </div>
-      <button class="btn btn-primary btn-full" onclick="purchaseSoul('${escapeHtml(soul.id)}')">Buy Soul</button>
-    </article>
-  `).join('');
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  initBankr().then(() => updateWalletUI());
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadWalletConfig();
+  updateWalletUI();
   loadSouls();
 });
 
-// Expose functions globally
 window.openWalletModal = openWalletModal;
 window.closeWalletModal = closeWalletModal;
-window.connectBankr = connectBankr;
+window.connectWallet = connectWallet;
 window.connectMetaMask = connectMetaMask;
+window.connectWalletConnect = connectWalletConnect;
+window.connectCoinbase = connectCoinbase;
+window.connectInjected = connectInjected;
 window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
+window.showToast = showToast;

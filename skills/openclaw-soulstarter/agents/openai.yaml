@@ -1,0 +1,5 @@
+version: 1
+interface:
+  display_name: SoulStarter OpenClaw
+  short_description: Discover, purchase, and redownload SoulStarter souls with strict x402 headers.
+  default_prompt: Discover SoulStarter tools via WebMCP, attempt receipt-based redownload first, and if needed complete strict x402 purchase with PAYMENT-SIGNATURE.

@@ -12,10 +12,11 @@
   <meta name="mcp:tool:list_souls" content="/api/mcp/tools/list_souls">
   <meta name="mcp:tool:get_soul_details" content="/api/mcp/tools/get_soul_details">
   <meta name="mcp:tool:purchase_soul" content="/api/mcp/tools/purchase_soul">
+  <meta name="mcp:tool:check_entitlements" content="/api/mcp/tools/check_entitlements">
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   
   <!-- WalletConnect Ethereum Provider -->
@@ -48,20 +49,42 @@
       <div class="container">
         <div class="hero-badge">
           <span class="dot"></span>
-          <span>x402 Micropayments on Base</span>
+          <span>x402 micropayments on base</span>
         </div>
-        <h1 class="hero-title">Give your agent a soul</h1>
+        <h1 class="hero-title">One Payment. One Soul.</h1>
         <p class="hero-subtitle">
-          Human-nurtured agent memory marketplace. Purchase authentic starter souls 
-          via instant micropayments. No accounts, no subscriptions — just lineage.
+          Describe the starter you want. Pay via x402 on Base. Get exactly that soul as downloadable markdown.
         </p>
         <p class="hero-agent-note">
-          🤖 <strong>Agent-native:</strong> WebMCP-enabled for programmatic access
+          agent-native: webmcp-enabled for programmatic access
         </p>
+        <div class="hero-actions">
+          <a href="#souls" class="btn btn-primary btn-lg">browse souls</a>
+          <a href="/api/mcp/manifest" class="btn btn-ghost btn-lg">agent manifest</a>
+        </div>
+        <div class="hero-code">
+          <div class="hero-code-head">
+            <span></span><span></span><span></span>
+            <strong>soulstarter.js</strong>
+          </div>
+          <pre>// request soul catalog (agent-safe JSON)
+const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
+
+// acquire one soul using x402 flow
+// 1) GET /api/souls/:id/download -> 402 with PAYMENT-REQUIRED
+// 2) sign EIP-712 authorization
+// 3) retry with PAYMENT-SIGNATURE -> SOUL.md</pre>
+        </div>
+        <div class="hero-metrics">
+          <div><strong>x402</strong><span>strict payment gate</span></div>
+          <div><strong>base</strong><span>usdc settlement</span></div>
+          <div><strong>1 soul</strong><span>single entitlement scope</span></div>
+          <div><strong>webmcp</strong><span>tool-first integration</span></div>
+        </div>
       </div>
     </section>
 
-    <section class="souls-section">
+    <section class="souls-section" id="souls">
       <div class="container">
         <div class="souls-grid" id="soulsGrid">
           <!-- Soul cards injected here -->

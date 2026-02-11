@@ -1,162 +1,64 @@
-# WebMCP Agent Access
+# WebMCP Contract
 
-SoulStarter is **WebMCP-enabled**, allowing AI agents to browse and purchase souls programmatically.
+This document describes the exact agent-facing contract implemented by SoulStarter.
 
-## What is WebMCP?
+## Discovery
 
-WebMCP (Web Model Context Protocol) is a standard for exposing website capabilities to AI agents via structured metadata. Instead of scraping HTML, agents discover and use APIs through a standardized interface.
+Agents should discover capabilities through:
 
-## Agent Discovery
+- `GET /api/mcp/manifest`
+- `mcp:*` meta tags in `/public/index.html` and `/public/soul.html`
 
-Agents can discover SoulStarter's capabilities by:
+## Tools
 
-1. **Meta tags** on every page:
-```html
-<meta name="mcp:version" content="1.0">
-<meta name="mcp:endpoint" content="/api/mcp/manifest">
+1. `GET /api/mcp/tools/list_souls`
+- Lists available souls and pricing metadata.
+
+2. `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
+- Returns detailed metadata and endpoint usage details for one soul.
+
+3. `POST /api/mcp/tools/purchase_soul`
+- Returns a strict x402 `402` response and `PAYMENT-REQUIRED`.
+
+4. `POST /api/mcp/tools/check_entitlements`
+- Verifies receipt proof(s) for re-download:
+`{ wallet_address, proofs: [{ soul_id, receipt }] }`
+
+## Download Endpoint
+
+`GET /api/souls/{id}/download`
+
+### Purchase (x402 strict)
+
+1. First request without payment headers:
+- Response `402`
+- Header `PAYMENT-REQUIRED` (base64 JSON payment requirements)
+
+2. Paid retry:
+- Header `PAYMENT-SIGNATURE` (base64 JSON payment payload)
+- Response `200` with soul file
+- Header `PAYMENT-RESPONSE` (base64 JSON settlement response)
+- Header `X-PURCHASE-RECEIPT` (for no-repay re-downloads)
+
+### Re-download (no repay)
+
+Headers required:
+
+- `X-WALLET-ADDRESS`
+- `X-AUTH-SIGNATURE`
+- `X-AUTH-TIMESTAMP`
+- `X-PURCHASE-RECEIPT`
+
+If receipt and wallet auth are valid, response is `200` with soul file.
+
+## Re-download Auth Message
+
+Clients sign exactly:
+
+```text
+SoulStarter Wallet Authentication
+address:<wallet_lowercase>
+soul:<soul_id>
+action:redownload
+timestamp:<unix_ms>
 ```
-
-2. **Manifest endpoint**:
-```bash
-GET https://soulstarter.vercel.app/api/mcp/manifest
-```
-
-Returns complete API specification with available tools.
-
-## Available Tools
-
-### 1. List Souls
-```bash
-GET /api/mcp/tools/list_souls?category=hybrid
-```
-
-Returns:
-```json
-{
-  "souls": [
-    {
-      "id": "meta-starter-v1",
-      "name": "Meta Starter Soul",
-      "description": "...",
-      "price": { "amount": "0.50", "currency": "USDC" },
-      "category": "hybrid",
-      "tags": ["autonomous", "organic", "growth"]
-    }
-  ]
-}
-```
-
-### 2. Get Soul Details
-```bash
-GET /api/mcp/tools/get_soul_details?id=meta-starter-v1
-```
-
-Returns complete soul metadata including file list, compatibility info, and preview excerpt.
-
-### 3. Purchase Soul (Initiate x402)
-```bash
-POST /api/mcp/tools/purchase_soul
-Content-Type: application/json
-
-{
-  "soul_id": "meta-starter-v1",
-  "wallet_address": "0x..."
-}
-```
-
-Returns **402 Payment Required** with x402 payload:
-```json
-{
-  "error": "Payment required",
-  "requirements": {
-    "scheme": "exact",
-    "network": "eip155:8453",
-    "payload": {
-      "token": "0x8335...",
-      "to": "0xa7d3...",
-      "amount": "500000",
-      "timestamp": 1707648000000,
-      "nonce": "..."
-    }
-  },
-  "instructions": {
-    "step_1": "Sign the payment payload",
-    "step_2": "POST to /api/souls/{id}/download with signature"
-  }
-}
-```
-
-### 4. Complete Purchase
-```bash
-GET /api/souls/meta-starter-v1/download
-PAYMENT-SIGNATURE: <base64-encoded-signed-payload>
-```
-
-Returns SOUL.md content on success (after x402 verification).
-
-## Agent Flow Example
-
-```javascript
-// 1. Discover capabilities
-const manifest = await fetch('https://soulstarter.vercel.app/api/mcp/manifest');
-
-// 2. List available souls
-const souls = await fetch('https://soulstarter.vercel.app/api/mcp/tools/list_souls');
-
-// 3. Get details
-const details = await fetch('https://soulstarter.vercel.app/api/mcp/tools/get_soul_details?id=meta-starter-v1');
-
-// 4. Initiate purchase (returns 402)
-const paymentReq = await fetch('https://soulstarter.vercel.app/api/mcp/tools/purchase_soul', {
-  method: 'POST',
-  body: JSON.stringify({
-    soul_id: 'meta-starter-v1',
-    wallet_address: agentWallet.address
-  })
-});
-
-// 5. Sign payment with wallet
-const signature = await agentWallet.sign(paymentReq.requirements.payload);
-
-// 6. Complete purchase
-const soul = await fetch('https://soulstarter.vercel.app/api/souls/meta-starter-v1/download', {
-  headers: {
-    'PAYMENT-SIGNATURE': btoa(JSON.stringify({
-      ...paymentReq.requirements,
-      signature,
-      from: agentWallet.address
-    }))
-  }
-});
-
-// 7. Use the soul
-console.log(soul); // SOUL.md content
-```
-
-## Why WebMCP?
-
-- **No scraping needed** — Structured data, not HTML parsing
-- **Self-documenting** — Manifest describes all capabilities
-- **Agent-native** — Built for programmatic interaction
-- **Payment-integrated** — x402 flow built-in
-- **Standards-based** — Works with any WebMCP client
-
-## Standards Compliance
-
-- ✅ WebMCP v1.0 discovery via meta tags
-- ✅ JSON manifest at `/api/mcp/manifest`
-- ✅ RESTful tool endpoints
-- ✅ x402 payment integration
-- ✅ CORS enabled for agent access
-
-## Future Enhancements
-
-- [ ] Agent identity verification (ERC-8004)
-- [ ] Usage analytics for soul creators
-- [ ] Soul rating/review system
-- [ ] Bulk purchase API
-- [ ] Subscription souls (recurring x402)
-
----
-
-*Agents welcome. Humans too.* 🤖💜
