@@ -276,10 +276,16 @@ function coerceToCdpV1Envelope(body) {
     payload: v1InnerPayload
   };
 
+  const normalizedAmount = normalizeUintString(
+    paymentRequirements?.amount ?? accepted?.amount ?? paymentRequirements?.maxAmountRequired ?? '0'
+  );
+
   const v1Requirements = {
     scheme: paymentRequirements?.scheme ?? accepted?.scheme ?? 'exact',
     network: paymentRequirements?.network ?? accepted?.network ?? 'base',
-    maxAmountRequired: normalizeUintString(paymentRequirements?.maxAmountRequired ?? accepted?.amount ?? paymentRequirements?.amount ?? '0'),
+    // Keep both fields for CDP schema compatibility across v1/v2 validators.
+    amount: normalizedAmount,
+    maxAmountRequired: normalizedAmount,
     resource: String(paymentRequirements?.resource ?? resource?.url ?? ''),
     description: String(paymentRequirements?.description ?? resource?.description ?? 'x402 payment'),
     mimeType: String(paymentRequirements?.mimeType ?? resource?.mimeType ?? 'application/octet-stream'),
