@@ -130,11 +130,19 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Soul unavailable' });
     }
 
-    const settlement = await httpServer.processSettlement(
-      result.paymentPayload,
-      result.paymentRequirements,
-      result.declaredExtensions
-    );
+    let settlement;
+    try {
+      settlement = await httpServer.processSettlement(
+        result.paymentPayload,
+        result.paymentRequirements,
+        result.declaredExtensions
+      );
+    } catch (error) {
+      return res.status(402).json({
+        error: 'Settlement threw an exception',
+        settlement_debug: extractX402Error(error)
+      });
+    }
 
     if (!settlement.success) {
       return res.status(402).json({
@@ -167,7 +175,10 @@ export default async function handler(req, res) {
     return res.status(200).send(content);
   } catch (error) {
     console.error('x402 processing failed:', error);
-    return res.status(500).json({ error: 'Payment processing failed' });
+    return res.status(500).json({
+      error: 'Payment processing failed',
+      processing_debug: extractX402Error(error)
+    });
   }
 }
 
@@ -493,4 +504,25 @@ function diffObjects(actual, expected, prefix = '') {
     }
   }
   return diffs;
+}
+
+function extractX402Error(error) {
+  if (!error || typeof error !== 'object') {
+    return { message: String(error || 'unknown') };
+  }
+
+  const result = {
+    name: error.name || null,
+    message: error.message || String(error),
+    statusCode: error.statusCode ?? null,
+    errorReason: error.errorReason ?? null,
+    errorMessage: error.errorMessage ?? null,
+    invalidReason: error.invalidReason ?? null,
+    invalidMessage: error.invalidMessage ?? null,
+    transaction: error.transaction ?? null,
+    network: error.network ?? null,
+    payer: error.payer ?? null
+  };
+
+  return result;
 }
