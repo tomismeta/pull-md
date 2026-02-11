@@ -8,7 +8,13 @@ import {
   verifyPurchaseReceipt,
   verifyWalletAuth
 } from '../../_lib/payments.js';
-import { applyInstructionResponse, createRequestContext, getX402HTTPServer, inspectFacilitatorVerify } from '../../_lib/x402.js';
+import {
+  applyInstructionResponse,
+  buildCdpRequestDebug,
+  createRequestContext,
+  getX402HTTPServer,
+  inspectFacilitatorVerify
+} from '../../_lib/x402.js';
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -150,11 +156,23 @@ export default async function handler(req, res) {
         paymentPayload: result.paymentPayload,
         paymentRequirements: result.paymentRequirements
       });
+      const cdpSettleRequestDebug = buildCdpRequestDebug({
+        paymentPayload: result.paymentPayload,
+        paymentRequirements: result.paymentRequirements,
+        x402Version: result.paymentPayload?.x402Version ?? 2
+      });
       return res.status(402).json({
         error: 'Settlement failed',
         reason: settlement.errorReason,
         message: settlement.errorMessage,
-        settlement_diagnostics: settlementDiagnostics
+        settlement_diagnostics: settlementDiagnostics,
+        cdp_settle_request_preview: {
+          top_level_x402Version: cdpSettleRequestDebug?.top_level_x402Version ?? null,
+          transfer_method: cdpSettleRequestDebug?.transfer_method ?? null,
+          paymentPayload_keys: cdpSettleRequestDebug?.paymentPayload_keys ?? [],
+          paymentRequirements_keys: cdpSettleRequestDebug?.paymentRequirements_keys ?? []
+        },
+        cdp_settle_request_redacted: cdpSettleRequestDebug?.cdp_request_redacted ?? null
       });
     }
 

@@ -313,6 +313,54 @@ function coerceToCdpV1Envelope(body) {
   };
 }
 
+function buildCdpFacilitatorRequest({ paymentPayload, paymentRequirements, x402Version }) {
+  const cdpMappedPayload = remapNetworkFields(paymentPayload);
+  const cdpMappedRequirements = remapNetworkFields(paymentRequirements);
+  const cdpNormalizedPayload = normalizePaymentPayloadShapeForFacilitator(cdpMappedPayload, cdpMappedRequirements);
+  const cdpRequest = coerceToCdpV1Envelope({
+    x402Version: x402Version ?? paymentPayload?.x402Version ?? 2,
+    paymentPayload: cdpNormalizedPayload,
+    paymentRequirements: cdpMappedRequirements
+  });
+  return { cdpMappedPayload, cdpMappedRequirements, cdpNormalizedPayload, cdpRequest };
+}
+
+function redactForSupport(value, keyPath = '') {
+  if (Array.isArray(value)) {
+    return value.map((entry, idx) => redactForSupport(entry, `${keyPath}[${idx}]`));
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  const result = {};
+  for (const [key, nested] of Object.entries(value)) {
+    const path = keyPath ? `${keyPath}.${key}` : key;
+    if (typeof nested === 'string' && (key === 'signature' || path.endsWith('.signature'))) {
+      result[key] = nested.length > 24 ? `${nested.slice(0, 12)}...${nested.slice(-12)} (len=${nested.length})` : nested;
+      continue;
+    }
+    result[key] = redactForSupport(nested, path);
+  }
+  return result;
+}
+
+export function buildCdpRequestDebug({ paymentPayload, paymentRequirements, x402Version }) {
+  if (!paymentPayload || typeof paymentPayload !== 'object' || !paymentRequirements || typeof paymentRequirements !== 'object') {
+    return null;
+  }
+
+  const built = buildCdpFacilitatorRequest({ paymentPayload, paymentRequirements, x402Version });
+  return {
+    top_level_x402Version: built.cdpRequest?.x402Version ?? null,
+    transfer_method: getTransferMethod(built.cdpNormalizedPayload, built.cdpMappedRequirements),
+    paymentPayload_keys: Object.keys(built.cdpRequest?.paymentPayload?.payload || {}),
+    paymentRequirements_keys: Object.keys(built.cdpRequest?.paymentRequirements || {}),
+    cdp_request_redacted: redactForSupport(built.cdpRequest)
+  };
+}
+
 function buildCdpAuthorizationForPermit2(permit2Auth, paymentRequirements) {
   const from = permit2Auth?.from ?? null;
   const to = permit2Auth?.witness?.to ?? paymentRequirements?.payTo ?? null;
@@ -575,14 +623,12 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
   }
 
   try {
-    const cdpMappedPayload = remapNetworkFields(paymentPayload);
-    const cdpMappedRequirements = remapNetworkFields(paymentRequirements);
-    const cdpNormalizedPayload = normalizePaymentPayloadShapeForFacilitator(cdpMappedPayload, cdpMappedRequirements);
-    const cdpVerifyRequest = coerceToCdpV1Envelope({
-      x402Version: x402Version ?? paymentPayload.x402Version ?? 2,
-      paymentPayload: cdpNormalizedPayload,
-      paymentRequirements: cdpMappedRequirements
+    const { cdpMappedPayload, cdpMappedRequirements, cdpNormalizedPayload } = buildCdpFacilitatorRequest({
+      paymentPayload,
+      paymentRequirements,
+      x402Version
     });
+    const cdpVerifyRequestDebug = buildCdpRequestDebug({ paymentPayload, paymentRequirements, x402Version });
     const verify = await callFacilitator('verify', {
       x402Version: x402Version ?? paymentPayload.x402Version ?? 2,
       paymentPayload,
@@ -615,21 +661,20 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
         transfer_method: getTransferMethod(cdpNormalizedPayload, cdpMappedRequirements)
       },
       cdp_verify_request_preview: {
-        top_level_x402Version: cdpVerifyRequest?.x402Version ?? null,
-        transfer_method: getTransferMethod(cdpNormalizedPayload, cdpMappedRequirements),
-        paymentPayload_keys: Object.keys(cdpVerifyRequest?.paymentPayload?.payload || {}),
-        paymentRequirements_keys: Object.keys(cdpVerifyRequest?.paymentRequirements || {})
-      }
+        top_level_x402Version: cdpVerifyRequestDebug?.top_level_x402Version ?? null,
+        transfer_method: cdpVerifyRequestDebug?.transfer_method ?? null,
+        paymentPayload_keys: cdpVerifyRequestDebug?.paymentPayload_keys ?? [],
+        paymentRequirements_keys: cdpVerifyRequestDebug?.paymentRequirements_keys ?? []
+      },
+      cdp_verify_request_redacted: cdpVerifyRequestDebug?.cdp_request_redacted ?? null
     };
   } catch (error) {
-    const cdpMappedPayload = remapNetworkFields(paymentPayload);
-    const cdpMappedRequirements = remapNetworkFields(paymentRequirements);
-    const cdpNormalizedPayload = normalizePaymentPayloadShapeForFacilitator(cdpMappedPayload, cdpMappedRequirements);
-    const cdpVerifyRequest = coerceToCdpV1Envelope({
-      x402Version: x402Version ?? paymentPayload.x402Version ?? 2,
-      paymentPayload: cdpNormalizedPayload,
-      paymentRequirements: cdpMappedRequirements
+    const { cdpMappedPayload, cdpMappedRequirements, cdpNormalizedPayload } = buildCdpFacilitatorRequest({
+      paymentPayload,
+      paymentRequirements,
+      x402Version
     });
+    const cdpVerifyRequestDebug = buildCdpRequestDebug({ paymentPayload, paymentRequirements, x402Version });
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
@@ -658,11 +703,12 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
         transfer_method: getTransferMethod(cdpNormalizedPayload, cdpMappedRequirements)
       },
       cdp_verify_request_preview: {
-        top_level_x402Version: cdpVerifyRequest?.x402Version ?? null,
-        transfer_method: getTransferMethod(cdpNormalizedPayload, cdpMappedRequirements),
-        paymentPayload_keys: Object.keys(cdpVerifyRequest?.paymentPayload?.payload || {}),
-        paymentRequirements_keys: Object.keys(cdpVerifyRequest?.paymentRequirements || {})
-      }
+        top_level_x402Version: cdpVerifyRequestDebug?.top_level_x402Version ?? null,
+        transfer_method: cdpVerifyRequestDebug?.transfer_method ?? null,
+        paymentPayload_keys: cdpVerifyRequestDebug?.paymentPayload_keys ?? [],
+        paymentRequirements_keys: cdpVerifyRequestDebug?.paymentRequirements_keys ?? []
+      },
+      cdp_verify_request_redacted: cdpVerifyRequestDebug?.cdp_request_redacted ?? null
     };
   }
 }
