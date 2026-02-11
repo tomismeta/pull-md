@@ -16,7 +16,7 @@ export function setCors(res, origin) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type, PAYMENT, PAYMENT-SIGNATURE, X-PAYMENT, X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, X-PURCHASE-RECEIPT, X-BANKR-API-KEY'
+    'Content-Type, PAYMENT, PAYMENT-SIGNATURE, X-PAYMENT, X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, X-PURCHASE-RECEIPT'
   );
   res.setHeader('Access-Control-Expose-Headers', 'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PURCHASE-RECEIPT');
 }

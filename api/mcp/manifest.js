@@ -32,8 +32,7 @@ export default function handler(req, res) {
         'X-PAYMENT',
         'PAYMENT-SIGNATURE',
         'PAYMENT-REQUIRED',
-        'PAYMENT-RESPONSE',
-        'X-BANKR-API-KEY'
+        'PAYMENT-RESPONSE'
       ],
       redownload_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP', 'X-PURCHASE-RECEIPT'],
       purchase_header_preference: ['PAYMENT-SIGNATURE', 'PAYMENT', 'X-PAYMENT']
@@ -69,7 +68,7 @@ export default function handler(req, res) {
       },
       {
         name: 'purchase_soul_bankr',
-        description: 'Execute full x402 purchase using Bankr Agent API typed-data signing (requires X-BANKR-API-KEY header)',
+        description: 'Execute full x402 purchase using a server-managed Bankr signer',
         endpoint: '/api/mcp/tools/purchase_soul_bankr',
         method: 'POST',
         parameters: {
@@ -82,8 +81,7 @@ export default function handler(req, res) {
         },
         returns: {
           type: 'object',
-          description:
-            'Purchased soul markdown, receipt, and settlement response. On non-200 responses includes bankr_debug for triage.',
+          description: 'Purchased soul markdown, receipt, and settlement response. Uses server-side Bankr credentials only.',
           success_fields: ['success', 'soul_id', 'wallet_address', 'purchase_receipt', 'payment_response', 'soul_markdown'],
           failure_fields: ['error', 'detail', 'upstream_status', 'upstream_body', 'bankr_debug'],
           bankr_debug_stages: [

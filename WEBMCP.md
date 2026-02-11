@@ -81,7 +81,7 @@ Read `accepted.extra.assetTransferMethod` and sign accordingly:
 - Bankr wallet:
 Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
 - Bankr helper tool:
-`POST /api/mcp/tools/purchase_soul_bankr` performs the full flow server-side when provided `X-BANKR-API-KEY`.
+`POST /api/mcp/tools/purchase_soul_bankr` performs the full flow with a server-managed Bankr signer.
 - Bankr API capability mapping:
 `/agent/me` for wallet discovery, `/agent/sign` for EIP-712 signature generation, and **do not** use `/agent/submit` for SoulStarter settlement.
 - Buyers do **not** need CDP credentials.

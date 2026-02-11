@@ -20,8 +20,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { soul_id: soulId, wallet_address: walletAddress } = req.body || {};
-  const bankrApiKey = req.headers['x-bankr-api-key'];
+  const { soul_id: soulId, wallet_address: walletAddress, bankr_api_key: bodyApiKey } = req.body || {};
+  const providedApiKey = req.headers['x-bankr-api-key'] || bodyApiKey;
+  const bankrApiKey = process.env.BANKR_API_KEY;
   const bankrDebug = {
     flow: 'purchase_soul_bankr',
     stage: 'init',
@@ -29,7 +30,8 @@ export default async function handler(req, res) {
     input: {
       soul_id: soulId || null,
       wallet_address_provided: Boolean(walletAddress),
-      bankr_api_key_present: Boolean(bankrApiKey)
+      bankr_api_key_present: Boolean(bankrApiKey),
+      caller_supplied_bankr_key: Boolean(providedApiKey)
     },
     payment_required: null,
     bankr_me: null,
@@ -41,10 +43,17 @@ export default async function handler(req, res) {
   if (!soulId) {
     return res.status(400).json({ error: 'Missing required parameter: soul_id', bankr_debug: bankrDebug });
   }
-  if (!bankrApiKey || typeof bankrApiKey !== 'string') {
+  if (providedApiKey) {
     return res.status(400).json({
-      error: 'Missing Bankr API key',
-      expected: 'Provide X-BANKR-API-KEY header',
+      error: 'Do not send personal Bankr API keys to this endpoint',
+      detail: 'Bankr signing here is server-managed only.',
+      bankr_debug: bankrDebug
+    });
+  }
+  if (!bankrApiKey || typeof bankrApiKey !== 'string') {
+    return res.status(503).json({
+      error: 'Server-managed Bankr signer is not configured',
+      detail: 'Set BANKR_API_KEY on the server to enable this flow.',
       bankr_debug: bankrDebug
     });
   }
