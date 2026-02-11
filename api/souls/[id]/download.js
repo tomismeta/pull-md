@@ -100,7 +100,7 @@ export default async function handler(req, res) {
 
   const CONFIG = {
     usdcAddress: USDC_ADDRESS,
-    sellerAddress: process.env.SELLER_ADDRESS?.trim(),
+    sellerAddress: process.env.SELLER_ADDRESS?.trim()?.replace(/\s/g, ''),
     network: 'eip155:8453',
     price: SOUL_CATALOG[id].price,
     priceDisplay: SOUL_CATALOG[id].priceDisplay
@@ -227,12 +227,13 @@ export default async function handler(req, res) {
 
     // Submit transferWithAuthorization transaction
     let txHash = null;
-    const serviceWalletKey = process.env.SERVICE_WALLET_KEY;
+    const serviceWalletKey = process.env.SERVICE_WALLET_KEY?.trim();
     
     if (serviceWalletKey) {
       try {
-        // Handle key format - ensure it has 0x prefix
-        const formattedKey = serviceWalletKey.startsWith('0x') ? serviceWalletKey : '0x' + serviceWalletKey;
+        // Handle key format - ensure it has 0x prefix and no whitespace
+        const cleanKey = serviceWalletKey.replace(/\s/g, '');
+        const formattedKey = cleanKey.startsWith('0x') ? cleanKey : '0x' + cleanKey;
         const serviceWallet = new ethers.Wallet(formattedKey, provider);
         const usdcWithSigner = usdc.connect(serviceWallet);
         
@@ -259,8 +260,12 @@ export default async function handler(req, res) {
         console.log('USDC transfer confirmed in block:', receipt.blockNumber);
       } catch (txError) {
         console.error('Transaction submission failed:', txError.message);
+        console.error('Error code:', txError.code);
         if (txError.error) {
           console.error('Error details:', txError.error.message);
+        }
+        if (txError.transaction) {
+          console.error('Failed transaction:', txError.transaction);
         }
         // Continue anyway - authorization is valid, user can submit manually
       }
