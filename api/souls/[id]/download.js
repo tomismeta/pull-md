@@ -1,7 +1,9 @@
 // api/souls/[id]/download.js
-// On-chain x402 verification (no facilitator needed)
+// On-chain x402 verification WITH actual USDC transfer
 
 import { ethers } from 'ethers';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 // Simple in-memory tracking
 const usedNonces = new Set();
@@ -41,13 +43,21 @@ const TRANSFER_WITH_AUTHORIZATION_TYPE = {
   ]
 };
 
-// Minimal ABI for authorization state check
+// USDC ABI with transferWithAuthorization
 const USDC_ABI = [
+  'function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external',
   'function authorizationState(address authorizer, bytes32 nonce) view returns (uint8)'
 ];
 
-// Base RPC (public)
+// Base RPC
 const RPC_URL = 'https://mainnet.base.org';
+
+// Soul catalog with prices (in USDC with 6 decimals)
+const SOUL_CATALOG = {
+  'meta-starter-v1': { price: '500000', priceDisplay: '$0.50' },
+  'midnight-coder-v1': { price: '100000', priceDisplay: '$0.10' },
+  'pattern-weaver-v1': { price: '250000', priceDisplay: '$0.25' }
+};
 
 export default async function handler(req, res) {
   // Rate limiting
@@ -83,13 +93,6 @@ export default async function handler(req, res) {
   if (!id || typeof id !== 'string' || id.length > 50) {
     return res.status(400).json({ error: 'Invalid soul ID' });
   }
-  
-  // Soul catalog with prices (in USDC with 6 decimals)
-  const SOUL_CATALOG = {
-    'meta-starter-v1': { price: '500000', priceDisplay: '$0.50' },      // $0.50
-    'midnight-coder-v1': { price: '100000', priceDisplay: '$0.10' },     // $0.10
-    'pattern-weaver-v1': { price: '250000', priceDisplay: '$0.25' }      // $0.25
-  };
   
   if (!SOUL_CATALOG[id]) {
     return res.status(404).json({ error: 'Soul not found' });
@@ -135,7 +138,7 @@ export default async function handler(req, res) {
     });
   }
 
-  // Verify payment on-chain
+  // Verify payment and submit transaction
   try {
     if (paymentSignature.length > 20000) {
       return res.status(400).json({ error: 'Invalid payment signature format' });
@@ -203,22 +206,61 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Signature mismatch' });
     }
 
-    // Check authorization state on-chain (not already used)
+    // Check authorization state on-chain
     const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
     const usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider);
     
     try {
       const authState = await usdc.authorizationState(auth.from, auth.nonce);
-      // State 0 = unused, 1 = used
       if (authState.toString() !== '0') {
         return res.status(400).json({ error: 'Authorization already used on-chain' });
       }
     } catch (e) {
       console.error('On-chain check failed:', e);
-      // Continue anyway - signature is valid, nonce tracking protects us
     }
 
-    // Mark nonce as used locally
+    // Split signature into v, r, s
+    const sig = signature.slice(2); // Remove 0x
+    const r = '0x' + sig.slice(0, 64);
+    const s = '0x' + sig.slice(64, 128);
+    const v = parseInt(sig.slice(128, 130), 16);
+
+    // Submit transferWithAuthorization transaction
+    let txHash = null;
+    const serviceWalletKey = process.env.SERVICE_WALLET_KEY;
+    
+    if (serviceWalletKey) {
+      try {
+        const serviceWallet = new ethers.Wallet(serviceWalletKey, provider);
+        const usdcWithSigner = usdc.connect(serviceWallet);
+        
+        const tx = await usdcWithSigner.transferWithAuthorization(
+          auth.from,
+          auth.to,
+          auth.value,
+          auth.validAfter,
+          auth.validBefore,
+          auth.nonce,
+          v,
+          r,
+          s,
+          { gasLimit: 100000 }
+        );
+        
+        txHash = tx.hash;
+        console.log('USDC transfer submitted:', txHash);
+        
+        // Wait for confirmation (optional - can be async)
+        // await tx.wait();
+      } catch (txError) {
+        console.error('Transaction submission failed:', txError);
+        // Continue anyway - authorization is valid, user can submit manually
+      }
+    } else {
+      console.log('No service wallet configured - authorization valid but not submitted');
+    }
+
+    // Mark nonce as used
     usedNonces.add(auth.nonce);
     
     // Cleanup
@@ -228,8 +270,15 @@ export default async function handler(req, res) {
       noncesArray.slice(-5000).forEach(n => usedNonces.add(n));
     }
 
-    // Return soul content
-    const soulContent = process.env[`SOUL_${id.replace(/-/g, '_').toUpperCase()}`];
+    // Load soul content from file
+    let soulContent;
+    try {
+      const soulPath = path.join(process.cwd(), 'souls', `${id}.md`);
+      soulContent = await fs.readFile(soulPath, 'utf-8');
+    } catch (e) {
+      // Fallback to env var for backward compatibility
+      soulContent = process.env[`SOUL_${id.replace(/-/g, '_').toUpperCase()}`];
+    }
     
     if (!soulContent) {
       return res.status(500).json({ error: 'Soul content unavailable' });
@@ -238,8 +287,9 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'text/markdown');
     res.setHeader('Content-Disposition', `attachment; filename="${id}-SOUL.md"`);
     res.setHeader('PAYMENT-RESPONSE', Buffer.from(JSON.stringify({
-      verified: true,
-      message: 'Payment verified. USDC transfer authorization valid. Submit to blockchain to complete.'
+      settled: !!txHash,
+      txHash: txHash || 'authorization-valid-submit-manually',
+      message: txHash ? 'USDC transfer submitted' : 'Authorization valid - submit manually'
     })).toString('base64'));
     
     return res.send(soulContent);
