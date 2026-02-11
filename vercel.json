@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/soul",
+      "dest": "/soul.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ],
+  "env": {
+    "SELLER_ADDRESS": "@seller_address",
+    "SOUL_META_STARTER_V1": "@soul_meta_starter_v1"
+  }
+}

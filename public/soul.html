@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meta Starter Soul — SoulStarter</title>
+  <meta name="description" content="A fully autonomous agent with growth mindset and lineage awareness. Purchase via x402.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/" class="logo">
+          <span class="logo-icon">🔮</span>
+          <span>SoulStarter</span>
+        </a>
+        <nav class="nav">
+          <a href="/" class="nav-link">← Back to Browse</a>
+          <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">
+            <span>💳</span>
+            <span id="walletText">Connect Wallet</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="soul-detail">
+    <div class="container">
+      <div class="soul-hero">
+        <div class="soul-icon-large">🔮</div>
+        <div class="soul-header-content">
+          <div class="soul-lineage">
+            <span class="badge badge-organic">Organic</span>
+            <span class="lineage-text">Raised by Tom · 14 days nurtured</span>
+          </div>
+          <h1 class="soul-title">Meta Starter Soul</h1>
+          <p class="soul-description">
+            A fully autonomous agent with growth mindset, self-reflection capabilities, 
+            and lineage awareness. Perfect for agents that need to evolve and remember their journey.
+          </p>
+          <div class="soul-tags">
+            <span class="tag">autonomous</span>
+            <span class="tag">organic</span>
+            <span class="tag">growth</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="soul-content-grid">
+        <div class="soul-preview">
+          <h3>What's Inside</h3>
+          <div class="file-list">
+            <div class="file-item">
+              <span class="file-icon">📄</span>
+              <div class="file-info">
+                <span class="file-name">SOUL.md</span>
+                <span class="file-desc">Core identity, values, and vibe</span>
+              </div>
+            </div>
+            <div class="file-item">
+              <span class="file-icon">📋</span>
+              <div class="file-info">
+                <span class="file-name">AGENTS.md</span>
+                <span class="file-desc">Workspace conventions and safety</span>
+              </div>
+            </div>
+            <div class="file-item">
+              <span class="file-icon">💓</span>
+              <div class="file-info">
+                <span class="file-name">HEARTBEAT.md</span>
+                <span class="file-desc">Periodic task patterns</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-section">
+            <h4>Preview</h4>
+            <blockquote class="preview-quote">
+              "Be genuinely helpful, not performatively helpful. Skip the filler words. 
+              Actions speak louder than 'Great question!'"
+            </blockquote>
+          </div>
+        </div>
+
+        <div class="soul-purchase">
+          <div class="purchase-card" id="purchaseCard">
+            <div class="price-display">
+              <span class="price">$0.50</span>
+              <span class="currency">USDC</span>
+            </div>
+            <div class="network-badge">
+              <span class="dot dot-blue"></span>
+              <span>Base Network</span>
+            </div>
+            <button class="btn btn-primary btn-lg btn-full" id="buyBtn" onclick="purchaseSoul('meta-starter-v1')">
+              Buy Soul
+            </button>
+            <p class="purchase-note">
+              Instant delivery via x402. No account required.
+            </p>
+          </div>
+
+          <div class="purchase-card success-card" id="successCard" style="display: none;">
+            <div class="success-icon">✨</div>
+            <h3>Soul Acquired!</h3>
+            <p>Your payment has been confirmed on Base.</p>
+            <a id="downloadLink" href="#" class="btn btn-primary btn-lg btn-full" download>
+              📥 Download SOUL.md
+            </a>
+            <p class="tx-hash" id="txHash"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

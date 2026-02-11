@@ -1,0 +1,30 @@
+# Environment variables (never commit)
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Logs
+*.log
+npm-debug.log*
+
+# Vercel
+.vercel
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets (double protection)
+*.pem
+*.key

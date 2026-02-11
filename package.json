@@ -1,0 +1,13 @@
+{
+  "name": "soulstarter",
+  "version": "1.0.0",
+  "description": "Human-nurtured agent memory marketplace with x402 payments",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "vercel": "^33.0.0"
+  }
+}

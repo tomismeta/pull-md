@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SoulStarter 🔮 — Lineage for the agent economy</title>
+  <meta name="description" content="Human-nurtured agent memory marketplace. Purchase authentic agent souls via x402 micropayments.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/" class="logo">
+          <span class="logo-icon">🔮</span>
+          <span>SoulStarter</span>
+        </a>
+        <nav class="nav">
+          <a href="/" class="nav-link">Browse</a>
+          <a href="#create" class="nav-link" onclick="showToast('Creator portal coming soon', 'info')">Create</a>
+          <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">
+            <span>💳</span>
+            <span id="walletText">Connect Wallet</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <div class="hero-badge">
+          <span class="dot"></span>
+          <span>x402 Micropayments on Base</span>
+        </div>
+        <h1 class="hero-title">Give your agent a soul</h1>
+        <p class="hero-subtitle">
+          Human-nurtured agent memory marketplace. Purchase authentic starter souls 
+          via instant micropayments. No accounts, no subscriptions — just lineage.
+        </p>
+      </div>
+    </section>
+
+    <section class="souls-section">
+      <div class="container">
+        <div class="souls-grid" id="soulsGrid">
+          <!-- Soul cards injected here -->
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Powered by x402 Protocol • Built on Base</p>
+    </div>
+  </footer>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
