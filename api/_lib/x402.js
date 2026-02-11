@@ -344,10 +344,11 @@ function parseFacilitatorError(error) {
     const parsed = JSON.parse(maybeJson);
     if (!parsed || typeof parsed !== 'object') return null;
     return {
-      error: parsed.error ?? null,
-      message: parsed.message ?? null,
+      error: parsed.error ?? parsed.errorType ?? null,
+      message: parsed.message ?? parsed.errorMessage ?? null,
       invalidReason: parsed.invalidReason ?? null,
-      code: parsed.code ?? null
+      code: parsed.code ?? null,
+      link: parsed.errorLink ?? null
     };
   } catch (_) {
     return null;
