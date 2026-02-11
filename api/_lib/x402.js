@@ -208,9 +208,13 @@ function normalizePaymentPayloadShapeForFacilitator(paymentPayload, paymentRequi
   const nextPayload = { ...payload };
 
   if (transferMethod === 'permit2') {
-    delete nextPayload.authorization;
     if (nextPayload.permit2 && !nextPayload.permit2Authorization) {
       nextPayload.permit2Authorization = nextPayload.permit2;
+    }
+    // CDP verify schema may require payload.authorization even for permit2-style payloads.
+    // Keep permit2Authorization and mirror it into authorization if absent.
+    if (!nextPayload.authorization && nextPayload.permit2Authorization) {
+      nextPayload.authorization = nextPayload.permit2Authorization;
     }
     delete nextPayload.permit2;
   } else if (transferMethod === 'eip3009') {
