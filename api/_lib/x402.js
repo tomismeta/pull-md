@@ -246,10 +246,10 @@ function normalizePaymentPayloadShapeForFacilitator(paymentPayload, paymentRequi
 function buildCdpAuthorizationForPermit2(permit2Auth, paymentRequirements) {
   const from = permit2Auth?.from ?? null;
   const to = permit2Auth?.witness?.to ?? paymentRequirements?.payTo ?? null;
-  const value = toStringNumber(permit2Auth?.permitted?.amount ?? paymentRequirements?.amount ?? null);
-  const validAfter = toStringNumber(permit2Auth?.witness?.validAfter ?? null);
-  const validBefore = toStringNumber(permit2Auth?.deadline ?? null);
-  const nonce = toStringNumber(permit2Auth?.nonce ?? null);
+  const value = normalizeUintString(permit2Auth?.permitted?.amount ?? paymentRequirements?.amount ?? null);
+  const validAfter = normalizeUintString(permit2Auth?.witness?.validAfter ?? null);
+  const validBefore = normalizeUintString(permit2Auth?.deadline ?? null);
+  const nonce = toBytes32Hex(permit2Auth?.nonce ?? null);
 
   return {
     from,
@@ -266,15 +266,15 @@ function normalizePermit2Authorization(auth) {
   if (next.permitted && typeof next.permitted === 'object') {
     next.permitted = {
       ...next.permitted,
-      amount: toStringNumber(next.permitted.amount)
+      amount: normalizeUintString(next.permitted.amount)
     };
   }
-  next.nonce = toStringNumber(next.nonce);
-  next.deadline = toStringNumber(next.deadline);
+  next.nonce = normalizeUintString(next.nonce);
+  next.deadline = normalizeUintString(next.deadline);
   if (next.witness && typeof next.witness === 'object') {
     next.witness = {
       ...next.witness,
-      validAfter: toStringNumber(next.witness.validAfter),
+      validAfter: normalizeUintString(next.witness.validAfter),
       extra: typeof next.witness.extra === 'string' ? next.witness.extra : '0x'
     };
   }
@@ -284,15 +284,53 @@ function normalizePermit2Authorization(auth) {
 function normalizeEip3009Authorization(auth) {
   return {
     ...auth,
-    value: toStringNumber(auth.value),
-    validAfter: toStringNumber(auth.validAfter),
-    validBefore: toStringNumber(auth.validBefore)
+    value: normalizeUintString(auth.value),
+    validAfter: normalizeUintString(auth.validAfter),
+    validBefore: normalizeUintString(auth.validBefore),
+    nonce: toBytes32Hex(auth.nonce)
   };
 }
 
 function toStringNumber(value) {
   if (value == null) return value;
   return typeof value === 'string' ? value : String(value);
+}
+
+function normalizeUintString(value) {
+  if (value == null) return value;
+  try {
+    let bi;
+    if (typeof value === 'string' && value.trim().toLowerCase().startsWith('0x')) {
+      bi = BigInt(value.trim());
+    } else {
+      bi = BigInt(String(value).trim());
+    }
+    if (bi < 0n) {
+      bi = BigInt.asUintN(256, bi);
+    }
+    return bi.toString(10);
+  } catch {
+    return toStringNumber(value);
+  }
+}
+
+function toBytes32Hex(value) {
+  if (value == null) return value;
+  try {
+    let bi;
+    if (typeof value === 'string' && value.trim().toLowerCase().startsWith('0x')) {
+      bi = BigInt(value.trim());
+    } else {
+      bi = BigInt(String(value).trim());
+    }
+    if (bi < 0n) {
+      bi = BigInt.asUintN(256, bi);
+    }
+    const hex = bi.toString(16).padStart(64, '0').slice(-64);
+    return `0x${hex}`;
+  } catch {
+    return toStringNumber(value);
+  }
 }
 
 function getTransferMethod(paymentPayload, paymentRequirements) {
