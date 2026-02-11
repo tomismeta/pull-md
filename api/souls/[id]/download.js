@@ -7,7 +7,7 @@ import {
   verifyPurchaseReceipt,
   verifyWalletAuth
 } from '../../_lib/payments.js';
-import { applyInstructionResponse, createRequestContext, getX402HTTPServer } from '../../_lib/x402.js';
+import { applyInstructionResponse, createRequestContext, getX402HTTPServer, inspectFacilitatorVerify } from '../../_lib/x402.js';
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -104,9 +104,18 @@ export default async function handler(req, res) {
           result.response.body.flow_hint =
             'No payment header was detected. Send PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload for purchase.';
         } else {
+          const submittedPayment = decodeSubmittedPayment(req);
+          const facilitatorVerify = await inspectFacilitatorVerify({
+            paymentPayload: submittedPayment,
+            paymentRequirements: paymentRequired?.accepts?.[0] || null,
+            x402Version: paymentRequired?.x402Version ?? submittedPayment?.x402Version ?? 2
+          });
           result.response.body.flow_hint =
             'Payment header was detected but could not be verified/settled. Regenerate PAYMENT-SIGNATURE from the latest PAYMENT-REQUIRED and retry.';
-          result.response.body.payment_debug = paymentDebug;
+          result.response.body.payment_debug = {
+            ...paymentDebug,
+            facilitator_verify: facilitatorVerify
+          };
         }
       }
       return applyInstructionResponse(res, result.response);

@@ -292,6 +292,68 @@ export function getFacilitatorHealth() {
   };
 }
 
+export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirements, x402Version }) {
+  if (!paymentPayload || typeof paymentPayload !== 'object') {
+    return {
+      ok: false,
+      error: 'missing_payment_payload'
+    };
+  }
+  if (!paymentRequirements || typeof paymentRequirements !== 'object') {
+    return {
+      ok: false,
+      error: 'missing_payment_requirements'
+    };
+  }
+
+  try {
+    const verify = await callFacilitator('verify', {
+      x402Version: x402Version ?? paymentPayload.x402Version ?? 2,
+      paymentPayload,
+      paymentRequirements
+    });
+    return {
+      ok: true,
+      result: summarizeVerifyResult(verify)
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      parsed_error: parseFacilitatorError(error)
+    };
+  }
+}
+
+function summarizeVerifyResult(verify) {
+  if (!verify || typeof verify !== 'object') return verify ?? null;
+  return {
+    isValid: Boolean(verify.isValid),
+    invalidReason: verify.invalidReason ?? null,
+    payer: verify.payer ?? null,
+    network: verify.network ?? null
+  };
+}
+
+function parseFacilitatorError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const jsonStart = message.indexOf('{');
+  if (jsonStart < 0) return null;
+  const maybeJson = message.slice(jsonStart);
+  try {
+    const parsed = JSON.parse(maybeJson);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      error: parsed.error ?? null,
+      message: parsed.message ?? null,
+      invalidReason: parsed.invalidReason ?? null,
+      code: parsed.code ?? null
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 class NodeAdapter {
   constructor(req) {
     this.req = req;
