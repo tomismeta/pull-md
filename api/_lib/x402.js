@@ -258,15 +258,20 @@ function coerceToCdpV1Envelope(body) {
 
   const transferMethod = getTransferMethod(paymentPayload, accepted);
   const resource = paymentPayload?.resource && typeof paymentPayload.resource === 'object' ? paymentPayload.resource : null;
-  const v1InnerPayload =
-    paymentPayload?.payload && typeof paymentPayload.payload === 'object' ? { ...paymentPayload.payload } : {};
+  const sourcePayload = paymentPayload?.payload && typeof paymentPayload.payload === 'object' ? paymentPayload.payload : {};
 
-  // Avoid oneOf ambiguity in facilitator schema: send only one branch.
+  // Build method-specific payload from scratch to avoid schema ambiguity.
+  let v1InnerPayload = {};
   if (transferMethod === 'permit2') {
-    delete v1InnerPayload.authorization;
+    v1InnerPayload = {
+      signature: sourcePayload.signature ?? null,
+      permit2Authorization: sourcePayload.permit2Authorization ?? null
+    };
   } else {
-    delete v1InnerPayload.permit2Authorization;
-    delete v1InnerPayload.transaction;
+    v1InnerPayload = {
+      signature: sourcePayload.signature ?? null,
+      authorization: sourcePayload.authorization ?? null
+    };
   }
 
   const v1PaymentPayload = {
@@ -573,6 +578,11 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
     const cdpMappedPayload = remapNetworkFields(paymentPayload);
     const cdpMappedRequirements = remapNetworkFields(paymentRequirements);
     const cdpNormalizedPayload = normalizePaymentPayloadShapeForFacilitator(cdpMappedPayload, cdpMappedRequirements);
+    const cdpVerifyRequest = coerceToCdpV1Envelope({
+      x402Version: x402Version ?? paymentPayload.x402Version ?? 2,
+      paymentPayload: cdpNormalizedPayload,
+      paymentRequirements: cdpMappedRequirements
+    });
     const verify = await callFacilitator('verify', {
       x402Version: x402Version ?? paymentPayload.x402Version ?? 2,
       paymentPayload,
@@ -603,12 +613,22 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
       cdp_envelope: {
         x402Version: 1,
         transfer_method: getTransferMethod(cdpNormalizedPayload, cdpMappedRequirements)
+      },
+      cdp_verify_request_preview: {
+        top_level_x402Version: cdpVerifyRequest?.x402Version ?? null,
+        paymentPayload_keys: Object.keys(cdpVerifyRequest?.paymentPayload?.payload || {}),
+        paymentRequirements_keys: Object.keys(cdpVerifyRequest?.paymentRequirements || {})
       }
     };
   } catch (error) {
     const cdpMappedPayload = remapNetworkFields(paymentPayload);
     const cdpMappedRequirements = remapNetworkFields(paymentRequirements);
     const cdpNormalizedPayload = normalizePaymentPayloadShapeForFacilitator(cdpMappedPayload, cdpMappedRequirements);
+    const cdpVerifyRequest = coerceToCdpV1Envelope({
+      x402Version: x402Version ?? paymentPayload.x402Version ?? 2,
+      paymentPayload: cdpNormalizedPayload,
+      paymentRequirements: cdpMappedRequirements
+    });
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
@@ -635,6 +655,11 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
       cdp_envelope: {
         x402Version: 1,
         transfer_method: getTransferMethod(cdpNormalizedPayload, cdpMappedRequirements)
+      },
+      cdp_verify_request_preview: {
+        top_level_x402Version: cdpVerifyRequest?.x402Version ?? null,
+        paymentPayload_keys: Object.keys(cdpVerifyRequest?.paymentPayload?.payload || {}),
+        paymentRequirements_keys: Object.keys(cdpVerifyRequest?.paymentRequirements || {})
       }
     };
   }
