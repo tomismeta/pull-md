@@ -7,8 +7,7 @@
     "deploy": "vercel --prod"
   },
   "dependencies": {
-    "@coinbase/x402": "^2.1.0",
-    "@x402/evm": "^2.3.0"
+    "ethers": "^5.7.2"
   },
   "devDependencies": {
     "vercel": "^33.0.0"

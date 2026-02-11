@@ -1,6 +1,5 @@
 // api/souls/[id]/download.js
-// SECURE endpoint - returns soul content only after verified x402 payment
-// Uses Coinbase Facilitator for payment verification
+// PROPER x402 implementation with EIP-3009 authorization verification
 
 // Simple in-memory nonce tracking
 const usedNonces = new Set();
@@ -17,8 +16,15 @@ const ALLOWED_ORIGINS = [
   'http://localhost:8080'
 ];
 
-// Facilitator config
+// Coinbase Facilitator
 const FACILITATOR_URL = 'https://api.cdp.coinbase.com/x402/facilitator/v1';
+
+// USDC Contract ABI (minimal for transferWithAuthorization)
+const USDC_ABI = [
+  'function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external',
+  'function authorizationState(address authorizer, bytes32 nonce) external view returns (uint8)',
+  'event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)'
+];
 
 export default async function handler(req, res) {
   // Rate limiting
@@ -75,16 +81,16 @@ export default async function handler(req, res) {
 
   if (!paymentSignature) {
     // Return 402 with payment requirements
-    const nonce = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+    const nonce = ethers.utils.hexlify(ethers.utils.randomBytes(32));
     
     const paymentRequired = {
+      x402Version: 1,
       scheme: 'exact',
       network: CONFIG.network,
       payload: {
         token: CONFIG.usdcAddress,
         to: CONFIG.sellerAddress,
         amount: CONFIG.price,
-        timestamp: Date.now(),
         nonce: nonce
       }
     };
@@ -101,35 +107,51 @@ export default async function handler(req, res) {
 
   // Verify payment
   try {
-    if (paymentSignature.length > 10000) {
+    if (paymentSignature.length > 20000) {
       return res.status(400).json({ error: 'Invalid payment signature format' });
     }
     
-    let paymentPayload;
+    let x402Payload;
     try {
-      paymentPayload = JSON.parse(Buffer.from(paymentSignature, 'base64').toString());
+      x402Payload = JSON.parse(Buffer.from(paymentSignature, 'base64').toString());
     } catch (e) {
       return res.status(400).json({ error: 'Invalid payment signature encoding' });
     }
     
-    if (!paymentPayload.signature || !paymentPayload.payload || !paymentPayload.payload.nonce) {
-      return res.status(400).json({ error: 'Invalid payment payload structure' });
+    // Validate x402 structure
+    if (!x402Payload.payload?.authorization || !x402Payload.payload?.signature) {
+      return res.status(400).json({ error: 'Invalid x402 payload structure' });
+    }
+    
+    const auth = x402Payload.payload.authorization;
+    
+    // Validate authorization fields
+    if (!auth.from || !auth.to || !auth.value || !auth.validAfter || !auth.validBefore || !auth.nonce) {
+      return res.status(400).json({ error: 'Invalid authorization structure' });
     }
 
     // Replay protection
-    if (usedNonces.has(paymentPayload.payload.nonce)) {
+    if (usedNonces.has(auth.nonce)) {
       return res.status(400).json({ error: 'Payment already used' });
     }
 
-    // Validate nonce timestamp
-    const nonceParts = paymentPayload.payload.nonce.split('-');
-    if (nonceParts.length !== 2) {
-      return res.status(400).json({ error: 'Invalid nonce format' });
+    // Validate timestamps
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (nowSec < parseInt(auth.validAfter)) {
+      return res.status(400).json({ error: 'Payment not yet valid' });
     }
-    
-    const nonceTimestamp = parseInt(nonceParts[0]);
-    if (isNaN(nonceTimestamp) || Date.now() - nonceTimestamp > 300000) {
+    if (nowSec > parseInt(auth.validBefore)) {
       return res.status(400).json({ error: 'Payment expired' });
+    }
+
+    // Validate amount
+    if (auth.value !== CONFIG.price) {
+      return res.status(400).json({ error: 'Invalid payment amount' });
+    }
+
+    // Validate recipient
+    if (auth.to.toLowerCase() !== CONFIG.sellerAddress.toLowerCase()) {
+      return res.status(400).json({ error: 'Invalid payment recipient' });
     }
 
     // Verify with Coinbase Facilitator
@@ -137,21 +159,16 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        payment: paymentPayload,
-        requirements: {
-          scheme: 'exact',
-          network: CONFIG.network,
-          payload: {
-            token: CONFIG.usdcAddress,
-            to: CONFIG.sellerAddress,
-            amount: CONFIG.price
-          }
-        }
+        x402Version: 1,
+        scheme: 'exact',
+        network: CONFIG.network,
+        payload: x402Payload.payload
       })
     });
 
     if (!verifyResponse.ok) {
       const error = await verifyResponse.json().catch(() => ({}));
+      console.error('Facilitator verify error:', error);
       return res.status(402).json({
         error: 'Payment verification failed',
         message: error.message || 'Invalid payment'
@@ -172,20 +189,16 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        payment: paymentPayload,
-        requirements: {
-          scheme: 'exact',
-          network: CONFIG.network,
-          payload: {
-            token: CONFIG.usdcAddress,
-            to: CONFIG.sellerAddress,
-            amount: CONFIG.price
-          }
-        }
+        x402Version: 1,
+        scheme: 'exact',
+        network: CONFIG.network,
+        payload: x402Payload.payload
       })
     });
 
     if (!settleResponse.ok) {
+      const error = await settleResponse.json().catch(() => ({}));
+      console.error('Facilitator settle error:', error);
       throw new Error('Settlement failed');
     }
 
@@ -196,7 +209,7 @@ export default async function handler(req, res) {
     }
 
     // Mark nonce as used
-    usedNonces.add(paymentPayload.payload.nonce);
+    usedNonces.add(auth.nonce);
     
     // Cleanup
     if (usedNonces.size > 10000) {
@@ -226,3 +239,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
+
+// Import ethers for validation
+import { ethers } from 'ethers';

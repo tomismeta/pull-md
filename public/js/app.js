@@ -1,26 +1,45 @@
 /**
- * SoulStarter - Multi-Wallet x402 Payment Integration
- * Supports MetaMask, WalletConnect, Coinbase, and injected wallets
+ * SoulStarter - Proper x402 Payment Implementation
+ * Uses EIP-712 typed data signing with EIP-3009 authorization
  */
 
 // Configuration
 const CONFIG = {
   network: 'eip155:8453',
+  chainId: 8453,
   usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-  chainId: '0x2105',
-  chainIdDecimal: 8453,
   apiBase: '/api',
   requestTimeout: 30000
 };
 
-// WalletConnect Project ID (replace with your own from https://cloud.walletconnect.com)
-const WC_PROJECT_ID = 'YOUR_WC_PROJECT_ID'; // Get free from cloud.walletconnect.com
+// USDC EIP-712 Domain (Base network)
+const USDC_DOMAIN = {
+  name: 'USDC',
+  version: '2',
+  chainId: 8453,
+  verifyingContract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+};
+
+// EIP-712 Types for EIP-3009 TransferWithAuthorization
+const TRANSFER_WITH_AUTHORIZATION_TYPE = {
+  TransferWithAuthorization: [
+    { name: 'from', type: 'address' },
+    { name: 'to', type: 'address' },
+    { name: 'value', type: 'uint256' },
+    { name: 'validAfter', type: 'uint256' },
+    { name: 'validBefore', type: 'uint256' },
+    { name: 'nonce', type: 'bytes32' }
+  ]
+};
 
 // State
 let provider = null;
 let signer = null;
 let walletAddress = null;
 let walletType = null;
+
+// WalletConnect Project ID (get from cloud.walletconnect.com)
+const WC_PROJECT_ID = 'YOUR_WC_PROJECT_ID';
 
 /**
  * Wallet Connection Functions
@@ -45,26 +64,16 @@ async function connectMetaMask() {
   
   try {
     walletType = 'metamask';
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     
-    // Request account access
-    const accounts = await window.ethereum.request({
-      method: 'eth_requestAccounts'
-    });
-    
-    if (accounts.length === 0) {
-      throw new Error('No accounts found');
-    }
+    if (accounts.length === 0) throw new Error('No accounts found');
     
     walletAddress = accounts[0];
     provider = new ethers.providers.Web3Provider(window.ethereum);
     signer = provider.getSigner();
     
-    // Check and switch to Base
-    await ensureCorrectNetwork(window.ethereum);
-    
-    // Setup listeners
+    await ensureCorrectNetwork();
     setupMetaMaskListeners();
-    
     updateWalletUI();
     showToast('Connected to MetaMask!', 'success');
     
@@ -79,7 +88,7 @@ async function connectWalletConnect() {
   closeWalletModal();
   
   if (WC_PROJECT_ID === 'YOUR_WC_PROJECT_ID') {
-    showToast('WalletConnect not configured. Please set up a project at cloud.walletconnect.com', 'error');
+    showToast('WalletConnect not configured', 'error');
     return;
   }
   
@@ -88,15 +97,13 @@ async function connectWalletConnect() {
     
     const ethereumProvider = await window.EthereumProvider.init({
       projectId: WC_PROJECT_ID,
-      chains: [CONFIG.chainIdDecimal],
+      chains: [CONFIG.chainId],
       showQrModal: true,
-      methods: ['eth_sendTransaction', 'eth_sign', 'personal_sign'],
-      events: ['chainChanged', 'accountsChanged'],
+      methods: ['eth_sendTransaction', 'eth_signTypedData_v4'],
       metadata: {
         name: 'SoulStarter',
         description: 'Human-nurtured agent memory marketplace',
-        url: window.location.origin,
-        icons: [window.location.origin + '/favicon.ico']
+        url: window.location.origin
       }
     });
     
@@ -106,16 +113,9 @@ async function connectWalletConnect() {
     signer = provider.getSigner();
     walletAddress = await signer.getAddress();
     
-    // WalletConnect handles network switching in the app
-    
-    // Setup listeners
     ethereumProvider.on('accountsChanged', (accounts) => {
-      if (accounts.length === 0) {
-        resetWalletState();
-      } else {
-        walletAddress = accounts[0];
-        updateWalletUI();
-      }
+      if (accounts.length === 0) resetWalletState();
+      else { walletAddress = accounts[0]; updateWalletUI(); }
     });
     
     ethereumProvider.on('disconnect', () => {
@@ -136,37 +136,28 @@ async function connectWalletConnect() {
 async function connectCoinbase() {
   closeWalletModal();
   
-  // Check for Coinbase Wallet
   const coinbaseWallet = window.ethereum?.providers?.find(p => p.isCoinbaseWallet) ||
                          (window.ethereum?.isCoinbaseWallet ? window.ethereum : null);
   
   if (!coinbaseWallet && !window.ethereum) {
-    showToast('Coinbase Wallet not found. Opening download page...', 'info');
+    showToast('Coinbase Wallet not found', 'info');
     window.open('https://www.coinbase.com/wallet', '_blank');
     return;
   }
   
   try {
     walletType = 'coinbase';
-    
     const providerToUse = coinbaseWallet || window.ethereum;
     
-    const accounts = await providerToUse.request({
-      method: 'eth_requestAccounts'
-    });
-    
-    if (accounts.length === 0) {
-      throw new Error('No accounts found');
-    }
+    const accounts = await providerToUse.request({ method: 'eth_requestAccounts' });
+    if (accounts.length === 0) throw new Error('No accounts found');
     
     walletAddress = accounts[0];
     provider = new ethers.providers.Web3Provider(providerToUse);
     signer = provider.getSigner();
     
-    await ensureCorrectNetwork(providerToUse);
-    
+    await ensureCorrectNetwork();
     setupMetaMaskListeners(providerToUse);
-    
     updateWalletUI();
     showToast('Connected to Coinbase Wallet!', 'success');
     
@@ -181,29 +172,21 @@ async function connectInjected() {
   closeWalletModal();
   
   if (!window.ethereum) {
-    showToast('No wallet found. Please install MetaMask, Rainbow, or another wallet.', 'error');
+    showToast('No wallet found', 'error');
     return;
   }
   
   try {
     walletType = 'injected';
-    
-    const accounts = await window.ethereum.request({
-      method: 'eth_requestAccounts'
-    });
-    
-    if (accounts.length === 0) {
-      throw new Error('No accounts found');
-    }
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    if (accounts.length === 0) throw new Error('No accounts found');
     
     walletAddress = accounts[0];
     provider = new ethers.providers.Web3Provider(window.ethereum);
     signer = provider.getSigner();
     
-    await ensureCorrectNetwork(window.ethereum);
-    
+    await ensureCorrectNetwork();
     setupMetaMaskListeners();
-    
     updateWalletUI();
     showToast('Wallet connected!', 'success');
     
@@ -214,21 +197,21 @@ async function connectInjected() {
   }
 }
 
-async function ensureCorrectNetwork(ethereumProvider) {
-  const chainId = await ethereumProvider.request({ method: 'eth_chainId' });
+async function ensureCorrectNetwork() {
+  const chainId = await window.ethereum.request({ method: 'eth_chainId' });
   
-  if (chainId !== CONFIG.chainId) {
+  if (parseInt(chainId) !== CONFIG.chainId) {
     try {
-      await ethereumProvider.request({
+      await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: CONFIG.chainId }]
+        params: [{ chainId: '0x2105' }]
       });
     } catch (switchError) {
       if (switchError.code === 4902) {
-        await ethereumProvider.request({
+        await window.ethereum.request({
           method: 'wallet_addEthereumChain',
           params: [{
-            chainId: CONFIG.chainId,
+            chainId: '0x2105',
             chainName: 'Base',
             nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
             rpcUrls: ['https://mainnet.base.org'],
@@ -255,9 +238,7 @@ function setupMetaMaskListeners(ethereumProvider = window.ethereum) {
     }
   });
   
-  ethereumProvider.on('chainChanged', () => {
-    window.location.reload();
-  });
+  ethereumProvider.on('chainChanged', () => window.location.reload());
 }
 
 function resetWalletState() {
@@ -291,7 +272,7 @@ function updateWalletUI() {
 }
 
 /**
- * Purchase Functions
+ * PROPER x402 Payment Implementation
  */
 
 async function purchaseSoul(soulId) {
@@ -309,22 +290,14 @@ async function purchaseSoul(soulId) {
       btn.textContent = 'Processing...';
     }
 
-    // Step 1: Get payment requirements
+    // Step 1: Get 402 response with requirements
     showToast('Requesting payment details...', 'info');
     const response = await fetchWithTimeout(
       `${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`
     );
 
-    if (response.status === 500) {
-      throw new Error('Server error. Please try again later.');
-    }
-    
-    if (response.status === 429) {
-      throw new Error('Too many requests. Please wait a moment.');
-    }
-
     if (response.status !== 402) {
-      throw new Error('Unexpected response from server');
+      throw new Error('Expected 402 Payment Required');
     }
 
     const paymentRequiredB64 = response.headers.get('PAYMENT-REQUIRED');
@@ -332,59 +305,40 @@ async function purchaseSoul(soulId) {
       throw new Error('No payment requirements received');
     }
 
-    let requirements;
-    try {
-      requirements = JSON.parse(atob(paymentRequiredB64));
-    } catch (e) {
-      throw new Error('Invalid payment requirements');
-    }
+    const requirements = JSON.parse(atob(paymentRequiredB64));
     
-    if (!requirements.payload || !requirements.payload.amount) {
-      throw new Error('Invalid payment data');
-    }
-
-    // Step 2: Create and sign payment
-    showToast('Please sign the payment in your wallet', 'info');
-    const paymentPayload = await createPaymentPayload(requirements);
+    // Step 2: Create proper x402 EIP-3009 authorization
+    showToast('Signing payment authorization...', 'info');
+    const x402Payload = await createX402Payment(requirements);
     
-    // Step 3: Send payment and get soul
+    // Step 3: Submit signed payment
     showToast('Verifying payment...', 'info');
     const paymentResponse = await fetchWithTimeout(
       `${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`,
       {
         method: 'GET',
         headers: {
-          'PAYMENT-SIGNATURE': btoa(JSON.stringify(paymentPayload)),
+          'PAYMENT-SIGNATURE': btoa(JSON.stringify(x402Payload)),
           'Accept': 'text/markdown'
         }
       }
     );
 
     if (!paymentResponse.ok) {
-      let errorMessage = 'Payment failed';
-      try {
-        const error = await paymentResponse.json();
-        errorMessage = error.message || errorMessage;
-      } catch (e) {}
-      
-      if (paymentResponse.status === 402) {
-        throw new Error('Payment was rejected: ' + errorMessage);
-      } else {
-        throw new Error(errorMessage);
-      }
+      const error = await paymentResponse.json().catch(() => ({}));
+      throw new Error(error.message || 'Payment failed');
     }
 
     const soulContent = await paymentResponse.text();
     
+    // Get transaction hash from response
     let txHash = 'pending';
     const paymentResponseB64 = paymentResponse.headers.get('PAYMENT-RESPONSE');
     if (paymentResponseB64) {
       try {
-        const paymentResult = JSON.parse(atob(paymentResponseB64));
-        txHash = paymentResult.txHash || 'pending';
-      } catch (e) {
-        console.warn('Failed to parse payment response');
-      }
+        const result = JSON.parse(atob(paymentResponseB64));
+        txHash = result.txHash || 'pending';
+      } catch (e) {}
     }
 
     showPaymentSuccess(soulContent, txHash, soulId);
@@ -392,7 +346,7 @@ async function purchaseSoul(soulId) {
 
   } catch (error) {
     console.error('Purchase failed:', error);
-    showToast('Purchase failed: ' + (error.message || 'Unknown error'), 'error');
+    showToast('Purchase failed: ' + error.message, 'error');
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -401,26 +355,54 @@ async function purchaseSoul(soulId) {
   }
 }
 
-async function createPaymentPayload(requirements) {
-  const message = JSON.stringify(requirements.payload);
+/**
+ * Create proper x402 payment with EIP-712 typed data signature
+ */
+async function createX402Payment(requirements) {
+  // Generate proper bytes32 nonce
+  const nonce = ethers.utils.hexlify(ethers.utils.randomBytes(32));
   
-  // Sign with ethers signer (works with all wallet types)
-  const signature = await signer.signMessage(message);
-
+  // Set validity window (5 minutes)
+  const now = Math.floor(Date.now() / 1000);
+  const validAfter = now - 60; // 1 minute ago (allows immediate use)
+  const validBefore = now + 300; // 5 minutes from now
+  
+  // Create EIP-3009 authorization struct
+  const authorization = {
+    from: walletAddress,
+    to: requirements.payload.to,
+    value: requirements.payload.amount,
+    validAfter: validAfter,
+    validBefore: validBefore,
+    nonce: nonce
+  };
+  
+  // Sign with EIP-712 typed data
+  const signature = await signer._signTypedData(
+    USDC_DOMAIN,
+    TRANSFER_WITH_AUTHORIZATION_TYPE,
+    authorization
+  );
+  
+  // Return proper x402 payload structure
   return {
-    scheme: requirements.scheme,
+    x402Version: 1,
+    scheme: 'exact',
     network: requirements.network,
-    payload: requirements.payload,
-    signature,
-    from: walletAddress
+    payload: {
+      signature: signature,
+      authorization: authorization
+    }
   };
 }
 
+/**
+ * UI and Utility Functions
+ */
+
 function showPaymentSuccess(content, txHash, soulId) {
   const purchaseCard = document.getElementById('purchaseCard');
-  if (purchaseCard) {
-    purchaseCard.style.display = 'none';
-  }
+  if (purchaseCard) purchaseCard.style.display = 'none';
 
   const successCard = document.getElementById('successCard');
   if (successCard) {
@@ -438,24 +420,13 @@ function showPaymentSuccess(content, txHash, soulId) {
     const txHashEl = document.getElementById('txHash');
     if (txHashEl) {
       if (txHash && txHash !== 'pending') {
-        txHashEl.textContent = 'Transaction: ';
-        const link = document.createElement('a');
-        link.href = `https://basescan.org/tx/${txHash}`;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = txHash.slice(0, 10) + '...' + txHash.slice(-8);
-        link.style.color = 'var(--accent-secondary)';
-        txHashEl.appendChild(link);
+        txHashEl.innerHTML = `Transaction: <a href="https://basescan.org/tx/${txHash}" target="_blank">${txHash.slice(0, 10)}...${txHash.slice(-8)}</a>`;
       } else {
         txHashEl.textContent = 'Transaction: Pending confirmation';
       }
     }
   }
 }
-
-/**
- * Utility Functions
- */
 
 function escapeHtml(text) {
   if (typeof text !== 'string') return '';
@@ -469,16 +440,13 @@ async function fetchWithTimeout(url, options = {}, timeout = CONFIG.requestTimeo
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   
   try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal
-    });
+    const response = await fetch(url, { ...options, signal: controller.signal });
     clearTimeout(timeoutId);
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
-      throw new Error('Request timed out. Please try again.');
+      throw new Error('Request timed out');
     }
     throw error;
   }
@@ -491,12 +459,9 @@ function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
-  
   container.appendChild(toast);
   
-  requestAnimationFrame(() => {
-    toast.classList.add('show');
-  });
+  requestAnimationFrame(() => toast.classList.add('show'));
   
   setTimeout(() => {
     toast.classList.remove('show');
@@ -542,11 +507,9 @@ async function loadSouls() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-  // Check for existing connection
   if (window.ethereum && window.ethereum.selectedAddress) {
     connectInjected().catch(console.error);
   }
-  
   loadSouls();
 });
 
