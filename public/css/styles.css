@@ -382,6 +382,11 @@ main {
   background: rgba(255, 212, 139, 0.08);
 }
 
+.badge-synthetic {
+  color: #8ec8ff;
+  background: rgba(142, 200, 255, 0.1);
+}
+
 .price {
   font-weight: 600;
   font-size: 1rem;

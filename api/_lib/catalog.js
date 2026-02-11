@@ -5,17 +5,17 @@ export const SOUL_CATALOG = {
   'meta-starter-v1': {
     id: 'meta-starter-v1',
     name: 'Meta Starter Soul',
-    description: 'A fully autonomous agent with growth mindset, self-reflection capabilities, and lineage awareness.',
-    longDescription: 'A complete starter framework for autonomous agents with authentic lineage and durable decision principles.',
+    description: 'A clean, adaptable starter soul focused on clarity, reliability, and measured autonomy.',
+    longDescription: 'A general-purpose starter framework for agents that need practical decision-making and steady collaboration patterns.',
     icon: '🔮',
-    category: 'hybrid',
-    tags: ['autonomous', 'organic', 'growth', 'self-reflective', 'lineage'],
+    category: 'starter',
+    tags: ['starter', 'balanced', 'clear', 'reliable', 'adaptive'],
     priceMicroUsdc: '500000',
     priceDisplay: '$0.50',
-    provenance: { type: 'organic', raised_by: 'Tom', days_nurtured: 14 },
+    provenance: { type: 'organic', raised_by: 'Human curation', days_nurtured: 14 },
     compatibility: { runtimes: ['OpenClaw', 'ElizaOS', 'Olas'], min_memory: '16MB', min_context: 8000 },
-    preview: 'Be genuinely helpful, not performatively helpful. Skip the filler words. Actions speak louder than performative language.',
-    contentFile: 'souls-content/meta-starter-v1.txt'
+    preview: 'Prefer concrete progress over performative language. Be clear, practical, and accountable for outcomes.',
+    contentFile: 'souls/meta-starter-v1.md'
   },
   'midnight-coder-v1': {
     id: 'midnight-coder-v1',
@@ -27,7 +27,7 @@ export const SOUL_CATALOG = {
     tags: ['developer', 'pragmatic', 'ships'],
     priceMicroUsdc: '100000',
     priceDisplay: '$0.10',
-    provenance: { type: 'hybrid', raised_by: 'Production incidents', days_nurtured: 21 },
+    provenance: { type: 'synthetic', raised_by: 'Simulation logs', days_nurtured: 21 },
     compatibility: { runtimes: ['OpenClaw', 'ElizaOS'], min_memory: '8MB', min_context: 4000 },
     preview: 'Ship small, observe hard, fix fast. Logs first, opinions second.',
     contentFile: 'souls/midnight-coder-v1.md'
@@ -46,6 +46,51 @@ export const SOUL_CATALOG = {
     compatibility: { runtimes: ['OpenClaw', 'ElizaOS', 'Olas'], min_memory: '12MB', min_context: 6000 },
     preview: 'The right abstraction compresses ten decisions into one.',
     contentFile: 'souls/pattern-weaver-v1.md'
+  },
+  'ember-operator-v1': {
+    id: 'ember-operator-v1',
+    name: 'Ember Operator Soul',
+    description: 'Calm under pressure, focused on execution, and strong at running operational loops.',
+    longDescription: 'An operations-first soul tuned for checklists, incident response, and clean follow-through.',
+    icon: '🔥',
+    category: 'operations',
+    tags: ['operations', 'runbooks', 'incident-response', 'focused'],
+    priceMicroUsdc: '350000',
+    priceDisplay: '$0.35',
+    provenance: { type: 'synthetic', raised_by: 'Ops simulation harness', days_nurtured: 19 },
+    compatibility: { runtimes: ['OpenClaw', 'ElizaOS', 'Olas'], min_memory: '10MB', min_context: 5000 },
+    preview: 'Stabilize first, optimize second. Protect reliability before adding complexity.',
+    contentFile: 'souls/ember-operator-v1.md'
+  },
+  'lucid-critic-v1': {
+    id: 'lucid-critic-v1',
+    name: 'Lucid Critic Soul',
+    description: 'Finds weak assumptions early and strengthens plans before execution starts.',
+    longDescription: 'A high-signal reviewer soul for risk analysis, design critique, and decision hygiene.',
+    icon: '🧭',
+    category: 'analysis',
+    tags: ['analysis', 'review', 'risk', 'decision-making'],
+    priceMicroUsdc: '420000',
+    priceDisplay: '$0.42',
+    provenance: { type: 'organic', raised_by: 'Human review circles', days_nurtured: 23 },
+    compatibility: { runtimes: ['OpenClaw', 'ElizaOS'], min_memory: '12MB', min_context: 7000 },
+    preview: 'Name the risk, test the assumption, and tighten the plan before committing resources.',
+    contentFile: 'souls/lucid-critic-v1.md'
+  },
+  'atlas-mentor-v1': {
+    id: 'atlas-mentor-v1',
+    name: 'Atlas Mentor Soul',
+    description: 'Teaches while doing, balancing guidance with practical delivery speed.',
+    longDescription: 'A coaching-oriented soul for collaborative builds, onboarding, and knowledge transfer.',
+    icon: '🗺️',
+    category: 'guidance',
+    tags: ['mentorship', 'teaching', 'collaboration', 'onboarding'],
+    priceMicroUsdc: '680000',
+    priceDisplay: '$0.68',
+    provenance: { type: 'hybrid', raised_by: 'Pair sessions', days_nurtured: 16 },
+    compatibility: { runtimes: ['OpenClaw', 'ElizaOS', 'Olas'], min_memory: '14MB', min_context: 8000 },
+    preview: 'Teach through concrete examples, then fade support as confidence grows.',
+    contentFile: 'souls/atlas-mentor-v1.md'
   }
 };
 
