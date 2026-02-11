@@ -227,15 +227,16 @@ function buildPaymentDebug(req, paymentRequired) {
         }
       : null,
     expected_fields: expected
-      ? {
-          x402Version: paymentRequired?.x402Version ?? null,
-          scheme: expected.scheme ?? null,
-          network: expected.network ?? null,
-          amount: expected.amount ?? null,
-          asset: expected.asset ?? null,
-          payTo: expected.payTo ?? null
-        }
-      : null,
+        ? {
+            x402Version: paymentRequired?.x402Version ?? null,
+            scheme: expected.scheme ?? null,
+            network: expected.network ?? null,
+            amount: expected.amount ?? null,
+            asset: expected.asset ?? null,
+            payTo: expected.payTo ?? null,
+            assetTransferMethod: expected?.extra?.assetTransferMethod ?? null
+          }
+        : null,
     accepted_exact_match: Boolean(expected && submitted?.accepted && deepEqual(submitted.accepted, expected)),
     accepted_diff: expected && submitted?.accepted ? diffObjects(submitted.accepted, expected) : null,
     authorization_checks:
@@ -260,6 +261,7 @@ function buildPaymentDebug(req, paymentRequired) {
             token: permit2Auth.permitted?.token ?? null,
             amount: permit2Auth.permitted?.amount ?? null,
             spender: permit2Auth.spender ?? null,
+            spender_matches_proxy: equalAddress(permit2Auth.spender, '0x4020615294c913F045dc10f0a5cdEbd86c280001'),
             deadline: permit2Auth.deadline ?? null,
             witness_to: permit2Auth.witness?.to ?? null,
             witness_validAfter: permit2Auth.witness?.validAfter ?? null,
@@ -318,6 +320,11 @@ function buildPaymentDebug(req, paymentRequired) {
     }
     if (!equalAddress(permit2Auth.witness?.to, expected.payTo)) {
       info.mismatch_hints.push(`permit2.witness.to mismatch: submitted=${permit2Auth.witness?.to} expected=${expected.payTo}`);
+    }
+    if (!equalAddress(permit2Auth.spender, '0x4020615294c913F045dc10f0a5cdEbd86c280001')) {
+      info.mismatch_hints.push(
+        `permit2.spender mismatch: submitted=${permit2Auth.spender} expected=0x4020615294c913F045dc10f0a5cdEbd86c280001`
+      );
     }
     if (!isBigIntGte(permit2Auth.permitted?.amount, expected.amount)) {
       info.mismatch_hints.push(

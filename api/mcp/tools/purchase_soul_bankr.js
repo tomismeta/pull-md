@@ -436,7 +436,8 @@ function summarizePaymentRequired(paymentRequired) {
     amount: accepted.amount ?? null,
     asset: accepted.asset ?? null,
     payTo: accepted.payTo ?? null,
-    maxTimeoutSeconds: accepted.maxTimeoutSeconds ?? null
+    maxTimeoutSeconds: accepted.maxTimeoutSeconds ?? null,
+    assetTransferMethod: accepted?.extra?.assetTransferMethod ?? null
   };
 }
 
