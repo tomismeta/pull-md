@@ -299,7 +299,10 @@ class NodeAdapter {
 
   getHeader(name) {
     const target = String(name || '').toLowerCase();
-    const value = this.req?.headers?.[target] ?? this.req?.headers?.[name];
+    let value = this.req?.headers?.[target] ?? this.req?.headers?.[name];
+    if (value == null && target === 'payment-signature') {
+      value = this.req?.headers?.payment ?? this.req?.headers?.PAYMENT ?? this.req?.headers?.['x-payment'];
+    }
     if (Array.isArray(value)) return value[0];
     if (value == null) return undefined;
     return String(value);
