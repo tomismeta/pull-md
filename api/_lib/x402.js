@@ -216,16 +216,63 @@ function normalizePaymentPayloadShapeForFacilitator(paymentPayload, paymentRequi
     if (!nextPayload.authorization && nextPayload.permit2Authorization) {
       nextPayload.authorization = nextPayload.permit2Authorization;
     }
+    if (nextPayload.permit2Authorization && typeof nextPayload.permit2Authorization === 'object') {
+      nextPayload.permit2Authorization = normalizePermit2Authorization(nextPayload.permit2Authorization);
+    }
+    if (nextPayload.authorization && typeof nextPayload.authorization === 'object') {
+      nextPayload.authorization = normalizePermit2Authorization(nextPayload.authorization);
+    }
+    if (nextPayload.transaction && typeof nextPayload.transaction === 'object') {
+      const txData = nextPayload.transaction.data;
+      nextPayload.transaction = typeof txData === 'string' ? txData : JSON.stringify(nextPayload.transaction);
+    }
     delete nextPayload.permit2;
   } else if (transferMethod === 'eip3009') {
     delete nextPayload.permit2Authorization;
     delete nextPayload.permit2;
+    if (nextPayload.authorization && typeof nextPayload.authorization === 'object') {
+      nextPayload.authorization = normalizeEip3009Authorization(nextPayload.authorization);
+    }
   }
 
   return {
     ...paymentPayload,
     payload: nextPayload
   };
+}
+
+function normalizePermit2Authorization(auth) {
+  const next = { ...auth };
+  if (next.permitted && typeof next.permitted === 'object') {
+    next.permitted = {
+      ...next.permitted,
+      amount: toStringNumber(next.permitted.amount)
+    };
+  }
+  next.nonce = toStringNumber(next.nonce);
+  next.deadline = toStringNumber(next.deadline);
+  if (next.witness && typeof next.witness === 'object') {
+    next.witness = {
+      ...next.witness,
+      validAfter: toStringNumber(next.witness.validAfter),
+      extra: typeof next.witness.extra === 'string' ? next.witness.extra : '0x'
+    };
+  }
+  return next;
+}
+
+function normalizeEip3009Authorization(auth) {
+  return {
+    ...auth,
+    value: toStringNumber(auth.value),
+    validAfter: toStringNumber(auth.validAfter),
+    validBefore: toStringNumber(auth.validBefore)
+  };
+}
+
+function toStringNumber(value) {
+  if (value == null) return value;
+  return typeof value === 'string' ? value : String(value);
 }
 
 function getTransferMethod(paymentPayload, paymentRequirements) {
@@ -420,8 +467,10 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
       facilitator_payload_shape: {
         submitted_has_authorization: Boolean(paymentPayload?.payload?.authorization),
         submitted_has_permit2_authorization: Boolean(paymentPayload?.payload?.permit2Authorization),
+        submitted_transaction_type: paymentPayload?.payload?.transaction == null ? null : typeof paymentPayload?.payload?.transaction,
         cdp_has_authorization: Boolean(cdpNormalizedPayload?.payload?.authorization),
-        cdp_has_permit2_authorization: Boolean(cdpNormalizedPayload?.payload?.permit2Authorization)
+        cdp_has_permit2_authorization: Boolean(cdpNormalizedPayload?.payload?.permit2Authorization),
+        cdp_transaction_type: cdpNormalizedPayload?.payload?.transaction == null ? null : typeof cdpNormalizedPayload?.payload?.transaction
       }
     };
   } catch (error) {
@@ -441,8 +490,10 @@ export async function inspectFacilitatorVerify({ paymentPayload, paymentRequirem
       facilitator_payload_shape: {
         submitted_has_authorization: Boolean(paymentPayload?.payload?.authorization),
         submitted_has_permit2_authorization: Boolean(paymentPayload?.payload?.permit2Authorization),
+        submitted_transaction_type: paymentPayload?.payload?.transaction == null ? null : typeof paymentPayload?.payload?.transaction,
         cdp_has_authorization: Boolean(cdpNormalizedPayload?.payload?.authorization),
-        cdp_has_permit2_authorization: Boolean(cdpNormalizedPayload?.payload?.permit2Authorization)
+        cdp_has_permit2_authorization: Boolean(cdpNormalizedPayload?.payload?.permit2Authorization),
+        cdp_transaction_type: cdpNormalizedPayload?.payload?.transaction == null ? null : typeof cdpNormalizedPayload?.payload?.transaction
       }
     };
   }
