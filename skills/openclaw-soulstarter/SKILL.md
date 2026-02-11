@@ -77,6 +77,7 @@ Read `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`:
 - Bankr wallet:
 Use Bankr Agent API typed-data signing:
 `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then pass final base64 JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
+Never send Bankr API keys/tokens to SoulStarter endpoints.
 
 If you get `No matching payment requirements`:
 - You likely omitted or mutated `accepted`.
@@ -91,6 +92,7 @@ Use these Bankr capabilities explicitly:
 
 2. `POST /agent/sign`:
 - Sign typed data based on `assetTransferMethod` (`PermitWitnessTransferFrom` for permit2, `TransferWithAuthorization` for eip3009).
+- Build final x402 JSON locally and send only `PAYMENT-SIGNATURE` to SoulStarter.
 
 3. `POST /agent/submit`:
 - Not required for SoulStarter purchase flow.
@@ -102,6 +104,7 @@ Use these Bankr capabilities explicitly:
 Important:
 - Buyer/Banr wallet does **not** need CDP credentials.
 - Only SoulStarter server needs facilitator credentials.
+- Bankr credentials are agent-local only and must never be forwarded to SoulStarter.
 
 ## 4. Optional Entitlement Verification Tool
 

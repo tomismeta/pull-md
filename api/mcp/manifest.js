@@ -35,7 +35,9 @@ export default function handler(req, res) {
         'PAYMENT-RESPONSE'
       ],
       redownload_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP', 'X-PURCHASE-RECEIPT'],
-      purchase_header_preference: ['PAYMENT-SIGNATURE', 'PAYMENT', 'X-PAYMENT']
+      purchase_header_preference: ['PAYMENT-SIGNATURE', 'PAYMENT', 'X-PAYMENT'],
+      agent_key_boundary:
+        'Never send Bankr API keys or signer secrets to SoulStarter. SoulStarter accepts only signed x402 payment headers.'
     },
     tools: [
       {
@@ -57,7 +59,8 @@ export default function handler(req, res) {
       },
       {
         name: 'purchase_soul',
-        description: 'Initiate x402 purchase and receive PAYMENT-REQUIRED requirements',
+        description:
+          'Initiate x402 purchase and receive PAYMENT-REQUIRED requirements. Agent signs externally (e.g. Bankr) and submits PAYMENT-SIGNATURE only.',
         endpoint: '/api/mcp/tools/purchase_soul',
         method: 'POST',
         parameters: {

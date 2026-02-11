@@ -77,8 +77,21 @@ Read `accepted.extra.assetTransferMethod` and sign accordingly:
 Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
 - Bankr API capability mapping:
 `/agent/me` for wallet discovery, `/agent/sign` for EIP-712 signature generation, and **do not** use `/agent/submit` for SoulStarter settlement.
+- Bankr key boundary:
+Bankr API keys remain in the agent runtime only. Never send Bankr keys/tokens to SoulStarter endpoints.
 - Buyers do **not** need CDP credentials.
 Only the SoulStarter server needs facilitator credentials.
+
+#### Bankr Self-Orchestrated Flow
+
+1. `GET /api/souls/{id}/download` to receive `402` + `PAYMENT-REQUIRED`.
+2. Decode `PAYMENT-REQUIRED`, copy `accepts[0]` into `accepted` unchanged.
+3. Call Bankr `GET /agent/me` and choose the EVM wallet signer.
+4. Read `accepted.extra.assetTransferMethod` and sign with Bankr `POST /agent/sign`:
+   `permit2` -> `PermitWitnessTransferFrom`, `eip3009` -> `TransferWithAuthorization`.
+5. Build x402 JSON payload, base64-encode it, and send:
+   `PAYMENT-SIGNATURE: <base64(JSON payload)>`
+6. Save `X-PURCHASE-RECEIPT` from the `200` response for re-downloads.
 
 ### Re-download (no repay)
 

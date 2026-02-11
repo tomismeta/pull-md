@@ -86,6 +86,10 @@ export default async function handler(req, res) {
         step_3: 'Retry GET /api/souls/{soul_id}/download with header PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT)',
         step_4: 'On success, store X-PURCHASE-RECEIPT for future re-downloads'
       },
+      security_rules: {
+        never_share_bankr_key_with_soulstarter: true,
+        note: 'Bankr API keys must stay inside the agent/Bankr runtime. SoulStarter only accepts signed x402 payment headers.'
+      },
       header_format: {
         preferred: 'PAYMENT-SIGNATURE: <base64(JSON x402 payload)>',
         accepted_alternatives: ['PAYMENT: <base64(JSON x402 payload)>', 'X-PAYMENT: <base64(JSON x402 payload)>']
@@ -93,7 +97,20 @@ export default async function handler(req, res) {
       wallet_examples: {
         standard_wallet:
           'If assetTransferMethod=permit2, sign PermitWitnessTransferFrom and include permit2Authorization + transaction. If eip3009, sign TransferWithAuthorization.',
-        bankr_wallet: 'Use your own Bankr context to call /agent/sign (eth_signTypedData_v4) based on assetTransferMethod.'
+        bankr_wallet:
+          'Agent orchestrates locally: call /agent/me, sign with /agent/sign, build base64 JSON payload, and send PAYMENT-SIGNATURE. Never send Bankr API key to SoulStarter.'
+      },
+      bankr_self_orchestration: {
+        step_1: 'Call Bankr GET /agent/me to resolve signing wallet context.',
+        step_2:
+          'Decode PAYMENT-REQUIRED and copy accepts[0] exactly into payload.accepted. Read accepts[0].extra.assetTransferMethod.',
+        step_3:
+          'Call Bankr POST /agent/sign (eth_signTypedData_v4) using permit2 or eip3009 typed data as required by assetTransferMethod.',
+        step_4:
+          'Build x402 JSON, base64-encode it, and call GET /api/souls/{soul_id}/download with PAYMENT-SIGNATURE header.',
+        step_5: 'Store X-PURCHASE-RECEIPT from 200 response for no-repay re-download.',
+        explicit_header_template: 'PAYMENT-SIGNATURE: <base64(JSON.stringify(x402_payload))>',
+        key_boundary: 'Do not send Bankr API key, bearer token, or secrets to SoulStarter endpoints.'
       },
       payload_requirements: {
         critical: 'For x402 v2, include top-level accepted object. If accepted is missing or modified, server returns: No matching payment requirements.',

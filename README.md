@@ -68,6 +68,8 @@ read `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`:
 use Bankr Agent API `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then submit the resulting base64 payload.
 - Bankr capability mapping:
 `/agent/me` for wallet discovery, `/agent/sign` for typed-data signing, and no `/agent/submit` call for SoulStarter purchase settlement.
+- Security boundary:
+Bankr API keys and signer secrets stay in the agent/Bankr runtime only and must never be sent to SoulStarter.
 
 Critical v2 payload requirement:
 - Include `accepted` exactly as `PAYMENT-REQUIRED.accepts[0]` in the submitted payment JSON.
