@@ -20,7 +20,11 @@ Agents should discover capabilities through:
 3. `POST /api/mcp/tools/purchase_soul`
 - Returns a strict x402 `402` response and `PAYMENT-REQUIRED`.
 
-4. `POST /api/mcp/tools/check_entitlements`
+4. `POST /api/mcp/tools/purchase_soul_bankr`
+- Executes end-to-end purchase via Bankr Agent API:
+wallet lookup (`/agent/me`) + typed data signing (`/agent/sign`) + paid retry.
+
+5. `POST /api/mcp/tools/check_entitlements`
 - Verifies receipt proof(s) for re-download:
 `{ wallet_address, proofs: [{ soul_id, receipt }] }`
 
@@ -68,9 +72,11 @@ Important:
 - Standard wallet:
 Build EIP-712 domain/types/message from `PAYMENT-REQUIRED.accepts[0]`, sign typed data, send base64 JSON payload.
 - Bankr wallet:
-Use Bankr's x402 exact EVM signer output directly, then send its base64 JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
-- Bankr API/CLI capability mapping:
-`/agent/prompt` + job polling for orchestration, `/agent/sign` for explicit signature generation, and **do not** use `/agent/submit` for SoulStarter purchase settlement.
+Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
+- Bankr helper tool:
+`POST /api/mcp/tools/purchase_soul_bankr` performs the full flow server-side when provided a Bankr API key.
+- Bankr API capability mapping:
+`/agent/me` for wallet discovery, `/agent/sign` for EIP-712 signature generation, and **do not** use `/agent/submit` for SoulStarter settlement.
 - Buyers do **not** need CDP credentials.
 Only the SoulStarter server needs facilitator credentials.
 

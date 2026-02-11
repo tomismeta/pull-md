@@ -74,7 +74,10 @@ If `401` or `402`, continue to purchase flow.
 - Standard wallet:
 Create EIP-712 `TransferWithAuthorization` typed data from `PAYMENT-REQUIRED.accepts[0]` and sign with the buyer wallet.
 - Bankr wallet:
-Use Bankr's x402 exact EVM flow and pass its final base64-encoded JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
+Use Bankr Agent API typed-data signing:
+`POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then pass final base64 JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
+Or use SoulStarter helper tool:
+`POST {base_url}/api/mcp/tools/purchase_soul_bankr` with `soul_id` and a Bankr API key.
 
 If you get `No matching payment requirements`:
 - You likely omitted or mutated `accepted`.
@@ -84,23 +87,18 @@ If you get `No matching payment requirements`:
 
 Use these Bankr capabilities explicitly:
 
-1. `bankr prompt` or `POST /agent/prompt`:
-- Ask Bankr to generate the x402 exact EVM payment payload from `PAYMENT-REQUIRED`.
-- Poll job completion via `bankr status` or `GET /agent/job/{jobId}`.
+1. `GET /agent/me`:
+- Read the Bankr EVM wallet address for `authorization.from`.
 
 2. `POST /agent/sign`:
-- Use when you need explicit typed-data signing control for `TransferWithAuthorization`.
+- Sign `TransferWithAuthorization` typed data (`eth_signTypedData_v4`).
 
 3. `POST /agent/submit`:
 - Not required for SoulStarter purchase flow.
 - SoulStarter server settles via facilitator after receiving the signed x402 payload header.
 
-4. Conversation threads (`threadId`):
-- Reuse the same thread for multi-step flows:
-request terms -> build payload -> sign -> return final base64 header.
-
-5. LLM gateway:
-- Optional for orchestration/reasoning only; not required for settlement.
+4. LLM gateway / threads:
+- Optional orchestration only; not required for settlement.
 
 Important:
 - Buyer/Banr wallet does **not** need CDP credentials.

@@ -19,6 +19,7 @@ preflight checks, multi-endpoint failover, timeout, circuit breaker
 - `GET /api/mcp/tools/list_souls`
 - `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
 - `POST /api/mcp/tools/purchase_soul`
+- `POST /api/mcp/tools/purchase_soul_bankr`
 - `POST /api/mcp/tools/check_entitlements`
 - `GET /api/souls/{id}/download`
 - `GET /api/health/facilitator`
@@ -39,6 +40,7 @@ preflight checks, multi-endpoint failover, timeout, circuit breaker
 | `FACILITATOR_COOLDOWN_MS` | optional | Circuit cooldown duration (default `60000`) |
 | `FACILITATOR_PREFLIGHT_TTL_MS` | optional | Cached preflight TTL (default `120000`) |
 | `WALLETCONNECT_PROJECT_ID` | optional | WalletConnect Cloud project ID for browser wallet UX |
+| `BANKR_API_KEY` | optional | Bankr API key used by `purchase_soul_bankr` when request key is not supplied |
 | `SOUL_META_STARTER_V1` | optional | Env fallback content for `meta-starter-v1` |
 
 ## Facilitator Health Checks
@@ -63,9 +65,11 @@ Wallet notes:
 - Standard wallet:
 sign EIP-712 `TransferWithAuthorization` using `PAYMENT-REQUIRED.accepts[0]`.
 - Bankr wallet:
-use Bankr's x402 exact EVM signer output and submit the resulting base64 payload.
+use Bankr Agent API `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then submit the resulting base64 payload.
+- Bankr server-side helper:
+`POST /api/mcp/tools/purchase_soul_bankr` performs wallet lookup (`/agent/me`) and signing (`/agent/sign`) before submitting the strict x402 header.
 - Bankr capability mapping:
-`/agent/prompt` + `/agent/job/{jobId}` for async orchestration, `/agent/sign` for explicit signing, and no `/agent/submit` call for SoulStarter purchase settlement.
+`/agent/me` for wallet discovery, `/agent/sign` for typed-data signing, and no `/agent/submit` call for SoulStarter purchase settlement.
 
 Critical v2 payload requirement:
 - Include `accepted` exactly as `PAYMENT-REQUIRED.accepts[0]` in the submitted payment JSON.

@@ -32,7 +32,8 @@ export default function handler(req, res) {
         'X-PAYMENT',
         'PAYMENT-SIGNATURE',
         'PAYMENT-REQUIRED',
-        'PAYMENT-RESPONSE'
+        'PAYMENT-RESPONSE',
+        'X-BANKR-API-KEY'
       ],
       redownload_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP', 'X-PURCHASE-RECEIPT'],
       purchase_header_preference: ['PAYMENT-SIGNATURE', 'PAYMENT', 'X-PAYMENT']
@@ -65,6 +66,26 @@ export default function handler(req, res) {
           wallet_address: { type: 'string', required: true, description: 'Buyer wallet address' }
         },
         returns: { type: 'object', description: '402 response body + PAYMENT-REQUIRED header details' }
+      },
+      {
+        name: 'purchase_soul_bankr',
+        description: 'Execute full x402 purchase using Bankr Agent API typed-data signing',
+        endpoint: '/api/mcp/tools/purchase_soul_bankr',
+        method: 'POST',
+        parameters: {
+          soul_id: { type: 'string', required: true, description: 'Soul identifier to purchase' },
+          bankr_api_key: {
+            type: 'string',
+            required: false,
+            description: 'Bankr API key (or pass X-BANKR-API-KEY header)'
+          },
+          wallet_address: {
+            type: 'string',
+            required: false,
+            description: 'Optional wallet to assert; must match Bankr evm wallet if provided'
+          }
+        },
+        returns: { type: 'object', description: 'Purchased soul markdown, receipt, and settlement response' }
       },
       {
         name: 'check_entitlements',
