@@ -92,6 +92,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    rewriteIncomingPaymentHeader(req);
     const httpServer = await getX402HTTPServer({ soulId, soul, sellerAddress });
     const context = createRequestContext(req);
     const result = await httpServer.processHTTPRequest(context);
@@ -225,6 +226,61 @@ function decodeSubmittedPayment(req) {
   } catch (_) {
     return null;
   }
+}
+
+function rewriteIncomingPaymentHeader(req) {
+  const headerKey = req.headers['payment-signature']
+    ? 'payment-signature'
+    : req.headers.payment
+      ? 'payment'
+      : req.headers['x-payment']
+        ? 'x-payment'
+        : req.headers['PAYMENT-SIGNATURE']
+          ? 'PAYMENT-SIGNATURE'
+          : null;
+  if (!headerKey) return;
+
+  const submitted = decodeSubmittedPayment(req);
+  if (!submitted) return;
+
+  const canonical = canonicalizeSubmittedPayment(submitted);
+  if (!canonical || deepEqual(canonical, submitted)) return;
+
+  req.headers[headerKey] = Buffer.from(JSON.stringify(canonical)).toString('base64');
+}
+
+function canonicalizeSubmittedPayment(submitted) {
+  if (!submitted || typeof submitted !== 'object') return submitted;
+  if (!submitted.payload || typeof submitted.payload !== 'object') return submitted;
+
+  const transferMethod = getTransferMethodFromSubmittedPayment(submitted);
+  const payload = { ...submitted.payload };
+
+  if (transferMethod === 'permit2') {
+    if (payload.permit2 && !payload.permit2Authorization) {
+      payload.permit2Authorization = payload.permit2;
+    }
+    delete payload.permit2;
+    delete payload.authorization;
+  } else {
+    delete payload.transaction;
+    delete payload.permit2Authorization;
+    delete payload.permit2;
+  }
+
+  return {
+    ...submitted,
+    payload
+  };
+}
+
+function getTransferMethodFromSubmittedPayment(submitted) {
+  const fromAccepted = String(submitted?.accepted?.extra?.assetTransferMethod || '')
+    .trim()
+    .toLowerCase();
+  if (fromAccepted === 'permit2' || fromAccepted === 'eip3009') return fromAccepted;
+  if (submitted?.payload?.permit2Authorization || submitted?.payload?.permit2) return 'permit2';
+  return 'eip3009';
 }
 
 function buildPaymentDebug(req, paymentRequired) {
