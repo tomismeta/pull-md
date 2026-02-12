@@ -16,6 +16,11 @@ import {
   inspectFacilitatorVerify
 } from '../../_lib/x402.js';
 
+const SETTLE_RETRY_DELAYS_MS = String(process.env.X402_SETTLE_RETRY_DELAYS_MS || '500,1000,2000')
+  .split(',')
+  .map((v) => Number(v.trim()))
+  .filter((v) => Number.isFinite(v) && v >= 0);
+
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
 
@@ -138,13 +143,13 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Soul unavailable' });
     }
 
-    let settlement;
+    let settlementResult;
     try {
-      settlement = await httpServer.processSettlement(
-        result.paymentPayload,
-        result.paymentRequirements,
-        result.declaredExtensions
-      );
+      settlementResult = await processSettlementWithRetries(httpServer, {
+        paymentPayload: result.paymentPayload,
+        paymentRequirements: result.paymentRequirements,
+        declaredExtensions: result.declaredExtensions
+      });
     } catch (error) {
       return res.status(402).json({
         error: 'Settlement threw an exception',
@@ -152,6 +157,7 @@ export default async function handler(req, res) {
       });
     }
 
+    const settlement = settlementResult.settlement;
     if (!settlement.success) {
       const settlementDiagnostics = await buildSettlementDiagnostics({
         paymentPayload: result.paymentPayload,
@@ -167,6 +173,7 @@ export default async function handler(req, res) {
         reason: settlement.errorReason,
         message: settlement.errorMessage,
         settlement_diagnostics: settlementDiagnostics,
+        settlement_attempts: settlementResult.attempts,
         cdp_settle_request_preview: {
           top_level_x402Version: cdpSettleRequestDebug?.top_level_x402Version ?? null,
           transfer_method: cdpSettleRequestDebug?.transfer_method ?? null,
@@ -215,6 +222,58 @@ function decodePaymentRequiredHeader(headers = {}) {
   } catch (_) {
     return null;
   }
+}
+
+async function processSettlementWithRetries(httpServer, { paymentPayload, paymentRequirements, declaredExtensions }) {
+  const attempts = [];
+  let settlement = null;
+
+  for (let i = 0; i <= SETTLE_RETRY_DELAYS_MS.length; i += 1) {
+    try {
+      settlement = await httpServer.processSettlement(paymentPayload, paymentRequirements, declaredExtensions);
+      attempts.push({
+        attempt: i + 1,
+        ok: Boolean(settlement?.success),
+        reason: settlement?.errorReason ?? null,
+        message: settlement?.errorMessage ?? null
+      });
+    } catch (error) {
+      const extracted = extractX402Error(error);
+      attempts.push({
+        attempt: i + 1,
+        ok: false,
+        threw: true,
+        reason: extracted?.errorReason ?? null,
+        message: extracted?.errorMessage ?? extracted?.message ?? null
+      });
+      throw error;
+    }
+
+    if (settlement?.success) {
+      return { settlement, attempts };
+    }
+    if (!shouldRetrySettlement(settlement)) {
+      return { settlement, attempts };
+    }
+
+    const delayMs = SETTLE_RETRY_DELAYS_MS[i];
+    if (delayMs == null) {
+      return { settlement, attempts };
+    }
+    await sleep(delayMs);
+  }
+
+  return { settlement, attempts };
+}
+
+function shouldRetrySettlement(settlement) {
+  if (!settlement || settlement.success) return false;
+  const message = String(settlement.errorMessage || settlement.errorReason || '').toLowerCase();
+  return message.includes('unable to estimate gas') || message.includes('execution reverted') || message.includes('timeout');
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function decodeSubmittedPayment(req) {
