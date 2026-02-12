@@ -20,6 +20,7 @@ const SETTLE_RETRY_DELAYS_MS = String(process.env.X402_SETTLE_RETRY_DELAYS_MS ||
   .split(',')
   .map((v) => Number(v.trim()))
   .filter((v) => Number.isFinite(v) && v >= 0);
+const SETTLE_INITIAL_DELAY_MS = Number(process.env.X402_SETTLE_INITIAL_DELAY_MS || '1000');
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -227,32 +228,47 @@ function decodePaymentRequiredHeader(headers = {}) {
 async function processSettlementWithRetries(httpServer, { paymentPayload, paymentRequirements, declaredExtensions }) {
   const attempts = [];
   let settlement = null;
+  const transferMethod = String(paymentRequirements?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
+  const initialDelayMs = transferMethod === 'eip3009' && Number.isFinite(SETTLE_INITIAL_DELAY_MS) ? SETTLE_INITIAL_DELAY_MS : 0;
+
+  if (initialDelayMs > 0) {
+    await sleep(initialDelayMs);
+  }
 
   for (let i = 0; i <= SETTLE_RETRY_DELAYS_MS.length; i += 1) {
     try {
       settlement = await httpServer.processSettlement(paymentPayload, paymentRequirements, declaredExtensions);
+      const transient = isTransientSettleError(settlement?.errorMessage || settlement?.errorReason || null);
       attempts.push({
         attempt: i + 1,
         ok: Boolean(settlement?.success),
         reason: settlement?.errorReason ?? null,
-        message: settlement?.errorMessage ?? null
+        message: settlement?.errorMessage ?? null,
+        transient
       });
     } catch (error) {
       const extracted = extractX402Error(error);
+      const transient = isTransientSettleError(extracted?.errorMessage || extracted?.message || null);
       attempts.push({
         attempt: i + 1,
         ok: false,
         threw: true,
         reason: extracted?.errorReason ?? null,
-        message: extracted?.errorMessage ?? extracted?.message ?? null
+        message: extracted?.errorMessage ?? extracted?.message ?? null,
+        transient
       });
-      throw error;
+      const delayMs = SETTLE_RETRY_DELAYS_MS[i];
+      if (!transient || delayMs == null) {
+        throw error;
+      }
+      await sleep(delayMs);
+      continue;
     }
 
     if (settlement?.success) {
       return { settlement, attempts };
     }
-    if (!shouldRetrySettlement(settlement)) {
+    if (!isTransientSettleError(settlement?.errorMessage || settlement?.errorReason || null)) {
       return { settlement, attempts };
     }
 
@@ -266,10 +282,16 @@ async function processSettlementWithRetries(httpServer, { paymentPayload, paymen
   return { settlement, attempts };
 }
 
-function shouldRetrySettlement(settlement) {
-  if (!settlement || settlement.success) return false;
-  const message = String(settlement.errorMessage || settlement.errorReason || '').toLowerCase();
-  return message.includes('unable to estimate gas') || message.includes('execution reverted') || message.includes('timeout');
+function isTransientSettleError(message) {
+  const text = String(message || '').toLowerCase();
+  if (!text) return false;
+  return (
+    text.includes('unable to estimate gas') ||
+    text.includes('execution reverted') ||
+    text.includes('timeout') ||
+    text.includes('temporarily unavailable') ||
+    text.includes('network error')
+  );
 }
 
 function sleep(ms) {
