@@ -127,18 +127,6 @@ export default function handler(req, res) {
           rollback_receipt: { type: 'string', required: true, description: 'Receipt for previous soul entitlement' }
         },
         returns: { type: 'object', description: 'New active soul state after rollback' }
-      },
-      {
-        name: 'seed_test_receipts',
-        description: 'Temporary helper to mint test receipts for Soul Locker UI validation (gated by TEST_RECEIPT_SEED_SECRET)',
-        endpoint: '/api/mcp/tools/seed_test_receipts',
-        method: 'POST',
-        parameters: {
-          wallet_address: { type: 'string', required: true, description: 'Wallet to seed' },
-          soul_ids: { type: 'array', required: false, description: 'Optional list of soul ids to seed' },
-          seed_secret: { type: 'string', required: true, description: 'Must match TEST_RECEIPT_SEED_SECRET' }
-        },
-        returns: { type: 'object', description: 'Seeded receipt tokens for testing only' }
       }
     ],
     download_contract: {
