@@ -105,21 +105,6 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
         <div class="my-souls-status" id="mySoulsStatus">
           Connect wallet to load your Soul Locker inventory.
         </div>
-        <details class="my-souls-helper">
-          <summary>Testing Helpers (temporary)</summary>
-          <p>Use these only for local/staging validation while x402 settlement is blocked.</p>
-          <div class="helper-controls">
-            <label class="helper-label" for="seedSecretInput">Seed secret</label>
-            <input id="seedSecretInput" class="helper-input" type="password" placeholder="TEST_RECEIPT_SEED_SECRET">
-            <button class="btn btn-subtle btn-full" onclick="seedTestReceipts()">Seed test receipts for this wallet</button>
-          </div>
-          <div class="helper-controls">
-            <label class="helper-label" for="importSoulIdInput">Import one receipt</label>
-            <input id="importSoulIdInput" class="helper-input" type="text" placeholder="soul_id (example: sassy-starter-v1)">
-            <textarea id="importReceiptInput" class="helper-input helper-textarea" placeholder="Paste receipt token"></textarea>
-            <button class="btn btn-subtle btn-full" onclick="importReceiptManually()">Import receipt</button>
-          </div>
-        </details>
         <div class="active-soul-card" id="activeSoulCard" style="display: none;"></div>
         <div class="my-souls-grid" id="mySoulsGrid"></div>
       </div>
