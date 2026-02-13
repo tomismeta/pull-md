@@ -79,6 +79,17 @@ export default function handler(req, res) {
           proofs: { type: 'array', required: true, description: 'List of { soul_id, receipt } proofs' }
         },
         returns: { type: 'object', description: 'Per-proof entitlement status' }
+      },
+      {
+        name: 'list_owned_souls',
+        description: 'Build wallet Soul Locker inventory from purchase receipt proofs',
+        endpoint: '/api/mcp/tools/list_owned_souls',
+        method: 'POST',
+        parameters: {
+          wallet_address: { type: 'string', required: true, description: 'Wallet to check' },
+          receipts: { type: 'array', required: true, description: 'List of purchase receipt tokens' }
+        },
+        returns: { type: 'object', description: 'Owned soul inventory with invalid proof diagnostics' }
       }
     ],
     download_contract: {
