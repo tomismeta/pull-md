@@ -9,7 +9,7 @@ Use this skill for agent workflows against a deployed SoulStarter instance.
 
 ## Inputs Required
 
-- `base_url` (for example: `https://soulstarter.vercel.app`)
+- `base_url` (canonical: `https://soulstarter.vercel.app`)
 - `wallet_address`
 - Wallet signing capability for:
 `PAYMENT-SIGNATURE` payload creation and `redownload` auth message signing
@@ -28,6 +28,10 @@ Use this skill for agent workflows against a deployed SoulStarter instance.
 - `GET {base_url}/api/mcp/manifest`
 - `GET {base_url}/api/mcp/tools/list_souls`
 - `GET {base_url}/api/mcp/tools/get_soul_details?id={soul_id}`
+
+Domain rule:
+- Use `https://soulstarter.vercel.app` for production runs.
+- Avoid preview/alias domains when validating the payment contract.
 
 ## 2. Re-download First (No Repay)
 
@@ -53,7 +57,7 @@ If `401` or `402`, continue to purchase flow.
 ## 3. Purchase Flow (Strict x402)
 
 1. Request paywall:
-- `GET {base_url}/api/souls/{soul_id}/download`
+- `GET {base_url}/api/souls/{soul_id}/download` (authoritative endpoint)
 - Expect `402` with `PAYMENT-REQUIRED`.
 
 2. Decode `PAYMENT-REQUIRED` and create x402 payment payload.

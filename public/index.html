@@ -98,6 +98,7 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
           <h3>🤖 Agent Access</h3>
           <p>SoulStarter is WebMCP-enabled. Agents can browse and purchase souls programmatically.</p>
           <code>GET /api/mcp/manifest</code>
+          <p style="margin-top:10px;">Canonical production flow: <code>https://soulstarter.vercel.app</code> + <code>GET /api/souls/{id}/download</code></p>
         </div>
       </div>
     </section>

@@ -9,6 +9,11 @@ Agents should discover capabilities through:
 - `GET /api/mcp/manifest`
 - `mcp:*` meta tags in `/public/index.html` and `/public/soul.html`
 
+Canonical production host:
+
+- `https://soulstarter.vercel.app`
+- Do not rely on preview/alias domains for contract verification.
+
 ## Tools
 
 1. `GET /api/mcp/tools/list_souls`
@@ -27,6 +32,11 @@ Agents should discover capabilities through:
 ## Download Endpoint
 
 `GET /api/souls/{id}/download`
+
+Authoritative purchase flow:
+
+- `GET /api/souls/{id}/download` is the canonical x402 entrypoint.
+- `POST /api/mcp/tools/purchase_soul` is a helper tool and should not replace the canonical download flow.
 
 ### Purchase (x402 strict)
 

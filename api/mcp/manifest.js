@@ -82,12 +82,15 @@ export default function handler(req, res) {
       }
     ],
     download_contract: {
+      canonical_base_url: 'https://soulstarter.vercel.app',
       endpoint_pattern: '/api/souls/{id}/download',
       method: 'GET',
+      canonical_purchase_flow: 'GET /api/souls/{id}/download is the authoritative x402 flow for payment requirements and paid retry.',
       first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
       claim_request: 'Include PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload to claim entitlement and download',
       redownload_request: 'Include X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, and X-PURCHASE-RECEIPT',
       note: 'auth_message_template may appear in a 402 response as helper text; purchase still requires payment header submission.',
+      domain_note: 'Use the canonical production host (soulstarter.vercel.app). Preview/alias domains may not reflect the latest contract behavior.',
       v2_requirement: 'Submitted payment JSON must include accepted matching PAYMENT-REQUIRED.accepts[0] exactly.',
       method_discipline:
         'Submit exactly one payload method branch. eip3009 => authorization+signature only. permit2 => permit2Authorization(+transaction)+signature only.',
