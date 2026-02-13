@@ -302,6 +302,106 @@ main {
   padding: 24px 0 52px;
 }
 
+.my-souls-section {
+  padding: 0 0 42px;
+}
+
+.my-souls-header h2 {
+  font-size: 1.08rem;
+  margin-bottom: 4px;
+}
+
+.my-souls-header p {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  margin-bottom: 14px;
+}
+
+.my-souls-status {
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--text-soft);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.active-soul-card {
+  border: 1px solid rgba(131, 240, 175, 0.4);
+  border-radius: 12px;
+  background: linear-gradient(140deg, rgba(131, 240, 175, 0.08), rgba(255, 255, 255, 0.02));
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.active-soul-card h3 {
+  font-size: 0.88rem;
+  margin-bottom: 6px;
+}
+
+.active-soul-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.my-souls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+  gap: 12px;
+}
+
+.my-soul-card {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  padding: 12px;
+}
+
+.my-soul-card h4 {
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.my-soul-card p {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--text-soft);
+  font-size: 0.69rem;
+  margin-bottom: 8px;
+}
+
+.my-soul-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.my-soul-chip {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: var(--text-muted);
+}
+
+.btn-subtle {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-soft);
+}
+
+.btn-subtle:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
 .souls-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
