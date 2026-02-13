@@ -114,42 +114,6 @@ export function verifyPurchaseReceipt({ receipt, wallet, soulId }) {
     return { ok: false, error: 'Server configuration error: PURCHASE_RECEIPT_SECRET is required' };
   }
 
-  const parsed = parsePurchaseReceipt(receipt, secret);
-  if (!parsed.ok) {
-    return { ok: false, error: parsed.error };
-  }
-  const payload = parsed.payload;
-
-  if (payload.wallet !== wallet.toLowerCase()) {
-    return { ok: false, error: 'Purchase receipt wallet mismatch' };
-  }
-  if (payload.soulId !== soulId) {
-    return { ok: false, error: 'Purchase receipt soul mismatch' };
-  }
-
-  return { ok: true, transaction: payload.transaction || null };
-}
-
-export function inspectPurchaseReceipt({ receipt }) {
-  const secret = receiptSecret();
-  if (!secret) {
-    return { ok: false, error: 'Server configuration error: PURCHASE_RECEIPT_SECRET is required' };
-  }
-  const parsed = parsePurchaseReceipt(receipt, secret);
-  if (!parsed.ok) {
-    return { ok: false, error: parsed.error };
-  }
-  const payload = parsed.payload;
-  return {
-    ok: true,
-    wallet: payload.wallet,
-    soulId: payload.soulId,
-    transaction: payload.transaction || null,
-    iat: payload.iat || null
-  };
-}
-
-function parsePurchaseReceipt(receipt, secret) {
   if (!receipt || typeof receipt !== 'string' || !receipt.includes('.')) {
     return { ok: false, error: 'Missing purchase receipt' };
   }
@@ -174,12 +138,12 @@ function parsePurchaseReceipt(receipt, secret) {
     return { ok: false, error: 'Invalid purchase receipt payload' };
   }
 
-  if (!payload || typeof payload !== 'object') {
-    return { ok: false, error: 'Invalid purchase receipt payload' };
+  if (payload.wallet !== wallet.toLowerCase()) {
+    return { ok: false, error: 'Purchase receipt wallet mismatch' };
   }
-  if (typeof payload.wallet !== 'string' || typeof payload.soulId !== 'string') {
-    return { ok: false, error: 'Invalid purchase receipt payload' };
+  if (payload.soulId !== soulId) {
+    return { ok: false, error: 'Purchase receipt soul mismatch' };
   }
 
-  return { ok: true, payload };
+  return { ok: true, transaction: payload.transaction || null };
 }
