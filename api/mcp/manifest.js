@@ -90,6 +90,43 @@ export default function handler(req, res) {
           receipts: { type: 'array', required: true, description: 'List of purchase receipt tokens' }
         },
         returns: { type: 'object', description: 'Owned soul inventory with invalid proof diagnostics' }
+      },
+      {
+        name: 'set_active_soul',
+        description: 'Set active soul for a wallet from a verified receipt and return a signed soul session token',
+        endpoint: '/api/mcp/tools/set_active_soul',
+        method: 'POST',
+        parameters: {
+          wallet_address: { type: 'string', required: true, description: 'Wallet to update' },
+          soul_id: { type: 'string', required: true, description: 'Soul to activate' },
+          receipt: { type: 'string', required: true, description: 'Purchase receipt for soul_id' },
+          previous_soul_id: { type: 'string', required: false, description: 'Currently active soul id (optional)' },
+          previous_receipt: { type: 'string', required: false, description: 'Purchase receipt for previous_soul_id' }
+        },
+        returns: { type: 'object', description: 'Active soul, rollback metadata, and soul_session_token' }
+      },
+      {
+        name: 'get_active_soul_status',
+        description: 'Resolve active/previous soul from soul_session_token for frictionless switching',
+        endpoint: '/api/mcp/tools/get_active_soul_status',
+        method: 'POST',
+        parameters: {
+          wallet_address: { type: 'string', required: true, description: 'Wallet to resolve' },
+          soul_session_token: { type: 'string', required: true, description: 'Token returned by set_active_soul' }
+        },
+        returns: { type: 'object', description: 'Current active soul status and redownload contract' }
+      },
+      {
+        name: 'rollback_active_soul',
+        description: 'Rollback to previous active soul from soul_session_token and previous soul receipt',
+        endpoint: '/api/mcp/tools/rollback_active_soul',
+        method: 'POST',
+        parameters: {
+          wallet_address: { type: 'string', required: true, description: 'Wallet to roll back' },
+          soul_session_token: { type: 'string', required: true, description: 'Token returned by set_active_soul' },
+          rollback_receipt: { type: 'string', required: true, description: 'Receipt for previous soul entitlement' }
+        },
+        returns: { type: 'object', description: 'New active soul state after rollback' }
       }
     ],
     download_contract: {

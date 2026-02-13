@@ -149,30 +149,57 @@ export function inspectPurchaseReceipt({ receipt }) {
   };
 }
 
+export function createSoulSessionToken({ wallet, soulId, previousSoulId = null }) {
+  const secret = receiptSecret();
+  if (!secret) {
+    throw new Error('Server configuration error: PURCHASE_RECEIPT_SECRET is required');
+  }
+  const payload = {
+    wallet: wallet.toLowerCase(),
+    soulId,
+    previousSoulId: previousSoulId || null,
+    iat: Date.now()
+  };
+  return signPayload(secret, payload);
+}
+
+export function verifySoulSessionToken({ token, wallet }) {
+  const secret = receiptSecret();
+  if (!secret) {
+    return { ok: false, error: 'Server configuration error: PURCHASE_RECEIPT_SECRET is required' };
+  }
+  const parsed = parseSignedPayload(token, secret, 'Missing soul session token');
+  if (!parsed.ok) {
+    return { ok: false, error: parsed.error };
+  }
+  const payload = parsed.payload;
+  if (payload.wallet !== wallet.toLowerCase()) {
+    return { ok: false, error: 'Soul session wallet mismatch' };
+  }
+  if (typeof payload.soulId !== 'string' || !payload.soulId) {
+    return { ok: false, error: 'Invalid soul session payload' };
+  }
+
+  return {
+    ok: true,
+    soulId: payload.soulId,
+    previousSoulId: payload.previousSoulId || null,
+    iat: payload.iat || null
+  };
+}
+
 function parsePurchaseReceipt(receipt, secret) {
-  if (!receipt || typeof receipt !== 'string' || !receipt.includes('.')) {
-    return { ok: false, error: 'Missing purchase receipt' };
+  const parsed = parseSignedPayload(receipt, secret, 'Missing purchase receipt');
+  if (!parsed.ok) {
+    if (parsed.error === 'Invalid token signature') {
+      return { ok: false, error: 'Invalid purchase receipt signature' };
+    }
+    if (parsed.error === 'Invalid token payload') {
+      return { ok: false, error: 'Invalid purchase receipt payload' };
+    }
+    return parsed;
   }
-
-  const [payloadB64, sigB64] = receipt.split('.');
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(payloadB64)
-    .digest('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-
-  if (sigB64 !== expected) {
-    return { ok: false, error: 'Invalid purchase receipt signature' };
-  }
-
-  let payload;
-  try {
-    payload = JSON.parse(base64UrlDecode(payloadB64));
-  } catch (_) {
-    return { ok: false, error: 'Invalid purchase receipt payload' };
-  }
+  const payload = parsed.payload;
 
   if (!payload || typeof payload !== 'object') {
     return { ok: false, error: 'Invalid purchase receipt payload' };
@@ -182,4 +209,40 @@ function parsePurchaseReceipt(receipt, secret) {
   }
 
   return { ok: true, payload };
+}
+
+function signPayload(secret, payload) {
+  const payloadB64 = base64UrlEncode(JSON.stringify(payload));
+  const sigB64 = crypto
+    .createHmac('sha256', secret)
+    .update(payloadB64)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+  return `${payloadB64}.${sigB64}`;
+}
+
+function parseSignedPayload(token, secret, missingError) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) {
+    return { ok: false, error: missingError };
+  }
+  const [payloadB64, sigB64] = token.split('.');
+  const expectedSig = crypto
+    .createHmac('sha256', secret)
+    .update(payloadB64)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+
+  if (sigB64 !== expectedSig) {
+    return { ok: false, error: 'Invalid token signature' };
+  }
+
+  try {
+    return { ok: true, payload: JSON.parse(base64UrlDecode(payloadB64)) };
+  } catch (_) {
+    return { ok: false, error: 'Invalid token payload' };
+  }
 }
