@@ -24,22 +24,6 @@ Agents should discover capabilities through:
 - Verifies receipt proof(s) for re-download:
 `{ wallet_address, proofs: [{ soul_id, receipt }] }`
 
-5. `POST /api/mcp/tools/list_owned_souls`
-- Builds Soul Locker inventory from receipts:
-`{ wallet_address, receipts: [receipt] }`
-
-6. `POST /api/mcp/tools/set_active_soul`
-- Sets active soul from verified receipt and returns signed session token:
-`{ wallet_address, soul_id, receipt, previous_soul_id?, previous_receipt? }`
-
-7. `POST /api/mcp/tools/get_active_soul_status`
-- Resolves current active soul from session token:
-`{ wallet_address, soul_session_token }`
-
-8. `POST /api/mcp/tools/rollback_active_soul`
-- Rolls active soul back to prior soul using receipt:
-`{ wallet_address, soul_session_token, rollback_receipt }`
-
 ## Download Endpoint
 
 `GET /api/souls/{id}/download`
@@ -129,33 +113,6 @@ Headers required:
 - `X-PURCHASE-RECEIPT`
 
 If receipt and wallet auth are valid, response is `200` with soul file.
-
-## Soul Switching Contract (No Repay)
-
-Switching tools are entitlement-based and do not require repayment.
-
-1. Build inventory:
-- `POST /api/mcp/tools/list_owned_souls`
-- Keep valid receipts per soul for future switching and re-download.
-
-2. Set active:
-- `POST /api/mcp/tools/set_active_soul`
-- Response includes:
-  - `active_soul`
-  - optional `previous_soul`
-  - `soul_session_token`
-  - `redownload_contract`
-
-3. Read status:
-- `POST /api/mcp/tools/get_active_soul_status` with `soul_session_token`.
-
-4. Roll back:
-- `POST /api/mcp/tools/rollback_active_soul` with `rollback_receipt`.
-
-Session token behavior:
-- `soul_session_token` is signed by server and bound to wallet.
-- Token allows deterministic active/previous soul resolution.
-- Token is not a purchase receipt and does not replace `X-PURCHASE-RECEIPT`.
 
 ## Common Misread
 
