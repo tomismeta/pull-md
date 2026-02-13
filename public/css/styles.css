@@ -355,6 +355,57 @@ main {
   gap: 12px;
 }
 
+.my-souls-helper {
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.my-souls-helper summary {
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-soft);
+}
+
+.my-souls-helper p {
+  margin-top: 8px;
+  margin-bottom: 10px;
+  color: var(--text-muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.66rem;
+}
+
+.helper-controls {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.helper-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.64rem;
+  color: var(--text-muted);
+}
+
+.helper-input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  padding: 8px 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+}
+
+.helper-textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
 .my-soul-card {
   border: 1px solid var(--line-soft);
   border-radius: 12px;

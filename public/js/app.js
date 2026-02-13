@@ -844,6 +844,59 @@ async function rollbackSoul() {
   showToast(`Rolled back to ${payload.active_soul?.name || payload.active_soul?.soul_id}`, 'success');
 }
 
+async function seedTestReceipts() {
+  if (!walletAddress) {
+    showToast('Connect wallet first', 'warning');
+    return;
+  }
+  const seedInput = document.getElementById('seedSecretInput');
+  const seedSecret = String(seedInput?.value || '').trim();
+  if (!seedSecret) {
+    showToast('Enter seed secret first', 'warning');
+    return;
+  }
+
+  const response = await fetchWithTimeout('/api/mcp/tools/seed_test_receipts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      wallet_address: walletAddress,
+      seed_secret: seedSecret
+    })
+  });
+  if (!response.ok) {
+    const error = await readError(response);
+    throw new Error(error || 'Failed to seed test receipts');
+  }
+  const payload = await response.json();
+  const seeded = Array.isArray(payload.seeded_receipts) ? payload.seeded_receipts : [];
+  seeded.forEach((item) => {
+    if (item?.soul_id && item?.receipt) {
+      storeReceipt(item.soul_id, walletAddress, item.receipt);
+    }
+  });
+  await refreshMySoulsPanel();
+  showToast(`Seeded ${seeded.length} test receipt${seeded.length === 1 ? '' : 's'}`, 'success');
+}
+
+async function importReceiptManually() {
+  if (!walletAddress) {
+    showToast('Connect wallet first', 'warning');
+    return;
+  }
+  const soulInput = document.getElementById('importSoulIdInput');
+  const receiptInput = document.getElementById('importReceiptInput');
+  const soulId = String(soulInput?.value || '').trim();
+  const receipt = String(receiptInput?.value || '').trim();
+  if (!soulId || !receipt) {
+    showToast('Provide soul_id and receipt token', 'warning');
+    return;
+  }
+  storeReceipt(soulId, walletAddress, receipt);
+  await refreshMySoulsPanel();
+  showToast(`Imported receipt for ${soulId}`, 'success');
+}
+
 async function loadWalletConfig() {
   try {
     const response = await fetch('/api/wallet-config');
@@ -918,6 +971,22 @@ window.rollbackSoul = async () => {
   } catch (error) {
     console.error('Rollback failed:', error);
     showToast(error.message || 'Rollback failed', 'error');
+  }
+};
+window.seedTestReceipts = async () => {
+  try {
+    await seedTestReceipts();
+  } catch (error) {
+    console.error('Seed receipts failed:', error);
+    showToast(error.message || 'Seed failed', 'error');
+  }
+};
+window.importReceiptManually = async () => {
+  try {
+    await importReceiptManually();
+  } catch (error) {
+    console.error('Import receipt failed:', error);
+    showToast(error.message || 'Import failed', 'error');
   }
 };
 window.showToast = showToast;
