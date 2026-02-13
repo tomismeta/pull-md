@@ -5,7 +5,8 @@
   "description": "Human-nurtured agent memory marketplace with x402 payments",
   "scripts": {
     "dev": "vercel dev",
-    "deploy": "vercel --prod"
+    "deploy": "vercel --prod",
+    "check:syntax": "find api -name '*.js' -print0 | xargs -0 -n1 node --check"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.44.0",
