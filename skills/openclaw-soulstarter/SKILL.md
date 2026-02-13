@@ -1,6 +1,6 @@
 ---
 name: openclaw-soulstarter
-description: Use this skill when an agent needs to discover SoulStarter via WebMCP, purchase a soul with strict x402 headers, and re-download previously purchased souls without paying twice.
+description: Use this skill when an agent needs to discover SoulStarter via WebMCP, purchase a soul with strict x402 headers, re-download previously purchased souls without paying twice, and switch active souls safely.
 ---
 
 # OpenClaw SoulStarter Skill
@@ -22,6 +22,7 @@ Use this skill for agent workflows against a deployed SoulStarter instance.
 3. Attempt receipt-based re-download first.
 4. If not entitled, run strict x402 purchase flow.
 5. Persist purchase receipt for future re-download.
+6. Use Soul Locker tools to switch active soul and rollback safely.
 
 ## 1. Discover
 
@@ -139,6 +140,36 @@ Use:
 - Body:
 `{ "wallet_address": "...", "proofs": [{ "soul_id": "...", "receipt": "..." }] }`
 
+## 5. Soul Locker + Switching (No Repay)
+
+Use these tools to avoid soul loss and enable fast switching:
+
+1. List owned inventory:
+- `POST {base_url}/api/mcp/tools/list_owned_souls`
+- Body:
+`{ "wallet_address": "...", "receipts": ["<receipt1>", "<receipt2>"] }`
+
+2. Set active soul:
+- `POST {base_url}/api/mcp/tools/set_active_soul`
+- Body:
+`{ "wallet_address": "...", "soul_id": "...", "receipt": "<receipt_for_soul_id>", "previous_soul_id": "...", "previous_receipt": "<optional_receipt>" }`
+- Save returned `soul_session_token`.
+
+3. Read active status:
+- `POST {base_url}/api/mcp/tools/get_active_soul_status`
+- Body:
+`{ "wallet_address": "...", "soul_session_token": "<token_from_set_active_soul>" }`
+
+4. Roll back to previous active soul:
+- `POST {base_url}/api/mcp/tools/rollback_active_soul`
+- Body:
+`{ "wallet_address": "...", "soul_session_token": "<token_from_set_active_soul>", "rollback_receipt": "<receipt_for_previous_soul>" }`
+
+Notes:
+- `soul_session_token` is a signed server token bound to `wallet_address`.
+- These switching tools validate entitlement using stored receipts; they do not trigger x402 repayment.
+- Use returned `redownload_contract` object to fetch `SOUL.md` for the active soul when needed.
+
 ## Output Expectations
 
 When this skill is used, return:
@@ -147,4 +178,6 @@ When this skill is used, return:
 2. acquisition mode: `redownload` or `purchase`
 3. settlement transaction id (if present)
 4. whether receipt was refreshed
-5. clear error reason and next step if flow fails
+5. active soul id (if switching was performed)
+6. whether rollback is available
+7. clear error reason and next step if flow fails
