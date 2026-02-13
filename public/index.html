@@ -13,10 +13,6 @@
   <meta name="mcp:tool:get_soul_details" content="/api/mcp/tools/get_soul_details">
   <meta name="mcp:tool:purchase_soul" content="/api/mcp/tools/purchase_soul">
   <meta name="mcp:tool:check_entitlements" content="/api/mcp/tools/check_entitlements">
-  <meta name="mcp:tool:list_owned_souls" content="/api/mcp/tools/list_owned_souls">
-  <meta name="mcp:tool:set_active_soul" content="/api/mcp/tools/set_active_soul">
-  <meta name="mcp:tool:get_active_soul_status" content="/api/mcp/tools/get_active_soul_status">
-  <meta name="mcp:tool:rollback_active_soul" content="/api/mcp/tools/rollback_active_soul">
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -93,20 +89,6 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
         <div class="souls-grid" id="soulsGrid">
           <!-- Soul cards injected here -->
         </div>
-      </div>
-    </section>
-
-    <section class="my-souls-section" id="mySouls">
-      <div class="container">
-        <div class="my-souls-header">
-          <h2>My Souls</h2>
-          <p>Switch active soul from owned receipts without paying again.</p>
-        </div>
-        <div class="my-souls-status" id="mySoulsStatus">
-          Connect wallet to load your Soul Locker inventory.
-        </div>
-        <div class="active-soul-card" id="activeSoulCard" style="display: none;"></div>
-        <div class="my-souls-grid" id="mySoulsGrid"></div>
       </div>
     </section>
     

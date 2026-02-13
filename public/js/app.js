@@ -69,9 +69,7 @@ function disconnectWallet() {
   provider = null;
   signer = null;
   walletAddress = null;
-  clearStoredSoulSession();
   updateWalletUI();
-  renderMySoulsDisconnected();
   showToast('Wallet disconnected', 'info');
 }
 
@@ -90,12 +88,6 @@ async function connectWithProvider(rawProvider) {
     walletAddress = (await signer.getAddress()).toLowerCase();
     await ensureBaseNetwork();
     updateWalletUI();
-    try {
-      await refreshMySoulsPanel();
-    } catch (panelError) {
-      console.error('Soul Locker refresh failed:', panelError);
-      setMySoulsStatus('Connected. Soul Locker refresh failed; retry after completing a purchase.');
-    }
     showToast('Wallet connected', 'success');
   } catch (error) {
     console.error('Wallet connection failed:', error);
@@ -202,31 +194,6 @@ function updateWalletUI() {
     btn.classList.remove('connected');
     btn.onclick = openWalletModal;
   }
-}
-
-function soulSessionStorageKey(wallet) {
-  return `soulstarter.session.${wallet.toLowerCase()}`;
-}
-
-function storeSoulSession(wallet, token) {
-  try {
-    localStorage.setItem(soulSessionStorageKey(wallet), token);
-  } catch (_) {}
-}
-
-function getStoredSoulSession(wallet) {
-  try {
-    return localStorage.getItem(soulSessionStorageKey(wallet));
-  } catch (_) {
-    return null;
-  }
-}
-
-function clearStoredSoulSession() {
-  if (!walletAddress) return;
-  try {
-    localStorage.removeItem(soulSessionStorageKey(walletAddress));
-  } catch (_) {}
 }
 
 function buildAuthMessage({ wallet, soulId, action, timestamp }) {
@@ -400,7 +367,6 @@ async function purchaseSoul(soulId) {
 
     const prior = await tryRedownload(soulId);
     if (prior.ok) {
-      await refreshMySoulsPanel();
       showToast('Entitlement verified. Download restored.', 'success');
       return;
     }
@@ -444,7 +410,6 @@ async function purchaseSoul(soulId) {
     if (receipt) storeReceipt(soulId, walletAddress, receipt);
 
     showPaymentSuccess(content, tx, soulId, false);
-    await refreshMySoulsPanel();
     showToast('Soul acquired successfully!', 'success');
   } catch (error) {
     console.error('Purchase failed:', error);
@@ -493,22 +458,6 @@ function getStoredReceipt(soulId, wallet) {
   } catch (_) {
     return null;
   }
-}
-
-function getStoredReceiptsForWallet(wallet) {
-  const receipts = [];
-  const prefix = `soulstarter.receipt.${wallet.toLowerCase()}.`;
-  try {
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      if (!key || !key.startsWith(prefix)) continue;
-      const receipt = localStorage.getItem(key);
-      if (receipt) receipts.push(receipt);
-    }
-  } catch (_) {
-    return [];
-  }
-  return receipts;
 }
 
 function showPaymentSuccess(content, txHash, soulId, redownload) {
@@ -609,241 +558,6 @@ async function loadSouls() {
   }
 }
 
-function renderMySoulsDisconnected() {
-  const status = document.getElementById('mySoulsStatus');
-  const grid = document.getElementById('mySoulsGrid');
-  const active = document.getElementById('activeSoulCard');
-  if (status) status.textContent = 'Connect wallet to load your Soul Locker inventory.';
-  if (grid) grid.innerHTML = '';
-  if (active) active.style.display = 'none';
-}
-
-function setMySoulsStatus(text) {
-  const status = document.getElementById('mySoulsStatus');
-  if (status) status.textContent = text;
-}
-
-function renderActiveSoul(activeSoul, previousSoul, switchedAt) {
-  const card = document.getElementById('activeSoulCard');
-  if (!card || !activeSoul) return;
-  const switched = switchedAt ? new Date(Number(switchedAt)).toLocaleString() : 'unknown';
-  card.style.display = 'block';
-  card.innerHTML = `
-    <h3>Active Soul: ${escapeHtml(activeSoul.name || activeSoul.soul_id)}</h3>
-    <div class="active-soul-meta">
-      <span>${escapeHtml(activeSoul.soul_id)}</span>
-      <span> • switched ${escapeHtml(switched)}</span>
-      ${previousSoul ? `<span> • previous ${escapeHtml(previousSoul.soul_id)}</span>` : ''}
-    </div>
-    ${
-      previousSoul
-        ? '<button class="btn btn-subtle btn-full" onclick="rollbackSoul()">Rollback to previous soul</button>'
-        : ''
-    }
-  `;
-}
-
-function renderOwnedSouls(ownedSouls) {
-  const grid = document.getElementById('mySoulsGrid');
-  if (!grid) return;
-
-  if (!ownedSouls.length) {
-    grid.innerHTML = '';
-    return;
-  }
-
-  grid.innerHTML = ownedSouls
-    .map(
-      (soul) => `
-      <article class="my-soul-card">
-        <div class="my-soul-row">
-          <h4>${escapeHtml(soul.name || soul.soul_id)}</h4>
-          <span class="my-soul-chip">${escapeHtml(soul.category || 'soul')}</span>
-        </div>
-        <p>${escapeHtml(soul.description || '')}</p>
-        <button class="btn btn-primary btn-full" onclick="activateSoul('${escapeHtml(soul.soul_id)}')">Set Active</button>
-      </article>
-    `
-    )
-    .join('');
-}
-
-async function refreshMySoulsPanel() {
-  if (!walletAddress) {
-    renderMySoulsDisconnected();
-    return;
-  }
-
-  const receipts = getStoredReceiptsForWallet(walletAddress);
-  if (!receipts.length) {
-    setMySoulsStatus('No stored receipts found for this wallet yet.');
-    renderOwnedSouls([]);
-    const active = document.getElementById('activeSoulCard');
-    if (active) active.style.display = 'none';
-    return;
-  }
-
-  setMySoulsStatus('Loading owned souls from local receipts...');
-
-  const response = await fetchWithTimeout('/api/mcp/tools/list_owned_souls', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      wallet_address: walletAddress,
-      receipts
-    })
-  });
-
-  if (!response.ok) {
-    const error = await readError(response);
-    throw new Error(error || 'Failed to load owned souls');
-  }
-
-  const payload = await response.json();
-  const ownedSouls = Array.isArray(payload.owned_souls) ? payload.owned_souls : [];
-  renderOwnedSouls(ownedSouls);
-  setMySoulsStatus(
-    ownedSouls.length
-      ? `Found ${ownedSouls.length} owned soul${ownedSouls.length === 1 ? '' : 's'}.`
-      : 'No valid owned souls found for stored receipts.'
-  );
-
-  const sessionToken = getStoredSoulSession(walletAddress);
-  if (!sessionToken) {
-    const active = document.getElementById('activeSoulCard');
-    if (active) active.style.display = 'none';
-    return;
-  }
-
-  const statusRes = await fetchWithTimeout('/api/mcp/tools/get_active_soul_status', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      wallet_address: walletAddress,
-      soul_session_token: sessionToken
-    })
-  });
-  if (!statusRes.ok) {
-    clearStoredSoulSession();
-    const active = document.getElementById('activeSoulCard');
-    if (active) active.style.display = 'none';
-    return;
-  }
-  const statusPayload = await statusRes.json();
-  renderActiveSoul(statusPayload.active_soul, statusPayload.previous_soul, statusPayload.switched_at);
-}
-
-async function activateSoul(soulId) {
-  if (!walletAddress) {
-    showToast('Connect wallet first', 'warning');
-    return;
-  }
-
-  const receipt = getStoredReceipt(soulId, walletAddress);
-  if (!receipt) {
-    showToast('Missing receipt for selected soul', 'error');
-    return;
-  }
-
-  let previousSoulId = null;
-  let previousReceipt = null;
-  const sessionToken = getStoredSoulSession(walletAddress);
-  if (sessionToken) {
-    const statusRes = await fetchWithTimeout('/api/mcp/tools/get_active_soul_status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        wallet_address: walletAddress,
-        soul_session_token: sessionToken
-      })
-    });
-    if (statusRes.ok) {
-      const statusPayload = await statusRes.json();
-      previousSoulId = statusPayload.active_soul?.soul_id || null;
-      previousReceipt = previousSoulId ? getStoredReceipt(previousSoulId, walletAddress) : null;
-    }
-  }
-
-  const response = await fetchWithTimeout('/api/mcp/tools/set_active_soul', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      wallet_address: walletAddress,
-      soul_id: soulId,
-      receipt,
-      previous_soul_id: previousSoulId,
-      previous_receipt: previousReceipt
-    })
-  });
-
-  if (!response.ok) {
-    const error = await readError(response);
-    throw new Error(error || 'Failed to set active soul');
-  }
-
-  const payload = await response.json();
-  if (payload.soul_session_token) {
-    storeSoulSession(walletAddress, payload.soul_session_token);
-  }
-  renderActiveSoul(payload.active_soul, payload.previous_soul, payload.switched_at);
-  showToast(`Active soul set: ${payload.active_soul?.name || soulId}`, 'success');
-}
-
-async function rollbackSoul() {
-  if (!walletAddress) return;
-  const token = getStoredSoulSession(walletAddress);
-  if (!token) {
-    showToast('No active soul session token', 'warning');
-    return;
-  }
-
-  const statusRes = await fetchWithTimeout('/api/mcp/tools/get_active_soul_status', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      wallet_address: walletAddress,
-      soul_session_token: token
-    })
-  });
-  if (!statusRes.ok) {
-    showToast('Unable to resolve active soul status', 'error');
-    return;
-  }
-
-  const statusPayload = await statusRes.json();
-  const previousSoulId = statusPayload.previous_soul?.soul_id;
-  if (!previousSoulId) {
-    showToast('No previous soul available to rollback', 'warning');
-    return;
-  }
-  const rollbackReceipt = getStoredReceipt(previousSoulId, walletAddress);
-  if (!rollbackReceipt) {
-    showToast('Missing receipt for previous soul', 'error');
-    return;
-  }
-
-  const response = await fetchWithTimeout('/api/mcp/tools/rollback_active_soul', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      wallet_address: walletAddress,
-      soul_session_token: token,
-      rollback_receipt: rollbackReceipt
-    })
-  });
-  if (!response.ok) {
-    const error = await readError(response);
-    throw new Error(error || 'Rollback failed');
-  }
-
-  const payload = await response.json();
-  if (payload.soul_session_token) {
-    storeSoulSession(walletAddress, payload.soul_session_token);
-  }
-  renderActiveSoul(payload.active_soul, { soul_id: payload.previous_soul_id }, payload.switched_at);
-  showToast(`Rolled back to ${payload.active_soul?.name || payload.active_soul?.soul_id}`, 'success');
-}
-
 async function loadWalletConfig() {
   try {
     const response = await fetch('/api/wallet-config');
@@ -890,7 +604,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadWalletConfig();
   updateWalletUI();
   loadSouls();
-  renderMySoulsDisconnected();
 });
 
 window.openWalletModal = openWalletModal;
@@ -902,22 +615,4 @@ window.connectCoinbase = connectCoinbase;
 window.connectInjected = connectInjected;
 window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
-window.activateSoul = async (soulId) => {
-  try {
-    await activateSoul(soulId);
-    await refreshMySoulsPanel();
-  } catch (error) {
-    console.error('Set active soul failed:', error);
-    showToast(error.message || 'Failed to set active soul', 'error');
-  }
-};
-window.rollbackSoul = async () => {
-  try {
-    await rollbackSoul();
-    await refreshMySoulsPanel();
-  } catch (error) {
-    console.error('Rollback failed:', error);
-    showToast(error.message || 'Rollback failed', 'error');
-  }
-};
 window.showToast = showToast;
