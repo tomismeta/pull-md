@@ -1,5 +1,5 @@
-import { getSoul, listSouls } from '../../_lib/catalog.js';
-import { createPurchaseReceipt, inspectPurchaseReceipt, setCors } from '../../_lib/payments.js';
+import { getSoul } from '../../_lib/catalog.js';
+import { inspectPurchaseReceipt, setCors } from '../../_lib/payments.js';
 
 export default function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -21,25 +21,6 @@ export default function handler(req, res) {
   }
 
   const receipts = Array.isArray(payload.receipts) ? payload.receipts : [];
-  const seededReceipts = [];
-  const seedSecret = String(payload.seed_secret || '').trim();
-  const expectedSeedSecret = String(process.env.TEST_RECEIPT_SEED_SECRET || '').trim();
-  if (seedSecret && expectedSeedSecret && seedSecret === expectedSeedSecret) {
-    const requestedSoulIds = Array.isArray(payload.seed_soul_ids) ? payload.seed_soul_ids.map((id) => String(id || '')) : [];
-    const seedSoulIds = requestedSoulIds.length > 0 ? requestedSoulIds : listSouls().slice(0, 2).map((s) => s.id);
-    for (const soulId of seedSoulIds) {
-      const soul = getSoul(soulId);
-      if (!soul) continue;
-      const receipt = createPurchaseReceipt({
-        wallet: walletAddress,
-        soulId,
-        transaction: `test-seed-${Date.now()}-${soulId}`
-      });
-      seededReceipts.push({ soul_id: soulId, receipt });
-      receipts.push(receipt);
-    }
-  }
-
   const invalidReceipts = [];
   const ownedBySoulId = new Map();
 
@@ -90,8 +71,6 @@ export default function handler(req, res) {
     wallet_address: walletAddress,
     owned_souls: ownedSouls,
     total_owned: ownedSouls.length,
-    seeded_receipts: seededReceipts,
-    seeded_receipts_count: seededReceipts.length,
     invalid_receipts: invalidReceipts,
     invalid_receipts_count: invalidReceipts.length
   });

@@ -856,12 +856,11 @@ async function seedTestReceipts() {
     return;
   }
 
-  const response = await fetchWithTimeout('/api/mcp/tools/list_owned_souls', {
+  const response = await fetchWithTimeout('/api/mcp/tools/seed_test_receipts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       wallet_address: walletAddress,
-      receipts: [],
       seed_secret: seedSecret
     })
   });
