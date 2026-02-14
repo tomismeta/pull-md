@@ -275,6 +275,7 @@ export async function upsertCreatorDraft({ walletAddress, normalizedDraft, draft
     created_at: idx >= 0 ? store.drafts[idx].created_at : now,
     updated_at: now,
     status: 'draft',
+    moderation: idx >= 0 ? store.drafts[idx].moderation || null : null,
     normalized: normalizedDraft
   };
 
@@ -294,6 +295,7 @@ export async function listCreatorDrafts(walletAddress) {
     .map((draft) => ({
       draft_id: draft.draft_id,
       status: draft.status || 'draft',
+      moderation: draft.moderation || null,
       created_at: draft.created_at,
       updated_at: draft.updated_at,
       soul_id: draft.normalized?.listing?.soul_id || null,
@@ -306,4 +308,37 @@ export async function getCreatorDraft(walletAddress, draftId) {
   const wallet = String(walletAddress || '').toLowerCase();
   const store = await loadWalletDraftFile(wallet);
   return store.drafts.find((item) => item?.draft_id === draftId) || null;
+}
+
+export async function submitCreatorDraftForReview({ walletAddress, draftId }) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const store = await loadWalletDraftFile(wallet);
+  const idx = store.drafts.findIndex((item) => item?.draft_id === draftId);
+  if (idx < 0) return { ok: false, error: 'Draft not found' };
+
+  const existing = store.drafts[idx];
+  const currentStatus = String(existing?.status || 'draft');
+  if (currentStatus === 'submitted_for_review') {
+    return { ok: false, error: 'Draft already submitted for review', draft: existing };
+  }
+  if (currentStatus === 'published') {
+    return { ok: false, error: 'Draft already published', draft: existing };
+  }
+
+  const now = new Date().toISOString();
+  const next = {
+    ...existing,
+    updated_at: now,
+    status: 'submitted_for_review',
+    moderation: {
+      state: 'pending',
+      submitted_at: now,
+      reviewed_at: null,
+      reviewer: null,
+      notes: null
+    }
+  };
+  store.drafts[idx] = next;
+  await saveWalletDraftFile(wallet, store);
+  return { ok: true, draft: next };
 }

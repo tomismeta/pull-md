@@ -36,6 +36,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `POST /api/mcp/tools/save_listing_draft`
 - `GET /api/mcp/tools/list_my_listing_drafts`
 - `GET /api/mcp/tools/get_my_listing_draft?draft_id=<id>`
+- `POST /api/mcp/tools/submit_listing_for_review`
 - `GET /api/souls/{id}/download`
 - `GET /api/health/facilitator`
 
@@ -49,6 +50,8 @@ validates and normalizes listing + soul content payload and returns deterministi
 validation/normalization only in this phase; publish/listing activation is intentionally not enabled yet.
 - Creator draft storage:
 wallet-authenticated private draft save/list/get endpoints are available for builder workflows.
+- Review submission:
+wallet-authenticated submit endpoint transitions draft -> `submitted_for_review` with moderation metadata (`state: pending`).
 
 ## Environment Variables
 

@@ -53,6 +53,12 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 9. `GET /api/mcp/tools/get_my_listing_draft?draft_id=<id>`
 - Wallet-authenticated fetch of one full creator-owned draft.
 
+10. `POST /api/mcp/tools/submit_listing_for_review`
+- Wallet-authenticated transition of a draft to `submitted_for_review`.
+- Adds moderation metadata:
+`{ state: "pending", submitted_at, reviewed_at: null, reviewer: null, notes: null }`
+- Publish is still intentionally disabled in this phase.
+
 ## Download Endpoint
 
 `GET /api/souls/{id}/download`
@@ -225,3 +231,4 @@ Where `<tool_action>` is one of:
 - `save_listing_draft`
 - `list_my_listing_drafts`
 - `get_my_listing_draft`
+- `submit_listing_for_review`

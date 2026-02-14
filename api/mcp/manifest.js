@@ -136,6 +136,19 @@ export default function handler(req, res) {
         },
         auth_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
         returns: { type: 'object', description: 'Full wallet-scoped draft record' }
+      },
+      {
+        name: 'submit_listing_for_review',
+        description: 'Move a creator draft from draft state to submitted_for_review with moderation metadata',
+        endpoint: '/api/mcp/tools/submit_listing_for_review',
+        method: 'POST',
+        parameters: {
+          wallet_address: { type: 'string', required: true, description: 'Creator wallet address' },
+          auth_signature: { type: 'string', required: true, description: 'Wallet signature over creator auth message' },
+          auth_timestamp: { type: 'number', required: true, description: 'Unix ms timestamp used in auth message' },
+          draft_id: { type: 'string', required: true, description: 'Draft identifier to submit' }
+        },
+        returns: { type: 'object', description: 'Draft submission status with moderation state= pending' }
       }
     ],
     download_contract: {
