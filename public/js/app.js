@@ -82,9 +82,9 @@ async function connectWithProvider(rawProvider) {
   closeWalletModal();
 
   try {
-    provider = new ethers.providers.Web3Provider(rawProvider, 'any');
+    provider = new ethers.BrowserProvider(rawProvider, 'any');
     await provider.send('eth_requestAccounts', []);
-    signer = provider.getSigner();
+    signer = await provider.getSigner();
     walletAddress = (await signer.getAddress()).toLowerCase();
     await ensureBaseNetwork();
     updateWalletUI();
@@ -166,7 +166,7 @@ async function connectWalletConnect() {
 async function ensureBaseNetwork() {
   if (!provider) return;
   const network = await provider.getNetwork();
-  if (network.chainId === CONFIG.baseChainIdDec) return;
+  if (Number(network.chainId) === CONFIG.baseChainIdDec) return;
 
   const raw = provider.provider;
   try {
@@ -240,6 +240,7 @@ async function buildX402PaymentSignature(paymentRequired) {
   const transferMethod = String(accepted.extra?.assetTransferMethod || 'eip3009').toLowerCase();
   const now = Math.floor(Date.now() / 1000);
   if (transferMethod === 'permit2') {
+    const permitNonceHex = ethers.hexlify(ethers.randomBytes(32));
     const permit2Authorization = {
       from: walletAddress,
       permitted: {
@@ -247,7 +248,7 @@ async function buildX402PaymentSignature(paymentRequired) {
         amount: accepted.amount
       },
       spender: X402_EXACT_PERMIT2_PROXY,
-      nonce: ethers.BigNumber.from(ethers.utils.randomBytes(32)).toString(),
+      nonce: BigInt(permitNonceHex).toString(),
       deadline: String(now + (accepted.maxTimeoutSeconds || 300)),
       witness: {
         to: accepted.payTo,
@@ -261,8 +262,8 @@ async function buildX402PaymentSignature(paymentRequired) {
       chainId,
       verifyingContract: PERMIT2_ADDRESS
     };
-    const permitSignature = await signer._signTypedData(permitDomain, PERMIT2_WITNESS_TYPES, permit2Authorization);
-    const approveData = new ethers.utils.Interface(['function approve(address spender, uint256 amount)']).encodeFunctionData(
+    const permitSignature = await signer.signTypedData(permitDomain, PERMIT2_WITNESS_TYPES, permit2Authorization);
+    const approveData = new ethers.Interface(['function approve(address spender, uint256 amount)']).encodeFunctionData(
       'approve',
       [PERMIT2_ADDRESS, MAX_UINT256_DEC]
     );
@@ -291,7 +292,7 @@ async function buildX402PaymentSignature(paymentRequired) {
     value: accepted.amount,
     validAfter: String(now - 600),
     validBefore: String(now + (accepted.maxTimeoutSeconds || 300)),
-    nonce: ethers.utils.hexlify(ethers.utils.randomBytes(32))
+    nonce: ethers.hexlify(ethers.randomBytes(32))
   };
   const domain = {
     name: accepted.extra.name,
@@ -299,7 +300,7 @@ async function buildX402PaymentSignature(paymentRequired) {
     chainId,
     verifyingContract: accepted.asset
   };
-  const signature = await signer._signTypedData(domain, TRANSFER_WITH_AUTHORIZATION_TYPE, authorization);
+  const signature = await signer.signTypedData(domain, TRANSFER_WITH_AUTHORIZATION_TYPE, authorization);
   return {
     x402Version: paymentRequired.x402Version,
     scheme: accepted.scheme,

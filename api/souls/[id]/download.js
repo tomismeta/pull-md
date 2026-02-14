@@ -740,7 +740,7 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
   }
 
   try {
-    const provider = new ethers.providers.JsonRpcProvider(rpcUrl, 8453);
+    const provider = new ethers.JsonRpcProvider(rpcUrl, 8453);
     const erc20Abi = [
       'function balanceOf(address account) view returns (uint256)',
       'function authorizationState(address authorizer, bytes32 nonce) view returns (bool)',

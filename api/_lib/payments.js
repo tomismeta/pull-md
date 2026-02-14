@@ -59,7 +59,7 @@ export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature 
   const message = buildAuthMessage({ wallet, soulId, action, timestamp: ts });
   let recovered;
   try {
-    recovered = ethers.utils.verifyMessage(message, signature);
+    recovered = ethers.verifyMessage(message, signature);
   } catch (_) {
     return { ok: false, error: 'Invalid auth signature' };
   }
