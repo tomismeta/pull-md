@@ -556,8 +556,7 @@ initDefaults();
 loadWalletConfig().then(() => restoreWalletSession());
 
 window.closeWalletModal = closeWalletModal;
-window.connectMetaMask = () => connectMetaMask().catch((error) => toast(error.message || 'Wallet connection failed', 'error'));
-window.connectCoinbase = () => connectCoinbase().catch((error) => toast(error.message || 'Wallet connection failed', 'error'));
-window.connectInjected = () => connectInjected().catch((error) => toast(error.message || 'Wallet connection failed', 'error'));
-window.connectWalletConnect = () =>
-  connectWalletConnect().catch((error) => toast(error.message || 'Wallet connection failed', 'error'));
+window.connectMetaMask = connectMetaMask;
+window.connectCoinbase = connectCoinbase;
+window.connectInjected = connectInjected;
+window.connectWalletConnect = connectWalletConnect;

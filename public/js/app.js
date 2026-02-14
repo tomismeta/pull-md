@@ -764,11 +764,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 window.openWalletModal = openWalletModal;
 window.closeWalletModal = closeWalletModal;
 window.connectWallet = connectWallet;
-window.connectMetaMask = () => connectMetaMask().catch((error) => showToast(error.message || 'Wallet connection failed', 'error'));
-window.connectWalletConnect = () =>
-  connectWalletConnect().catch((error) => showToast(error.message || 'Wallet connection failed', 'error'));
-window.connectCoinbase = () => connectCoinbase().catch((error) => showToast(error.message || 'Wallet connection failed', 'error'));
-window.connectInjected = () => connectInjected().catch((error) => showToast(error.message || 'Wallet connection failed', 'error'));
+window.connectMetaMask = connectMetaMask;
+window.connectWalletConnect = connectWalletConnect;
+window.connectCoinbase = connectCoinbase;
+window.connectInjected = connectInjected;
 window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
 window.showToast = showToast;
