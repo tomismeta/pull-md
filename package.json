@@ -10,11 +10,11 @@
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.44.1",
     "@x402/core": "^2.3.1",
-    "@x402/evm": "^2.3.0",
+    "@x402/evm": "^2.3.1",
     "@x402/next": "^2.3.0",
     "ethers": "^5.7.2"
   },
   "devDependencies": {
-    "vercel": "^33.0.0"
+    "vercel": "^50.17.1"
   }
 }
