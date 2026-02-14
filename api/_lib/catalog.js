@@ -1,4 +1,5 @@
-import { promises as fs } from 'fs';
+import fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -97,8 +98,29 @@ export const SOUL_CATALOG = {
   }
 };
 
+const PUBLISHED_CATALOG_PATH = path.join(process.cwd(), '.marketplace-drafts', 'published-catalog.json');
+
+function loadPublishedCatalogSync() {
+  try {
+    const raw = fs.readFileSync(PUBLISHED_CATALOG_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.entries)) return [];
+    return parsed.entries.filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string');
+  } catch (_) {
+    return [];
+  }
+}
+
+function mergedCatalogValues() {
+  const byId = new Map(Object.values(SOUL_CATALOG).map((item) => [item.id, item]));
+  for (const entry of loadPublishedCatalogSync()) {
+    byId.set(entry.id, entry);
+  }
+  return [...byId.values()];
+}
+
 export function listSouls() {
-  return Object.values(SOUL_CATALOG).map((soul) => ({
+  return mergedCatalogValues().map((soul) => ({
     id: soul.id,
     name: soul.name,
     description: soul.description,
@@ -122,11 +144,13 @@ export function listSouls() {
 }
 
 export function getSoul(id) {
-  return SOUL_CATALOG[id] || null;
+  if (SOUL_CATALOG[id]) return SOUL_CATALOG[id];
+  const published = loadPublishedCatalogSync().find((entry) => entry.id === id);
+  return published || null;
 }
 
 export function soulIds() {
-  return Object.keys(SOUL_CATALOG);
+  return mergedCatalogValues().map((soul) => soul.id);
 }
 
 export async function loadSoulContent(id) {
@@ -141,10 +165,14 @@ export async function loadSoulContent(id) {
 
   for (const diskPath of candidates) {
     try {
-      return await fs.readFile(diskPath, 'utf-8');
+      return await fsPromises.readFile(diskPath, 'utf-8');
     } catch (_) {
       continue;
     }
+  }
+
+  if (typeof soul.contentInline === 'string' && soul.contentInline.trim()) {
+    return soul.contentInline;
   }
 
   const envKey = `SOUL_${id.replace(/-/g, '_').toUpperCase()}`;

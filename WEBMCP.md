@@ -36,6 +36,53 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 - Verifies receipt proof(s) for re-download:
 `{ wallet_address, proofs: [{ soul_id, receipt }] }`
 
+5. `GET /api/mcp/tools/get_listing_template`
+- Returns marketplace listing draft template for creator upload workflows.
+
+6. `POST /api/mcp/tools/validate_listing_draft`
+- Validates and normalizes creator listing payloads.
+- Returns deterministic `draft_id`, `errors`, `warnings`, and normalized payload.
+- This phase does not publish listings; it only prepares validated drafts.
+
+7. `POST /api/mcp/tools/save_listing_draft`
+- Wallet-authenticated save/upsert for creator draft records.
+
+8. `GET /api/mcp/tools/list_my_listing_drafts`
+- Wallet-authenticated list of creator-owned draft summaries.
+
+9. `GET /api/mcp/tools/get_my_listing_draft?draft_id=<id>`
+- Wallet-authenticated fetch of one full creator-owned draft.
+
+10. `POST /api/mcp/tools/submit_listing_for_review`
+- Wallet-authenticated transition of a draft to `submitted_for_review`.
+- Adds moderation metadata:
+`{ state: "pending", submitted_at, reviewed_at: null, reviewer: null, notes: null }`
+- Publish is still intentionally disabled in this phase.
+
+11. `POST /api/mcp/tools/review_listing_submission` (admin only)
+- Header: `X-ADMIN-TOKEN`
+- Body:
+`{ wallet_address, draft_id, decision: "approve" | "reject", reviewer?, notes? }`
+- Applies moderation decision and updates status:
+`approved_for_publish` or `rejected`.
+- Writes immutable audit entries to local review audit stream.
+
+12. `GET /api/mcp/tools/list_review_queue` (admin only)
+- Header: `X-ADMIN-TOKEN`
+- Returns drafts in `submitted_for_review` status.
+
+13. `POST /api/mcp/tools/publish_listing` (admin only)
+- Header: `X-ADMIN-TOKEN`
+- Body:
+`{ wallet_address, draft_id, reviewer?, notes? }`
+- Requires draft status `approved_for_publish`.
+- Transitions draft to `published` and writes immutable audit entry.
+- Published drafts are promoted to active catalog and are purchasable from:
+`GET /api/souls/{published_soul_id}/download`
+
+14. `GET /api/mcp/tools/list_published_listings`
+- Public listing of all drafts currently in `published` status.
+
 ## Download Endpoint
 
 `GET /api/souls/{id}/download`
@@ -187,3 +234,25 @@ soul:<soul_id>
 action:redownload
 timestamp:<unix_ms>
 ```
+
+## Creator Draft Auth Message
+
+Private creator-draft tools require wallet-auth headers:
+- `X-WALLET-ADDRESS`
+- `X-AUTH-SIGNATURE`
+- `X-AUTH-TIMESTAMP`
+
+Sign exactly:
+
+```text
+SoulStarter Creator Authentication
+address:<wallet_lowercase>
+action:<tool_action>
+timestamp:<unix_ms>
+```
+
+Where `<tool_action>` is one of:
+- `save_listing_draft`
+- `list_my_listing_drafts`
+- `get_my_listing_draft`
+- `submit_listing_for_review`

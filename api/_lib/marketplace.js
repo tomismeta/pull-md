@@ -1,0 +1,588 @@
+import crypto from 'crypto';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { ethers } from 'ethers';
+
+const SOUL_TYPES = new Set(['synthetic', 'organic', 'hybrid']);
+const MAX_SOUL_MD_BYTES = 64 * 1024;
+const MAX_TAGS = 12;
+const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
+const REVIEW_AUDIT_FILE = 'review-audit.jsonl';
+const PUBLISHED_CATALOG_FILE = 'published-catalog.json';
+
+function asString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeTags(value) {
+  const tags = Array.isArray(value) ? value : [];
+  const normalized = [];
+  for (const raw of tags) {
+    const next = asString(raw).toLowerCase();
+    if (!next) continue;
+    if (normalized.includes(next)) continue;
+    normalized.push(next);
+    if (normalized.length >= MAX_TAGS) break;
+  }
+  return normalized;
+}
+
+function normalizeUsdPriceToMicroUsdc(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value <= 0) return null;
+  const micro = Math.round(value * 1_000_000);
+  if (micro <= 0) return null;
+  return String(micro);
+}
+
+function validateEthAddress(value) {
+  return /^0x[a-fA-F0-9]{40}$/.test(String(value || ''));
+}
+
+function validateSoulId(value) {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(value || ''));
+}
+
+function getMarketplaceDraftsDir() {
+  return process.env.MARKETPLACE_DRAFTS_DIR || path.join(process.cwd(), '.marketplace-drafts');
+}
+
+function walletFilePath(walletAddress) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  return path.join(getMarketplaceDraftsDir(), `${wallet}.json`);
+}
+
+function safeChecksumAddress(address) {
+  try {
+    return ethers.getAddress(String(address || '').trim());
+  } catch (_) {
+    return null;
+  }
+}
+
+function buildCreatorAuthMessageWithNewline({ wallet, action, timestamp, newline }) {
+  return ['SoulStarter Creator Authentication', `address:${wallet}`, `action:${action}`, `timestamp:${timestamp}`].join(
+    newline
+  );
+}
+
+function buildCreatorAuthMessageCandidates({ wallet, action, timestamp }) {
+  const raw = asString(wallet);
+  const lower = raw.toLowerCase();
+  const checksummed = safeChecksumAddress(raw);
+  const wallets = [...new Set([lower, checksummed].filter(Boolean))];
+  const newlines = ['\n', '\r\n'];
+  const messages = [];
+  for (const walletVariant of wallets) {
+    for (const newline of newlines) {
+      messages.push({
+        variant: `${walletVariant === lower ? 'lowercase' : 'checksummed'}-${newline === '\n' ? 'lf' : 'crlf'}`,
+        message: buildCreatorAuthMessageWithNewline({ wallet: walletVariant, action, timestamp, newline })
+      });
+    }
+  }
+  return messages;
+}
+
+async function ensureDraftStore() {
+  await fs.mkdir(getMarketplaceDraftsDir(), { recursive: true });
+}
+
+async function loadWalletDraftFile(walletAddress) {
+  await ensureDraftStore();
+  const filePath = walletFilePath(walletAddress);
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.drafts)) {
+      return { wallet: String(walletAddress).toLowerCase(), drafts: [] };
+    }
+    return parsed;
+  } catch (_) {
+    return { wallet: String(walletAddress).toLowerCase(), drafts: [] };
+  }
+}
+
+async function saveWalletDraftFile(walletAddress, payload) {
+  await ensureDraftStore();
+  const filePath = walletFilePath(walletAddress);
+  const next = {
+    wallet: String(walletAddress).toLowerCase(),
+    updated_at: new Date().toISOString(),
+    drafts: Array.isArray(payload?.drafts) ? payload.drafts : []
+  };
+  await fs.writeFile(filePath, JSON.stringify(next, null, 2), { mode: 0o600 });
+  return next;
+}
+
+async function appendReviewAudit(entry) {
+  await ensureDraftStore();
+  const filePath = path.join(getMarketplaceDraftsDir(), REVIEW_AUDIT_FILE);
+  await fs.appendFile(filePath, `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+}
+
+function derivePreview(markdown) {
+  const clean = String(markdown || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))[0];
+  return clean || 'Published creator soul.';
+}
+
+async function loadPublishedCatalog() {
+  await ensureDraftStore();
+  const filePath = path.join(getMarketplaceDraftsDir(), PUBLISHED_CATALOG_FILE);
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.entries)) {
+      return { schema_version: 'published-catalog-v1', entries: [] };
+    }
+    return parsed;
+  } catch (_) {
+    return { schema_version: 'published-catalog-v1', entries: [] };
+  }
+}
+
+async function savePublishedCatalog(payload) {
+  await ensureDraftStore();
+  const filePath = path.join(getMarketplaceDraftsDir(), PUBLISHED_CATALOG_FILE);
+  const normalized = {
+    schema_version: 'published-catalog-v1',
+    updated_at: new Date().toISOString(),
+    entries: Array.isArray(payload?.entries) ? payload.entries : []
+  };
+  await fs.writeFile(filePath, JSON.stringify(normalized, null, 2), { mode: 0o600 });
+  return normalized;
+}
+
+async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
+  const listing = draft?.normalized?.listing || {};
+  const assets = draft?.normalized?.assets || {};
+  const id = asString(listing.soul_id);
+  if (!id) return;
+
+  const catalog = await loadPublishedCatalog();
+  const nextEntry = {
+    id,
+    name: asString(listing.name),
+    description: asString(listing.description),
+    longDescription: asString(listing.long_description),
+    icon: asString(listing.icon) || '🔮',
+    category: asString(listing.category),
+    tags: Array.isArray(listing.tags) ? listing.tags : [],
+    priceMicroUsdc: asString(listing.price_micro_usdc),
+    priceDisplay: `$${(Number(listing.price_usdc) || 0).toFixed(2)}`,
+    provenance: {
+      type: asString(listing.soul_type) || 'hybrid',
+      raised_by: `Creator ${String(walletAddress || '').toLowerCase()}`,
+      days_nurtured: 0
+    },
+    compatibility: { runtimes: ['OpenClaw', 'ElizaOS', 'Olas'], min_memory: '8MB', min_context: 4000 },
+    preview: derivePreview(assets.soul_markdown),
+    sourceLabel: assets.source_label || null,
+    sourceUrl: assets.source_url || null,
+    contentInline: assets.soul_markdown,
+    sellerAddress: asString(listing.seller_address).toLowerCase(),
+    publishedBy: String(walletAddress || '').toLowerCase(),
+    publishedAt: draft?.published_at || new Date().toISOString(),
+    draftId: draft?.draft_id
+  };
+
+  const idx = catalog.entries.findIndex((entry) => entry?.id === id);
+  if (idx >= 0) catalog.entries[idx] = nextEntry;
+  else catalog.entries.push(nextEntry);
+  await savePublishedCatalog(catalog);
+}
+
+async function loadAllWalletDraftStores() {
+  await ensureDraftStore();
+  const dir = getMarketplaceDraftsDir();
+  const entries = await fs.readdir(dir);
+  const files = entries.filter((name) => name.endsWith('.json') && name !== REVIEW_AUDIT_FILE);
+  const stores = [];
+  for (const file of files) {
+    try {
+      const raw = await fs.readFile(path.join(dir, file), 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.drafts)) {
+        stores.push(parsed);
+      }
+    } catch (_) {}
+  }
+  return stores;
+}
+
+export function getMarketplaceDraftTemplate() {
+  return {
+    schema_version: 'marketplace-draft-v1',
+    listing: {
+      soul_id: 'example-soul-v1',
+      name: 'Example Soul',
+      description: 'One-sentence summary for buyers.',
+      long_description: 'Longer details about behavior, strengths, and target use cases.',
+      category: 'starter',
+      soul_type: 'hybrid',
+      icon: 'spark',
+      tags: ['clear', 'pragmatic', 'tooling'],
+      price_usdc: 0.49,
+      seller_address: '0x0000000000000000000000000000000000000000',
+      creator_royalty_bps: 9900,
+      platform_fee_bps: 100
+    },
+    assets: {
+      soul_markdown: '# SOUL\\n\\nYour soul content goes here.',
+      source_url: '',
+      source_label: ''
+    }
+  };
+}
+
+export function buildCreatorAuthMessage({ wallet, action, timestamp }) {
+  return ['SoulStarter Creator Authentication', `address:${String(wallet || '').toLowerCase()}`, `action:${action}`, `timestamp:${timestamp}`].join(
+    '\n'
+  );
+}
+
+export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
+  if (!wallet || !timestamp || !signature || !action) {
+    return { ok: false, error: 'Missing creator auth fields' };
+  }
+  if (!validateEthAddress(wallet)) {
+    return { ok: false, error: 'Invalid wallet address' };
+  }
+
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts)) {
+    return { ok: false, error: 'Invalid auth timestamp' };
+  }
+  if (Math.abs(Date.now() - ts) > CREATOR_AUTH_DRIFT_MS) {
+    return { ok: false, error: 'Authentication message expired' };
+  }
+
+  const candidates = buildCreatorAuthMessageCandidates({ wallet, action, timestamp: ts });
+  for (const candidate of candidates) {
+    try {
+      const recovered = ethers.verifyMessage(candidate.message, signature);
+      if (typeof recovered === 'string' && recovered.toLowerCase() === String(wallet).toLowerCase()) {
+        return { ok: true, wallet: String(wallet).toLowerCase(), matched_variant: candidate.variant };
+      }
+    } catch (_) {}
+  }
+
+  return {
+    ok: false,
+    error: 'Signature does not match wallet address',
+    auth_message_template: buildCreatorAuthMessage({
+      wallet: '0x<your-wallet>',
+      action,
+      timestamp: Date.now()
+    })
+  };
+}
+
+export function validateMarketplaceDraft(input) {
+  const errors = [];
+  const warnings = [];
+
+  const listing = input && typeof input.listing === 'object' ? input.listing : {};
+  const assets = input && typeof input.assets === 'object' ? input.assets : {};
+
+  const soulId = asString(listing.soul_id).toLowerCase();
+  const name = asString(listing.name);
+  const description = asString(listing.description);
+  const longDescription = asString(listing.long_description);
+  const category = asString(listing.category).toLowerCase();
+  const soulType = asString(listing.soul_type).toLowerCase();
+  const icon = asString(listing.icon);
+  const tags = normalizeTags(listing.tags);
+  const sellerAddress = asString(listing.seller_address);
+  const sourceUrl = asString(assets.source_url);
+  const sourceLabel = asString(assets.source_label);
+  const soulMarkdown = typeof assets.soul_markdown === 'string' ? assets.soul_markdown : '';
+
+  if (!validateSoulId(soulId)) errors.push('listing.soul_id must be kebab-case alphanumeric (example-soul-v1).');
+  if (name.length < 3 || name.length > 80) errors.push('listing.name must be between 3 and 80 characters.');
+  if (description.length < 12 || description.length > 240)
+    errors.push('listing.description must be between 12 and 240 characters.');
+  if (longDescription.length < 24 || longDescription.length > 2000)
+    errors.push('listing.long_description must be between 24 and 2000 characters.');
+  if (!category) errors.push('listing.category is required.');
+  if (!SOUL_TYPES.has(soulType)) errors.push('listing.soul_type must be synthetic, organic, or hybrid.');
+  if (!validateEthAddress(sellerAddress)) errors.push('listing.seller_address must be a valid EVM address.');
+  if (!soulMarkdown.trim()) errors.push('assets.soul_markdown is required.');
+  if (Buffer.byteLength(soulMarkdown, 'utf8') > MAX_SOUL_MD_BYTES)
+    errors.push(`assets.soul_markdown exceeds ${MAX_SOUL_MD_BYTES} bytes.`);
+
+  const priceMicroUsdc = normalizeUsdPriceToMicroUsdc(listing.price_usdc);
+  if (!priceMicroUsdc) errors.push('listing.price_usdc must be a positive number.');
+  if (tags.length === 0) warnings.push('listing.tags is empty; discovery quality may be poor.');
+  if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) errors.push('assets.source_url must be http(s) if set.');
+  if (sourceLabel && !sourceUrl) warnings.push('assets.source_label provided without assets.source_url.');
+
+  const creatorRoyaltyBps = Number.isFinite(listing.creator_royalty_bps) ? Number(listing.creator_royalty_bps) : 9900;
+  const platformFeeBps = Number.isFinite(listing.platform_fee_bps) ? Number(listing.platform_fee_bps) : 100;
+  if (creatorRoyaltyBps < 0 || creatorRoyaltyBps > 10000) errors.push('listing.creator_royalty_bps must be 0..10000.');
+  if (platformFeeBps < 0 || platformFeeBps > 10000) errors.push('listing.platform_fee_bps must be 0..10000.');
+  if (creatorRoyaltyBps + platformFeeBps !== 10000) {
+    errors.push('listing.creator_royalty_bps + listing.platform_fee_bps must equal 10000.');
+  }
+
+  const normalized = {
+    schema_version: 'marketplace-draft-v1',
+    listing: {
+      soul_id: soulId,
+      name,
+      description,
+      long_description: longDescription,
+      category,
+      soul_type: soulType,
+      icon: icon || 'spark',
+      tags,
+      price_usdc: Number(listing.price_usdc),
+      price_micro_usdc: priceMicroUsdc,
+      seller_address: sellerAddress.toLowerCase(),
+      creator_royalty_bps: creatorRoyaltyBps,
+      platform_fee_bps: platformFeeBps
+    },
+    assets: {
+      soul_markdown: soulMarkdown,
+      source_url: sourceUrl || null,
+      source_label: sourceLabel || null
+    }
+  };
+
+  const digest = crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+  const draftId = `draft_${digest.slice(0, 16)}`;
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    warnings,
+    draft_id: draftId,
+    normalized
+  };
+}
+
+export async function upsertCreatorDraft({ walletAddress, normalizedDraft, draftId }) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const store = await loadWalletDraftFile(wallet);
+  const now = new Date().toISOString();
+  const idx = store.drafts.findIndex((item) => item?.draft_id === draftId);
+
+  const record = {
+    draft_id: draftId,
+    created_at: idx >= 0 ? store.drafts[idx].created_at : now,
+    updated_at: now,
+    status: 'draft',
+    moderation: idx >= 0 ? store.drafts[idx].moderation || null : null,
+    normalized: normalizedDraft
+  };
+
+  if (idx >= 0) store.drafts[idx] = record;
+  else store.drafts.push(record);
+
+  await saveWalletDraftFile(wallet, store);
+  return record;
+}
+
+export async function listCreatorDrafts(walletAddress) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const store = await loadWalletDraftFile(wallet);
+  return store.drafts
+    .slice()
+    .sort((a, b) => new Date(b?.updated_at || 0).getTime() - new Date(a?.updated_at || 0).getTime())
+    .map((draft) => ({
+      draft_id: draft.draft_id,
+      status: draft.status || 'draft',
+      moderation: draft.moderation || null,
+      created_at: draft.created_at,
+      updated_at: draft.updated_at,
+      soul_id: draft.normalized?.listing?.soul_id || null,
+      name: draft.normalized?.listing?.name || null,
+      price_micro_usdc: draft.normalized?.listing?.price_micro_usdc || null
+    }));
+}
+
+export async function getCreatorDraft(walletAddress, draftId) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const store = await loadWalletDraftFile(wallet);
+  return store.drafts.find((item) => item?.draft_id === draftId) || null;
+}
+
+export async function submitCreatorDraftForReview({ walletAddress, draftId }) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const store = await loadWalletDraftFile(wallet);
+  const idx = store.drafts.findIndex((item) => item?.draft_id === draftId);
+  if (idx < 0) return { ok: false, error: 'Draft not found' };
+
+  const existing = store.drafts[idx];
+  const currentStatus = String(existing?.status || 'draft');
+  if (currentStatus === 'submitted_for_review') {
+    return { ok: false, error: 'Draft already submitted for review', draft: existing };
+  }
+  if (currentStatus === 'published') {
+    return { ok: false, error: 'Draft already published', draft: existing };
+  }
+
+  const now = new Date().toISOString();
+  const next = {
+    ...existing,
+    updated_at: now,
+    status: 'submitted_for_review',
+    moderation: {
+      state: 'pending',
+      submitted_at: now,
+      reviewed_at: null,
+      reviewer: null,
+      notes: null
+    }
+  };
+  store.drafts[idx] = next;
+  await saveWalletDraftFile(wallet, store);
+  await appendReviewAudit({
+    at: now,
+    event: 'submit_for_review',
+    wallet,
+    draft_id: draftId,
+    actor: wallet,
+    status_before: currentStatus,
+    status_after: next.status
+  });
+  return { ok: true, draft: next };
+}
+
+export function verifyReviewAdminToken(token) {
+  const presented = String(token || '').trim();
+  const configured = String(process.env.MARKETPLACE_REVIEW_ADMIN_TOKEN || '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  if (!presented) return { ok: false, error: 'Missing admin token' };
+  if (configured.length === 0) {
+    return { ok: false, error: 'Server configuration error: MARKETPLACE_REVIEW_ADMIN_TOKEN is required' };
+  }
+  if (!configured.includes(presented)) return { ok: false, error: 'Invalid admin token' };
+  return { ok: true };
+}
+
+export async function reviewCreatorDraft({ walletAddress, draftId, decision, reviewer, notes }) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const normalizedDecision = String(decision || '').toLowerCase();
+  if (normalizedDecision !== 'approve' && normalizedDecision !== 'reject') {
+    return { ok: false, error: 'decision must be approve or reject' };
+  }
+
+  const store = await loadWalletDraftFile(wallet);
+  const idx = store.drafts.findIndex((item) => item?.draft_id === draftId);
+  if (idx < 0) return { ok: false, error: 'Draft not found' };
+
+  const existing = store.drafts[idx];
+  const currentStatus = String(existing?.status || 'draft');
+  if (currentStatus !== 'submitted_for_review') {
+    return {
+      ok: false,
+      error: `Draft is not reviewable from status=${currentStatus}`,
+      draft: existing
+    };
+  }
+
+  const now = new Date().toISOString();
+  const nextStatus = normalizedDecision === 'approve' ? 'approved_for_publish' : 'rejected';
+  const next = {
+    ...existing,
+    updated_at: now,
+    status: nextStatus,
+    moderation: {
+      state: normalizedDecision === 'approve' ? 'approved' : 'rejected',
+      submitted_at: existing?.moderation?.submitted_at || now,
+      reviewed_at: now,
+      reviewer: asString(reviewer) || 'admin',
+      notes: asString(notes) || null,
+      decision: normalizedDecision
+    }
+  };
+
+  store.drafts[idx] = next;
+  await saveWalletDraftFile(wallet, store);
+  await appendReviewAudit({
+    at: now,
+    event: 'review_decision',
+    wallet,
+    draft_id: draftId,
+    actor: next.moderation.reviewer,
+    decision: normalizedDecision,
+    status_before: currentStatus,
+    status_after: next.status,
+    notes: next.moderation.notes
+  });
+
+  return { ok: true, draft: next };
+}
+
+export async function listDraftsByStatus(statuses = []) {
+  const allowed = new Set((Array.isArray(statuses) ? statuses : []).map((s) => String(s || '')));
+  const stores = await loadAllWalletDraftStores();
+  const rows = [];
+  for (const store of stores) {
+    const wallet = String(store.wallet || '').toLowerCase();
+    for (const draft of store.drafts || []) {
+      const status = String(draft?.status || 'draft');
+      if (allowed.size > 0 && !allowed.has(status)) continue;
+      rows.push({
+        wallet_address: wallet,
+        draft_id: draft.draft_id,
+        status,
+        moderation: draft.moderation || null,
+        updated_at: draft.updated_at || null,
+        soul_id: draft.normalized?.listing?.soul_id || null,
+        name: draft.normalized?.listing?.name || null
+      });
+    }
+  }
+  return rows.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+}
+
+export async function publishCreatorDraft({ walletAddress, draftId, reviewer, notes }) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const store = await loadWalletDraftFile(wallet);
+  const idx = store.drafts.findIndex((item) => item?.draft_id === draftId);
+  if (idx < 0) return { ok: false, error: 'Draft not found' };
+
+  const existing = store.drafts[idx];
+  const currentStatus = String(existing?.status || 'draft');
+  if (currentStatus !== 'approved_for_publish') {
+    return { ok: false, error: `Draft is not publishable from status=${currentStatus}`, draft: existing };
+  }
+
+  const now = new Date().toISOString();
+  const next = {
+    ...existing,
+    status: 'published',
+    updated_at: now,
+    published_at: now,
+    moderation: {
+      ...(existing.moderation || {}),
+      state: 'published',
+      reviewed_at: now,
+      reviewer: asString(reviewer) || existing?.moderation?.reviewer || 'admin',
+      notes: asString(notes) || existing?.moderation?.notes || null
+    }
+  };
+  store.drafts[idx] = next;
+  await saveWalletDraftFile(wallet, store);
+  await upsertPublishedCatalogEntry({ walletAddress: wallet, draft: next });
+  await appendReviewAudit({
+    at: now,
+    event: 'publish',
+    wallet,
+    draft_id: draftId,
+    actor: next.moderation.reviewer,
+    status_before: currentStatus,
+    status_after: next.status,
+    notes: next.moderation.notes
+  });
+
+  return { ok: true, draft: next };
+}

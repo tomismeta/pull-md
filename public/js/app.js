@@ -27,6 +27,7 @@ const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 const X402_EXACT_PERMIT2_PROXY = '0x4020615294c913F045dc10f0a5cdEbd86c280001';
 const MAX_UINT256_DEC = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
 const EXPECTED_SELLER_ADDRESS = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
+const sellerAddressCache = new Map();
 
 const PERMIT2_WITNESS_TYPES = {
   PermitWitnessTransferFrom: [
@@ -215,8 +216,8 @@ function normalizeAddress(address) {
   }
 }
 
-function assertExpectedSellerAddress(payTo) {
-  const expected = normalizeAddress(EXPECTED_SELLER_ADDRESS);
+function assertExpectedSellerAddress(payTo, expectedPayTo) {
+  const expected = normalizeAddress(expectedPayTo || EXPECTED_SELLER_ADDRESS);
   const actual = normalizeAddress(payTo);
   if (!expected || !actual) {
     throw new Error('Invalid seller address in payment requirements');
@@ -225,6 +226,24 @@ function assertExpectedSellerAddress(payTo) {
     throw new Error(
       `Security check failed: payment recipient mismatch. Expected ${expected}, got ${actual}. Do not continue.`
     );
+  }
+}
+
+async function getExpectedSellerAddressForSoul(soulId) {
+  if (sellerAddressCache.has(soulId)) {
+    return sellerAddressCache.get(soulId);
+  }
+  try {
+    const response = await fetchWithTimeout(`${CONFIG.apiBase}/mcp/tools/get_soul_details?id=${encodeURIComponent(soulId)}`);
+    if (!response.ok) throw new Error('details lookup failed');
+    const payload = await response.json();
+    const seller = payload?.soul?.seller_address;
+    const normalized = normalizeAddress(seller || EXPECTED_SELLER_ADDRESS);
+    if (!normalized) throw new Error('invalid seller');
+    sellerAddressCache.set(soulId, normalized);
+    return normalized;
+  } catch (_) {
+    return normalizeAddress(EXPECTED_SELLER_ADDRESS);
   }
 }
 
@@ -240,7 +259,7 @@ async function signRedownloadAuth(soulId) {
   return { timestamp, signature };
 }
 
-async function buildX402PaymentSignature(paymentRequired) {
+async function buildX402PaymentSignature(paymentRequired, soulId) {
   if (!paymentRequired || paymentRequired.x402Version !== 2) {
     throw new Error('Unsupported x402 version');
   }
@@ -249,7 +268,8 @@ async function buildX402PaymentSignature(paymentRequired) {
   if (!accepted) {
     throw new Error('No payment requirements available');
   }
-  assertExpectedSellerAddress(accepted.payTo);
+  const expectedSeller = await getExpectedSellerAddressForSoul(soulId);
+  assertExpectedSellerAddress(accepted.payTo, expectedSeller);
 
   if (!accepted.extra?.name || !accepted.extra?.version) {
     throw new Error('Missing EIP-712 domain parameters in payment requirements');
@@ -412,7 +432,7 @@ async function purchaseSoul(soulId) {
 
     const paymentRequired = JSON.parse(atob(paymentRequiredHeader));
     if (btn) btn.textContent = 'Signing x402 payment...';
-    const paymentPayload = await buildX402PaymentSignature(paymentRequired);
+    const paymentPayload = await buildX402PaymentSignature(paymentRequired, soulId);
 
     if (btn) btn.textContent = 'Submitting payment...';
     const paid = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {

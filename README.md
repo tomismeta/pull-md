@@ -31,8 +31,47 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
 - `POST /api/mcp/tools/purchase_soul`
 - `POST /api/mcp/tools/check_entitlements`
+- `GET /api/mcp/tools/get_listing_template`
+- `POST /api/mcp/tools/validate_listing_draft`
+- `POST /api/mcp/tools/save_listing_draft`
+- `GET /api/mcp/tools/list_my_listing_drafts`
+- `GET /api/mcp/tools/get_my_listing_draft?draft_id=<id>`
+- `POST /api/mcp/tools/submit_listing_for_review`
+- `POST /api/mcp/tools/review_listing_submission` (admin only)
+- `GET /api/mcp/tools/list_review_queue` (admin only)
+- `POST /api/mcp/tools/publish_listing` (admin only)
+- `GET /api/mcp/tools/list_published_listings`
 - `GET /api/souls/{id}/download`
 - `GET /api/health/facilitator`
+
+## Marketplace Foundations (Phase 1)
+
+- `GET /api/mcp/tools/get_listing_template`:
+returns creator draft contract template for user-submitted soul listings.
+- `POST /api/mcp/tools/validate_listing_draft`:
+validates and normalizes listing + soul content payload and returns deterministic `draft_id`.
+- Scope:
+validation/normalization only in this phase; publish/listing activation is intentionally not enabled yet.
+- Creator draft storage:
+wallet-authenticated private draft save/list/get endpoints are available for builder workflows.
+- Review submission:
+wallet-authenticated submit endpoint transitions draft -> `submitted_for_review` with moderation metadata (`state: pending`).
+- Admin moderation decision:
+`review_listing_submission` applies `approve`/`reject` decisions and records immutable audit entries.
+- Review queue + publish:
+admins can list pending queue and transition approved drafts to `published`.
+- Active catalog behavior:
+once a draft is `published`, it is promoted into the live catalog and becomes purchasable via `GET /api/souls/{id}/download`.
+
+## Marketplace Admin Configuration
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `MARKETPLACE_REVIEW_ADMIN_TOKEN` | for moderation endpoints | Comma-separated admin token(s) accepted by `review_listing_submission` |
+
+Audit trail:
+- Marketplace moderation actions append immutable JSONL entries at:
+`.marketplace-drafts/review-audit.jsonl`
 
 ## Environment Variables
 
