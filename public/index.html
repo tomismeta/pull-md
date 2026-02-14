@@ -3,10 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SoulStarter 🔮 — Lineage for the agent economy</title>
-  <meta name="description" content="Human-nurtured agent memory marketplace. Purchase authentic agent souls via x402 micropayments.">
-  
-  <!-- WebMCP Agent Discovery -->
+  <title>SoulStarter — OpenClaw Agent Souls</title>
+  <meta name="description" content="Discover and purchase OpenClaw agent souls with x402 on Base. One payment, one soul, persistent wallet entitlement.">
+
   <meta name="mcp:version" content="1.0">
   <meta name="mcp:endpoint" content="/api/mcp/manifest">
   <meta name="mcp:tool:list_souls" content="/api/mcp/tools/list_souls">
@@ -24,15 +23,13 @@
   <meta name="mcp:tool:list_review_queue" content="/api/mcp/tools/creator_marketplace?action=list_review_queue">
   <meta name="mcp:tool:publish_listing" content="/api/mcp/tools/creator_marketplace?action=publish_listing">
   <meta name="mcp:tool:list_published_listings" content="/api/mcp/tools/creator_marketplace?action=list_published_listings">
-  
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
-  
-  <!-- WalletConnect Ethereum Provider -->
+
   <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.23.1/dist/index.umd.js"></script>
-  <!-- Ethers.js for wallet interactions -->
   <script src="https://unpkg.com/ethers@6.16.0/dist/ethers.umd.min.js"></script>
 </head>
 <body>
@@ -40,16 +37,16 @@
     <div class="container">
       <div class="header-content">
         <a href="/" class="logo">
-          <span class="logo-icon">🔮</span>
+          <span class="logo-mark">SS</span>
           <span>SoulStarter</span>
         </a>
         <nav class="nav">
-          <a href="/" class="nav-link">Browse</a>
+          <a href="#souls" class="nav-link">Discover</a>
           <a href="#my-souls" class="nav-link">My Souls</a>
           <a href="/create.html" class="nav-link">Create</a>
+          <a href="#for-agents" class="nav-link">For Agents</a>
           <a href="/admin.html" class="nav-link moderator-nav-link" style="display: none;">Moderate</a>
           <button class="wallet-btn" id="walletBtn" onclick="openWalletModal()">
-            <span>💳</span>
             <span id="walletText">Connect Wallet</span>
           </button>
         </nav>
@@ -60,70 +57,81 @@
   <main>
     <section class="hero">
       <div class="container">
-        <div class="hero-badge">
-          <span class="dot"></span>
-          <span>x402 micropayments on base</span>
-        </div>
-        <h1 class="hero-title">One Payment. One Soul.</h1>
-        <p class="hero-subtitle">
-          Describe the starter you want. Pay via x402 on Base. Get exactly that soul as downloadable markdown.
-        </p>
-        <p class="hero-agent-note">
-          agent-native: webmcp-enabled for programmatic access
-        </p>
-        <div class="hero-actions">
-          <a href="#souls" class="btn btn-primary btn-lg">browse souls</a>
-          <a href="/api/mcp/manifest" class="btn btn-ghost btn-lg">agent manifest</a>
-        </div>
-        <div class="hero-code">
-          <div class="hero-code-head">
-            <span></span><span></span><span></span>
-            <strong>soulstarter.js</strong>
+        <div class="hero-shell">
+          <p class="hero-kicker">OpenClaw Agent Identity Marketplace</p>
+          <h1 class="hero-title">Start New Agent Life with One Clear Purchase</h1>
+          <p class="hero-subtitle">
+            SoulStarter helps you buy, own, and re-download OpenClaw agent souls with wallet-backed entitlement.
+            Simple for people. Reliable for agents.
+          </p>
+          <div class="hero-actions">
+            <a href="#souls" class="btn btn-primary btn-lg">Explore Souls</a>
+            <a href="#for-agents" class="btn btn-ghost btn-lg">Agent Integration</a>
           </div>
-          <pre>// request soul catalog (agent-safe JSON)
-const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
-
-// acquire one soul using x402 flow
-// 1) GET /api/souls/:id/download -> 402 with PAYMENT-REQUIRED
-// 2) sign EIP-712 authorization
-// 3) retry with PAYMENT-SIGNATURE -> SOUL.md</pre>
+          <div class="hero-metrics">
+            <div><strong>x402</strong><span>strict payment gate</span></div>
+            <div><strong>base</strong><span>usdc settlement</span></div>
+            <div><strong>one soul</strong><span>single entitlement scope</span></div>
+            <div><strong>re-download</strong><span>no second payment</span></div>
+          </div>
         </div>
-        <div class="hero-metrics">
-          <div><strong>x402</strong><span>strict payment gate</span></div>
-          <div><strong>base</strong><span>usdc settlement</span></div>
-          <div><strong>1 soul</strong><span>single entitlement scope</span></div>
-          <div><strong>webmcp</strong><span>tool-first integration</span></div>
+      </div>
+    </section>
+
+    <section class="workflow-section">
+      <div class="container">
+        <div class="section-head">
+          <h2>How It Works</h2>
+          <p>Three steps, one consistent flow for both humans and agent clients.</p>
+        </div>
+        <div class="workflow-grid">
+          <article class="workflow-card">
+            <h3>1. Choose a Soul</h3>
+            <p>Browse available OpenClaw soul profiles and select the one that matches your agent style.</p>
+          </article>
+          <article class="workflow-card">
+            <h3>2. Pay Through x402</h3>
+            <p>Use your wallet to authorize payment on Base. The payment request is explicit and verifiable.</p>
+          </article>
+          <article class="workflow-card">
+            <h3>3. Download and Reuse</h3>
+            <p>Receive SOUL.md immediately. Re-download later using wallet entitlement without paying again.</p>
+          </article>
         </div>
       </div>
     </section>
 
     <section class="souls-section" id="souls">
       <div class="container">
-        <div class="souls-grid" id="soulsGrid">
-          <!-- Soul cards injected here -->
+        <div class="section-head">
+          <h2>Available Souls</h2>
+          <p>Each listing is scoped, price-tagged, and delivered as one downloadable SOUL.md file.</p>
         </div>
+        <div class="souls-grid" id="soulsGrid"></div>
       </div>
     </section>
 
     <section class="souls-section" id="my-souls">
       <div class="container">
-        <div class="agent-api-card">
-          <h3>My Souls</h3>
-          <p>Souls you already purchased with this wallet. Download any time without repaying.</p>
-          <div class="souls-grid" id="ownedSoulsGrid">
-            <!-- Owned soul cards injected here -->
-          </div>
+        <div class="section-head">
+          <h2>My Souls</h2>
+          <p>Connect your wallet to view owned souls and download without repaying.</p>
         </div>
+        <div class="souls-grid" id="ownedSoulsGrid"></div>
       </div>
     </section>
-    
-    <section class="agent-api-section">
+
+    <section class="agent-api-section" id="for-agents">
       <div class="container">
         <div class="agent-api-card">
-          <h3>🤖 Agent Access</h3>
-          <p>SoulStarter is WebMCP-enabled. Agents can browse and purchase souls programmatically.</p>
+          <h3>For Agents</h3>
+          <p>OpenClaw-compatible WebMCP contract with canonical x402 purchase flow.</p>
           <code>GET /api/mcp/manifest</code>
-          <p style="margin-top:10px;">Canonical production flow: <code>https://soulstarter.vercel.app</code> + <code>GET /api/souls/{id}/download</code></p>
+          <pre class="hero-code-block">GET /api/souls/{id}/download
+-> 402 + PAYMENT-REQUIRED
+-> sign EIP-712 payload
+-> retry with PAYMENT-SIGNATURE
+-> receive SOUL.md + receipt</pre>
         </div>
       </div>
     </section>
@@ -131,11 +139,10 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
 
   <footer class="footer">
     <div class="container">
-      <p>Powered by x402 Protocol • WebMCP Enabled • Built on Base</p>
+      <p>SoulStarter · OpenClaw Agent Souls · x402 on Base</p>
     </div>
   </footer>
 
-  <!-- Wallet Selection Modal -->
   <div class="modal" id="walletModal" style="display: none;">
     <div class="modal-content">
       <div class="modal-header">
@@ -145,34 +152,31 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
       <div class="modal-body">
         <div class="wallet-options">
           <button class="wallet-option" data-wallet-kind="metamask">
-            <span class="wallet-icon">🦊</span>
+            <span class="wallet-icon">MM</span>
             <div class="wallet-info">
               <span class="wallet-name">MetaMask</span>
               <span class="wallet-desc">Browser extension</span>
             </div>
           </button>
-          
           <button class="wallet-option" data-wallet-kind="walletconnect">
-            <span class="wallet-icon">🔗</span>
+            <span class="wallet-icon">WC</span>
             <div class="wallet-info">
               <span class="wallet-name">WalletConnect</span>
-              <span class="wallet-desc">Mobile & desktop wallets</span>
+              <span class="wallet-desc">Mobile and desktop wallets</span>
             </div>
           </button>
-          
           <button class="wallet-option" data-wallet-kind="coinbase">
-            <span class="wallet-icon">🔵</span>
+            <span class="wallet-icon">CB</span>
             <div class="wallet-info">
               <span class="wallet-name">Coinbase Wallet</span>
               <span class="wallet-desc">Coinbase extension or app</span>
             </div>
           </button>
-          
           <button class="wallet-option" data-wallet-kind="injected">
-            <span class="wallet-icon">💼</span>
+            <span class="wallet-icon">BW</span>
             <div class="wallet-info">
               <span class="wallet-name">Browser Wallet</span>
-              <span class="wallet-desc">Rainbow, Trust, or other injected wallet</span>
+              <span class="wallet-desc">Any injected provider</span>
             </div>
           </button>
         </div>
@@ -181,7 +185,6 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
   </div>
 
   <div class="toast-container" id="toastContainer"></div>
-
   <script src="js/app.js"></script>
 </body>
 </html>

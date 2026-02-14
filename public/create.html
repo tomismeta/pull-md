@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SoulStarter Creator Portal</title>
-  <meta name="description" content="Create, validate, and submit soul listings for moderation.">
+  <meta name="description" content="Create and submit OpenClaw-compatible soul listings for moderation.">
   <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.23.1/dist/index.umd.js"></script>
   <script src="https://unpkg.com/ethers@6.16.0/dist/ethers.umd.min.js"></script>
@@ -18,11 +18,11 @@
     <div class="container">
       <div class="header-content">
         <a href="/" class="logo">
-          <span class="logo-icon">🔮</span>
+          <span class="logo-mark">SS</span>
           <span>SoulStarter</span>
         </a>
         <nav class="nav">
-          <a href="/" class="nav-link">Browse</a>
+          <a href="/" class="nav-link">Discover</a>
           <a href="/create.html" class="nav-link">Create</a>
           <a href="/admin.html" class="nav-link moderator-nav-link" style="display: none;">Moderate</a>
           <button class="wallet-btn" id="walletBtn">Connect Wallet</button>
@@ -36,7 +36,7 @@
       <div class="container">
         <div class="agent-api-card creator-header-card">
           <h1>Creator Portal</h1>
-          <p>Build your soul listing, validate it, save a draft, and submit for review. Wallet signatures are used for creator-authenticated actions.</p>
+          <p>Create OpenClaw-focused soul listings, validate the schema, and submit for moderation.</p>
         </div>
       </div>
     </section>
@@ -47,10 +47,10 @@
           <div class="creator-actions">
             <h3>Draft Actions</h3>
             <div class="creator-action-row">
-              <button id="loadTemplateBtn" class="btn btn-ghost">load template</button>
-              <button id="validateBtn" class="btn btn-ghost">validate draft</button>
-              <button id="saveDraftBtn" class="btn btn-primary">save draft</button>
-              <button id="listDraftsBtn" class="btn btn-ghost">list my drafts</button>
+              <button id="loadTemplateBtn" class="btn btn-ghost">Load Template</button>
+              <button id="validateBtn" class="btn btn-ghost">Validate</button>
+              <button id="saveDraftBtn" class="btn btn-primary">Save Draft</button>
+              <button id="listDraftsBtn" class="btn btn-ghost">List Drafts</button>
             </div>
           </div>
           <p id="draftStatus" class="creator-status">Ready.</p>
@@ -63,8 +63,8 @@
         <div class="agent-api-card">
           <h3>Listing</h3>
           <div class="creator-form-grid">
-            <label>soul_id<input id="soulId" class="creator-input" placeholder="my-soul-v1"></label>
-            <label>name<input id="name" class="creator-input" placeholder="My Soul"></label>
+            <label>soul_id<input id="soulId" class="creator-input" placeholder="my-openclaw-soul-v1"></label>
+            <label>name<input id="name" class="creator-input" placeholder="My OpenClaw Soul"></label>
             <label>category<input id="category" class="creator-input" placeholder="starter"></label>
             <label>soul_type
               <select id="soulType" class="creator-input">
@@ -73,10 +73,10 @@
                 <option value="organic">organic</option>
               </select>
             </label>
-            <label>icon<input id="icon" class="creator-input" placeholder="spark"></label>
+            <label>icon<input id="icon" class="creator-input" placeholder="Use text initials"></label>
             <label>price_usdc<input id="priceUsdc" class="creator-input" type="number" step="0.01" min="0.01" placeholder="0.49"></label>
             <label>seller_address<input id="sellerAddress" class="creator-input" placeholder="0x..."></label>
-            <label>tags (comma-separated)<input id="tags" class="creator-input" placeholder="clear, pragmatic, tool"></label>
+            <label>tags (comma-separated)<input id="tags" class="creator-input" placeholder="openclaw, concise, autonomous"></label>
           </div>
           <label>description<textarea id="description" class="creator-textarea" rows="3"></textarea></label>
           <label>long_description<textarea id="longDescription" class="creator-textarea" rows="5"></textarea></label>
@@ -101,7 +101,7 @@
         <div class="agent-api-card">
           <div class="creator-actions">
             <h3>My Drafts</h3>
-            <button id="refreshDraftsBtn" class="btn btn-ghost">refresh</button>
+            <button id="refreshDraftsBtn" class="btn btn-ghost">Refresh</button>
           </div>
           <div id="draftList" class="admin-list"></div>
         </div>
@@ -118,31 +118,31 @@
       <div class="modal-body">
         <div class="wallet-options">
           <button class="wallet-option" onclick="connectMetaMask()">
-            <span class="wallet-icon">🦊</span>
+            <span class="wallet-icon">MM</span>
             <div class="wallet-info">
               <span class="wallet-name">MetaMask</span>
               <span class="wallet-desc">Browser extension</span>
             </div>
           </button>
           <button class="wallet-option" onclick="connectWalletConnect()">
-            <span class="wallet-icon">🔗</span>
+            <span class="wallet-icon">WC</span>
             <div class="wallet-info">
               <span class="wallet-name">WalletConnect</span>
-              <span class="wallet-desc">Mobile & desktop wallets</span>
+              <span class="wallet-desc">Mobile and desktop wallets</span>
             </div>
           </button>
           <button class="wallet-option" onclick="connectCoinbase()">
-            <span class="wallet-icon">🔵</span>
+            <span class="wallet-icon">CB</span>
             <div class="wallet-info">
               <span class="wallet-name">Coinbase Wallet</span>
               <span class="wallet-desc">Coinbase extension or app</span>
             </div>
           </button>
           <button class="wallet-option" onclick="connectInjected()">
-            <span class="wallet-icon">💼</span>
+            <span class="wallet-icon">BW</span>
             <div class="wallet-info">
               <span class="wallet-name">Browser Wallet</span>
-              <span class="wallet-desc">Rainbow, Trust, or other injected wallet</span>
+              <span class="wallet-desc">Any injected provider</span>
             </div>
           </button>
         </div>

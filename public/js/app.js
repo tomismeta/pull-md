@@ -335,7 +335,7 @@ function updateSoulPagePurchaseState() {
   const soulId = match?.[1];
   if (!soulId) return;
   const owned = isSoulOwned(soulId);
-  btn.textContent = owned ? 'Download Soul' : 'Buy Soul';
+  btn.textContent = owned ? 'Download Soul' : 'Purchase Soul';
 }
 
 function renderOwnedSouls() {
@@ -355,10 +355,10 @@ function renderOwnedSouls() {
 
   const byId = new Map((Array.isArray(soulCatalogCache) ? soulCatalogCache : []).map((soul) => [soul.id, soul]));
   const cards = [...owned].map((soulId) => {
-    const soul = byId.get(soulId) || { id: soulId, name: soulId, description: 'Purchased soul', icon: '🔮' };
+    const soul = byId.get(soulId) || { id: soulId, name: soulId, description: 'Purchased soul' };
     return `
       <article class="soul-card" data-owned-soul-id="${escapeHtml(soul.id)}">
-        <div class="soul-card-icon">${escapeHtml(soul.icon || '🔮')}</div>
+        <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
         <h3>${escapeHtml(soul.name || soul.id)}</h3>
         <p>${escapeHtml(soul.description || 'Purchased soul')}</p>
         <div class="soul-card-meta">
@@ -370,7 +370,7 @@ function renderOwnedSouls() {
             <span class="price">Purchased</span>
           </div>
         </div>
-        <button class="btn btn-primary btn-full" onclick="downloadOwnedSoul('${escapeHtml(soul.id)}')">Download SOUL.md</button>
+        <button class="btn btn-primary btn-full" onclick="downloadOwnedSoul('${escapeHtml(soul.id)}')">Download Soul File</button>
       </article>
     `;
   });
@@ -748,7 +748,7 @@ async function purchaseSoul(soulId) {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = 'Buy Soul';
+      btn.textContent = 'Purchase Soul';
     }
   }
 }
@@ -928,6 +928,22 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function getSoulGlyph(soul) {
+  const name = String(soul?.name || soul?.id || 'Soul').trim();
+  const clean = name.replace(/[^a-zA-Z0-9 ]/g, '');
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  if (parts.length === 1 && parts[0].length >= 2) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  if (parts.length === 1 && parts[0].length === 1) {
+    return `${parts[0].toUpperCase()}S`;
+  }
+  return 'SS';
+}
+
 async function loadSouls() {
   const grid = document.getElementById('soulsGrid');
   if (!grid) {
@@ -946,10 +962,10 @@ async function loadSouls() {
       .map(
         (soul) => {
           const owned = isSoulOwned(soul.id);
-          const cta = owned ? 'Download Soul' : 'Buy Soul';
+          const cta = owned ? 'Download Soul' : 'Purchase Soul';
           return `
       <article class="soul-card ${soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : ''}" data-soul-id="${escapeHtml(soul.id)}">
-        <div class="soul-card-icon">${escapeHtml(soul.icon || '🔮')}</div>
+        <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
         <h3>${escapeHtml(soul.name)}</h3>
         <p>${escapeHtml(soul.description)}</p>
         ${
@@ -1075,10 +1091,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await refreshEntitlementsForWallet(walletAddress);
   loadSouls();
   updateSoulPagePurchaseState();
-  showToast(
-    `Security: verify full seller address ${EXPECTED_SELLER_ADDRESS} and ignore tiny unsolicited transfers.`,
-    'info'
-  );
 });
 
 window.openWalletModal = openWalletModal;

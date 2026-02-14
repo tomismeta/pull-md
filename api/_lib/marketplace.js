@@ -170,7 +170,7 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
     name: asString(listing.name),
     description: asString(listing.description),
     longDescription: asString(listing.long_description),
-    icon: asString(listing.icon) || '🔮',
+    icon: asString(listing.icon) || 'SS',
     category: asString(listing.category),
     tags: Array.isArray(listing.tags) ? listing.tags : [],
     priceMicroUsdc: asString(listing.price_micro_usdc),

@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SoulStarter Admin</title>
+  <title>SoulStarter Moderation</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.23.1/dist/index.umd.js"></script>
   <script src="https://unpkg.com/ethers@6.16.0/dist/ethers.umd.min.js"></script>
@@ -17,11 +17,11 @@
     <div class="container">
       <div class="header-content">
         <a href="/" class="logo">
-          <span class="logo-icon">🔮</span>
+          <span class="logo-mark">SS</span>
           <span>SoulStarter</span>
         </a>
         <nav class="nav">
-          <a href="/" class="nav-link">Browse</a>
+          <a href="/" class="nav-link">Discover</a>
           <a href="/admin.html" class="nav-link">Moderate</a>
         </nav>
       </div>
@@ -33,7 +33,7 @@
       <div class="container">
         <div class="agent-api-card admin-header-card">
           <h1>Marketplace Moderation</h1>
-          <p>Access is restricted to allowlisted moderator wallets using signed wallet-auth messages per action.</p>
+          <p>Allowlisted human moderators can review creator submissions and publish approved OpenClaw souls.</p>
         </div>
       </div>
     </section>
@@ -43,10 +43,10 @@
         <div class="agent-api-card">
           <h3>Moderator Session</h3>
           <div class="admin-token-row">
-            <button id="connectWalletBtn" class="btn btn-primary">connect moderator wallet</button>
+            <button id="connectWalletBtn" class="btn btn-primary">Connect Moderator Wallet</button>
           </div>
           <p id="tokenStatus" class="admin-status">Wallet not connected.</p>
-          <p class="admin-status">Allowed moderators:</p>
+          <p class="admin-status">Allowlisted moderators:</p>
           <div id="moderatorList" class="admin-list"></div>
         </div>
       </div>
@@ -57,7 +57,7 @@
         <div class="agent-api-card">
           <div class="admin-actions">
             <h3>Review Queue</h3>
-            <button id="refreshQueueBtn" class="btn btn-ghost">refresh queue</button>
+            <button id="refreshQueueBtn" class="btn btn-ghost">Refresh Queue</button>
           </div>
           <div id="queueContainer" class="admin-list"></div>
         </div>
@@ -69,7 +69,7 @@
         <div class="agent-api-card">
           <div class="admin-actions">
             <h3>Published Listings</h3>
-            <button id="refreshPublishedBtn" class="btn btn-ghost">refresh published</button>
+            <button id="refreshPublishedBtn" class="btn btn-ghost">Refresh Published</button>
           </div>
           <div id="publishedContainer" class="admin-list"></div>
         </div>
@@ -86,31 +86,31 @@
       <div class="modal-body">
         <div class="wallet-options">
           <button class="wallet-option" onclick="connectMetaMask()">
-            <span class="wallet-icon">🦊</span>
+            <span class="wallet-icon">MM</span>
             <div class="wallet-info">
               <span class="wallet-name">MetaMask</span>
               <span class="wallet-desc">Browser extension</span>
             </div>
           </button>
           <button class="wallet-option" onclick="connectWalletConnect()">
-            <span class="wallet-icon">🔗</span>
+            <span class="wallet-icon">WC</span>
             <div class="wallet-info">
               <span class="wallet-name">WalletConnect</span>
-              <span class="wallet-desc">Mobile & desktop wallets</span>
+              <span class="wallet-desc">Mobile and desktop wallets</span>
             </div>
           </button>
           <button class="wallet-option" onclick="connectCoinbase()">
-            <span class="wallet-icon">🔵</span>
+            <span class="wallet-icon">CB</span>
             <div class="wallet-info">
               <span class="wallet-name">Coinbase Wallet</span>
               <span class="wallet-desc">Coinbase extension or app</span>
             </div>
           </button>
           <button class="wallet-option" onclick="connectInjected()">
-            <span class="wallet-icon">💼</span>
+            <span class="wallet-icon">BW</span>
             <div class="wallet-info">
               <span class="wallet-name">Browser Wallet</span>
-              <span class="wallet-desc">Rainbow, Trust, or other injected wallet</span>
+              <span class="wallet-desc">Any injected provider</span>
             </div>
           </button>
         </div>

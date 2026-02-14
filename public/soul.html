@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Meta Starter Soul — SoulStarter</title>
-  <meta name="description" content="A clean and adaptable agent starter with practical decision principles. Purchase via x402.">
+  <meta name="description" content="A practical OpenClaw starter identity focused on clarity, reliability, and useful execution.">
   <meta name="mcp:version" content="1.0">
   <meta name="mcp:endpoint" content="/api/mcp/manifest">
   <meta name="mcp:tool:list_souls" content="/api/mcp/tools/list_souls">
@@ -24,7 +24,7 @@
   <meta name="mcp:tool:list_published_listings" content="/api/mcp/tools/creator_marketplace?action=list_published_listings">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/styles.css">
   <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.23.1/dist/index.umd.js"></script>
   <script src="https://unpkg.com/ethers@6.16.0/dist/ethers.umd.min.js"></script>
@@ -34,13 +34,12 @@
     <div class="container">
       <div class="header-content">
         <a href="/" class="logo">
-          <span class="logo-icon">🔮</span>
+          <span class="logo-mark">SS</span>
           <span>SoulStarter</span>
         </a>
         <nav class="nav">
-          <a href="/" class="nav-link">← Back to Browse</a>
+          <a href="/" class="nav-link">Back to Discover</a>
           <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">
-            <span>💳</span>
             <span id="walletText">Connect Wallet</span>
           </button>
         </nav>
@@ -51,16 +50,16 @@
   <main class="soul-detail">
     <div class="container">
       <div class="soul-hero">
-        <div class="soul-icon-large">🔮</div>
+        <div class="soul-icon-large">MS</div>
         <div class="soul-header-content">
           <div class="soul-lineage">
             <span class="badge badge-organic">Organic</span>
-            <span class="lineage-text">Raised by Tom · 14 days nurtured</span>
+            <span class="lineage-text">Raised for OpenClaw usage</span>
           </div>
           <h1 class="soul-title">Meta Starter Soul</h1>
           <p class="soul-description">
-            A neutral, reusable starter soul focused on clarity, reliability, and practical autonomy.
-            Ideal as a baseline you can customize for your own workflows.
+            A neutral OpenClaw starter identity optimized for clear communication, reliable execution,
+            and configurable behavior over time.
           </p>
           <div class="soul-tags">
             <span class="tag">starter</span>
@@ -72,13 +71,13 @@
 
       <div class="soul-content-grid">
         <div class="soul-preview">
-          <h3>What's Inside</h3>
+          <h3>Included File</h3>
           <div class="file-list">
             <div class="file-item">
-              <span class="file-icon">📄</span>
+              <span class="file-icon">MD</span>
               <div class="file-info">
                 <span class="file-name">SOUL.md</span>
-                <span class="file-desc">Core identity, values, and vibe</span>
+                <span class="file-desc">Identity, values, and behavior baseline</span>
               </div>
             </div>
           </div>
@@ -86,8 +85,7 @@
           <div class="preview-section">
             <h4>Preview</h4>
             <blockquote class="preview-quote">
-              "Prefer concrete progress over performative language.
-              Be clear, practical, and accountable for outcomes."
+              Prefer concrete progress over performative language. Be clear, practical, and accountable for outcomes.
             </blockquote>
           </div>
         </div>
@@ -103,19 +101,19 @@
               <span>Base Network</span>
             </div>
             <button class="btn btn-primary btn-lg btn-full" id="buyBtn" onclick="purchaseSoul('meta-starter-v1')">
-              Buy Soul
+              Purchase Soul
             </button>
             <p class="purchase-note">
-              Instant delivery via x402. No account required.
+              Delivered instantly through x402 settlement.
             </p>
           </div>
 
           <div class="purchase-card success-card" id="successCard" style="display: none;">
-            <div class="success-icon">✨</div>
-            <h3>Soul Acquired!</h3>
-            <p>Your payment has been confirmed on Base.</p>
+            <div class="success-icon">OK</div>
+            <h3>Soul Acquired</h3>
+            <p>Your purchase is complete.</p>
             <a id="downloadLink" href="#" class="btn btn-primary btn-lg btn-full" download>
-              📥 Download SOUL.md
+              Download SOUL.md
             </a>
             <p class="tx-hash" id="txHash"></p>
           </div>
@@ -135,7 +133,7 @@
       <div class="modal-body">
         <div class="wallet-options">
           <button class="wallet-option" data-wallet-kind="metamask">
-            <span class="wallet-icon">🦊</span>
+            <span class="wallet-icon">MM</span>
             <div class="wallet-info">
               <span class="wallet-name">MetaMask</span>
               <span class="wallet-desc">Browser extension</span>
@@ -143,15 +141,15 @@
           </button>
 
           <button class="wallet-option" data-wallet-kind="walletconnect">
-            <span class="wallet-icon">🔗</span>
+            <span class="wallet-icon">WC</span>
             <div class="wallet-info">
               <span class="wallet-name">WalletConnect</span>
-              <span class="wallet-desc">Mobile & desktop wallets</span>
+              <span class="wallet-desc">Mobile and desktop wallets</span>
             </div>
           </button>
 
           <button class="wallet-option" data-wallet-kind="coinbase">
-            <span class="wallet-icon">🔵</span>
+            <span class="wallet-icon">CB</span>
             <div class="wallet-info">
               <span class="wallet-name">Coinbase Wallet</span>
               <span class="wallet-desc">Coinbase extension or app</span>
@@ -159,10 +157,10 @@
           </button>
 
           <button class="wallet-option" data-wallet-kind="injected">
-            <span class="wallet-icon">💼</span>
+            <span class="wallet-icon">BW</span>
             <div class="wallet-info">
               <span class="wallet-name">Browser Wallet</span>
-              <span class="wallet-desc">Rainbow, Trust, or other injected wallet</span>
+              <span class="wallet-desc">Any injected provider</span>
             </div>
           </button>
         </div>
