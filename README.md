@@ -177,6 +177,9 @@ Keep using purchase flow and submit `PAYMENT-SIGNATURE` to `GET /api/souls/{id}/
 - `No matching payment requirements`:
 your submitted `accepted` object did not match the latest `PAYMENT-REQUIRED.accepts[0]`.
 Re-fetch paywall and copy `accepts[0]` exactly (including `maxTimeoutSeconds` and `extra`).
+- `Incomplete re-download header set`:
+you sent partial entitlement headers. For no-repay re-download, send:
+`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
 - `flow_hint: "Payment header was detected but could not be verified/settled..."`:
 header exists but signature/shape failed verification.
 Re-sign using the latest `PAYMENT-REQUIRED` and confirm method-specific payload shape.

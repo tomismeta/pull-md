@@ -59,8 +59,50 @@ export default async function handler(req, res) {
   const cookies = parseCookieHeader(req.headers.cookie);
   const redownloadSessionToken = req.headers['x-redownload-session'] || cookies.soulstarter_redownload_session || null;
   const paymentSignature = req.headers['payment-signature'] || req.headers.payment || req.headers['x-payment'];
+  const hasAnyRedownloadHeaders = Boolean(wallet || authSignature || authTimestamp || receipt || redownloadSessionToken);
+  const hasSessionRedownloadHeaders = Boolean(wallet && receipt && redownloadSessionToken);
+  const hasSignedRedownloadHeaders = Boolean(wallet && receipt && authSignature && authTimestamp);
 
-  if (wallet && receipt && ((authSignature && authTimestamp) || redownloadSessionToken)) {
+  // Guardrail: partial re-download header sets should never fall through into purchase flow.
+  // This prevents accidental repurchase when clients intended entitlement-based access.
+  if (hasAnyRedownloadHeaders && !hasSessionRedownloadHeaders && !hasSignedRedownloadHeaders) {
+    const walletForTemplate = typeof wallet === 'string' && wallet ? wallet : '0x<your-wallet>';
+    return res.status(401).json({
+      error: 'Incomplete re-download header set',
+      flow_hint:
+        'Re-download requires X-WALLET-ADDRESS + X-PURCHASE-RECEIPT and either X-REDOWNLOAD-SESSION (preferred) or X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP. No payment retry was attempted.',
+      received_headers: {
+        has_wallet: Boolean(wallet),
+        has_receipt: Boolean(receipt),
+        has_session_token: Boolean(redownloadSessionToken),
+        has_auth_signature: Boolean(authSignature),
+        has_auth_timestamp: Boolean(authTimestamp),
+        has_payment_header: Boolean(paymentSignature)
+      },
+      expected_header_sets: {
+        session_mode: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SESSION'],
+        signed_fallback_mode: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
+      },
+      redownload_session_bootstrap: {
+        endpoint: '/api/auth/session',
+        headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+        auth_message_template: buildAuthMessage({
+          wallet: walletForTemplate,
+          soulId: '*',
+          action: 'session',
+          timestamp: Date.now()
+        })
+      },
+      auth_message_template: buildAuthMessage({
+        wallet: walletForTemplate,
+        soulId,
+        action: 'redownload',
+        timestamp: Date.now()
+      })
+    });
+  }
+
+  if (hasSessionRedownloadHeaders || hasSignedRedownloadHeaders) {
     let authWallet = String(wallet || '').toLowerCase();
     let usedSignedAuth = false;
     if (authSignature && authTimestamp) {

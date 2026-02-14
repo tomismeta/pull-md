@@ -241,6 +241,10 @@ your `accepted` object is stale or mutated.
 Refresh `PAYMENT-REQUIRED` and copy `accepts[0]` exactly, unchanged.
 - Payment 402 with copy-paste scaffold:
 use `accepted_copy_paste` exactly as top-level `accepted`, then fill `copy_paste_payment_payload.payload` signer fields and resubmit.
+- `Incomplete re-download header set`:
+you sent partial entitlement headers, so server blocked purchase fallback to prevent accidental repay.
+Re-download requires:
+`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
 - `flow_hint: Payment header was detected but could not be verified/settled`:
 header parsed but signature/authorization failed verification.
 Re-sign from latest requirements and verify method-specific shape.
