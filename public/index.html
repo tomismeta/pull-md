@@ -131,7 +131,7 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
       </div>
       <div class="modal-body">
         <div class="wallet-options">
-          <button class="wallet-option" onclick="connectMetaMask()">
+          <button class="wallet-option" data-wallet-kind="metamask">
             <span class="wallet-icon">🦊</span>
             <div class="wallet-info">
               <span class="wallet-name">MetaMask</span>
@@ -139,7 +139,7 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
             </div>
           </button>
           
-          <button class="wallet-option" onclick="connectWalletConnect()">
+          <button class="wallet-option" data-wallet-kind="walletconnect">
             <span class="wallet-icon">🔗</span>
             <div class="wallet-info">
               <span class="wallet-name">WalletConnect</span>
@@ -147,7 +147,7 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
             </div>
           </button>
           
-          <button class="wallet-option" onclick="connectCoinbase()">
+          <button class="wallet-option" data-wallet-kind="coinbase">
             <span class="wallet-icon">🔵</span>
             <div class="wallet-info">
               <span class="wallet-name">Coinbase Wallet</span>
@@ -155,7 +155,7 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
             </div>
           </button>
           
-          <button class="wallet-option" onclick="connectInjected()">
+          <button class="wallet-option" data-wallet-kind="injected">
             <span class="wallet-icon">💼</span>
             <div class="wallet-info">
               <span class="wallet-name">Browser Wallet</span>

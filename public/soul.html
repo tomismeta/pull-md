@@ -134,7 +134,7 @@
       </div>
       <div class="modal-body">
         <div class="wallet-options">
-          <button class="wallet-option" onclick="connectMetaMask()">
+          <button class="wallet-option" data-wallet-kind="metamask">
             <span class="wallet-icon">🦊</span>
             <div class="wallet-info">
               <span class="wallet-name">MetaMask</span>
@@ -142,7 +142,7 @@
             </div>
           </button>
 
-          <button class="wallet-option" onclick="connectWalletConnect()">
+          <button class="wallet-option" data-wallet-kind="walletconnect">
             <span class="wallet-icon">🔗</span>
             <div class="wallet-info">
               <span class="wallet-name">WalletConnect</span>
@@ -150,7 +150,7 @@
             </div>
           </button>
 
-          <button class="wallet-option" onclick="connectCoinbase()">
+          <button class="wallet-option" data-wallet-kind="coinbase">
             <span class="wallet-icon">🔵</span>
             <div class="wallet-info">
               <span class="wallet-name">Coinbase Wallet</span>
@@ -158,7 +158,7 @@
             </div>
           </button>
 
-          <button class="wallet-option" onclick="connectInjected()">
+          <button class="wallet-option" data-wallet-kind="injected">
             <span class="wallet-icon">💼</span>
             <div class="wallet-info">
               <span class="wallet-name">Browser Wallet</span>

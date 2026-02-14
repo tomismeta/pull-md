@@ -727,8 +727,31 @@ function showToast(message, type = 'info') {
   }, 4000);
 }
 
+function bindWalletOptionHandlers() {
+  const options = document.querySelectorAll('.wallet-option[data-wallet-kind]');
+  options.forEach((option) => {
+    option.addEventListener('click', async () => {
+      const kind = option.getAttribute('data-wallet-kind');
+      try {
+        if (kind === 'metamask') {
+          await connectMetaMask();
+        } else if (kind === 'walletconnect') {
+          await connectWalletConnect();
+        } else if (kind === 'coinbase') {
+          await connectCoinbase();
+        } else {
+          await connectInjected();
+        }
+      } catch (error) {
+        showToast(error?.message || 'Wallet connection failed', 'error');
+      }
+    });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   await loadWalletConfig();
+  bindWalletOptionHandlers();
   updateWalletUI();
   await restoreWalletSession();
   loadSouls();
