@@ -45,6 +45,7 @@
         </a>
         <nav class="nav">
           <a href="/" class="nav-link">Browse</a>
+          <a href="#my-souls" class="nav-link">My Souls</a>
           <a href="/create.html" class="nav-link">Create</a>
           <a href="/admin.html" class="nav-link moderator-nav-link" style="display: none;">Moderate</a>
           <button class="wallet-btn" id="walletBtn" onclick="openWalletModal()">
@@ -100,6 +101,18 @@ const list = await fetch("/api/mcp/tools/list_souls").then(r =&gt; r.json());
       <div class="container">
         <div class="souls-grid" id="soulsGrid">
           <!-- Soul cards injected here -->
+        </div>
+      </div>
+    </section>
+
+    <section class="souls-section" id="my-souls">
+      <div class="container">
+        <div class="agent-api-card">
+          <h3>My Souls</h3>
+          <p>Souls you already purchased with this wallet. Download any time without repaying.</p>
+          <div class="souls-grid" id="ownedSoulsGrid">
+            <!-- Owned soul cards injected here -->
+          </div>
         </div>
       </div>
     </section>

@@ -32,6 +32,7 @@ const RECEIPT_PREFIX = 'soulstarter.receipt.';
 const sellerAddressCache = new Map();
 const entitlementCacheByWallet = new Map();
 let moderatorAllowlist = new Set();
+let soulCatalogCache = [];
 
 const PERMIT2_WITNESS_TYPES = {
   PermitWitnessTransferFrom: [
@@ -318,6 +319,8 @@ async function refreshEntitlementsForWallet(wallet) {
     const fallback = new Set(proofs.map((proof) => String(proof.soul_id)));
     entitlementCacheByWallet.set(wallet.toLowerCase(), fallback);
   }
+  renderOwnedSouls();
+  updateSoulPagePurchaseState();
 }
 
 function updateSoulPagePurchaseState() {
@@ -329,6 +332,46 @@ function updateSoulPagePurchaseState() {
   if (!soulId) return;
   const owned = isSoulOwned(soulId);
   btn.textContent = owned ? 'Download Soul' : 'Buy Soul';
+}
+
+function renderOwnedSouls() {
+  const grid = document.getElementById('ownedSoulsGrid');
+  if (!grid) return;
+
+  if (!walletAddress) {
+    grid.innerHTML = '<p class="admin-empty">Connect your wallet to view owned souls.</p>';
+    return;
+  }
+
+  const owned = ownedSoulSetForCurrentWallet();
+  if (!owned.size) {
+    grid.innerHTML = '<p class="admin-empty">No purchased souls found for this wallet yet.</p>';
+    return;
+  }
+
+  const byId = new Map((Array.isArray(soulCatalogCache) ? soulCatalogCache : []).map((soul) => [soul.id, soul]));
+  const cards = [...owned].map((soulId) => {
+    const soul = byId.get(soulId) || { id: soulId, name: soulId, description: 'Purchased soul', icon: '🔮' };
+    return `
+      <article class="soul-card" data-owned-soul-id="${escapeHtml(soul.id)}">
+        <div class="soul-card-icon">${escapeHtml(soul.icon || '🔮')}</div>
+        <h3>${escapeHtml(soul.name || soul.id)}</h3>
+        <p>${escapeHtml(soul.description || 'Purchased soul')}</p>
+        <div class="soul-card-meta">
+          <div class="soul-lineage">
+            <span class="badge badge-organic">Owned</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Wallet entitlement</span>
+          </div>
+          <div>
+            <span class="price">Purchased</span>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="downloadOwnedSoul('${escapeHtml(soul.id)}')">Download SOUL.md</button>
+      </article>
+    `;
+  });
+
+  grid.innerHTML = cards.join('');
 }
 
 async function restoreWalletSession() {
@@ -657,6 +700,25 @@ async function purchaseSoul(soulId) {
   }
 }
 
+async function downloadOwnedSoul(soulId) {
+  if (!walletAddress || !signer) {
+    showToast('Connect your wallet first', 'warning');
+    openWalletModal();
+    return;
+  }
+  try {
+    await ensureBaseNetwork();
+    const prior = await tryRedownload(soulId);
+    if (prior.ok) {
+      showToast('Download restored from your entitlement.', 'success');
+      return;
+    }
+    showToast('No valid entitlement found for this soul on this wallet.', 'warning');
+  } catch (error) {
+    showToast(`Download failed: ${error.message || 'Unknown error'}`, 'error');
+  }
+}
+
 function readSettlementTx(response) {
   const header = response.headers.get('PAYMENT-RESPONSE');
   if (!header) return null;
@@ -699,6 +761,19 @@ function getStoredReceipt(soulId, wallet) {
   }
 }
 
+function triggerMarkdownDownload(content, soulId) {
+  const blob = new Blob([content], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${soulId}-SOUL.md`;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function showPaymentSuccess(content, txHash, soulId, redownload) {
   const purchaseCard = document.getElementById('purchaseCard');
   if (purchaseCard) purchaseCard.style.display = 'none';
@@ -721,11 +796,22 @@ function showPaymentSuccess(content, txHash, soulId, redownload) {
 
   const downloadLink = document.getElementById('downloadLink');
   if (downloadLink) {
-    const blob = new Blob([content], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
     downloadLink.href = url;
     downloadLink.download = `${soulId}-SOUL.md`;
-    setTimeout(() => downloadLink.click(), 300);
+  }
+
+  // Always trigger human download, even outside detail page cards.
+  try {
+    triggerMarkdownDownload(content, soulId);
+  } catch (_) {}
+
+  if (downloadLink) {
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(downloadLink.href);
+      } catch (_) {}
+    }, 1000);
   }
 
   const txHashEl = document.getElementById('txHash');
@@ -754,13 +840,17 @@ function escapeHtml(text) {
 
 async function loadSouls() {
   const grid = document.getElementById('soulsGrid');
-  if (!grid) return;
+  if (!grid) {
+    renderOwnedSouls();
+    return;
+  }
 
   try {
     const response = await fetchWithTimeout('/api/mcp/tools/list_souls');
     if (!response.ok) throw new Error('Failed to load soul catalog');
     const payload = await response.json();
     const souls = payload.souls || [];
+    soulCatalogCache = souls;
 
     grid.innerHTML = souls
       .map(
@@ -795,9 +885,11 @@ async function loadSouls() {
         }
       )
       .join('');
+    renderOwnedSouls();
   } catch (error) {
     console.error('Catalog load failed:', error);
     grid.innerHTML = '<p>Catalog is temporarily unavailable.</p>';
+    renderOwnedSouls();
   }
 }
 
@@ -908,4 +1000,5 @@ window.connectCoinbase = connectCoinbase;
 window.connectInjected = connectInjected;
 window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
+window.downloadOwnedSoul = downloadOwnedSoul;
 window.showToast = showToast;
