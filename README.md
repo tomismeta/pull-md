@@ -31,24 +31,24 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
 - `POST /api/mcp/tools/purchase_soul`
 - `POST /api/mcp/tools/check_entitlements`
-- `GET /api/mcp/tools/get_listing_template`
-- `POST /api/mcp/tools/validate_listing_draft`
-- `POST /api/mcp/tools/save_listing_draft`
-- `GET /api/mcp/tools/list_my_listing_drafts`
-- `GET /api/mcp/tools/get_my_listing_draft?draft_id=<id>`
-- `POST /api/mcp/tools/submit_listing_for_review`
-- `POST /api/mcp/tools/review_listing_submission` (admin only)
-- `GET /api/mcp/tools/list_review_queue` (admin only)
-- `POST /api/mcp/tools/publish_listing` (admin only)
-- `GET /api/mcp/tools/list_published_listings`
+- `GET /api/mcp/tools/creator_marketplace?action=get_listing_template`
+- `POST /api/mcp/tools/creator_marketplace?action=validate_listing_draft`
+- `POST /api/mcp/tools/creator_marketplace?action=save_listing_draft`
+- `GET /api/mcp/tools/creator_marketplace?action=list_my_listing_drafts`
+- `GET /api/mcp/tools/creator_marketplace?action=get_my_listing_draft&draft_id=<id>`
+- `POST /api/mcp/tools/creator_marketplace?action=submit_listing_for_review`
+- `POST /api/mcp/tools/creator_marketplace?action=review_listing_submission` (admin only)
+- `GET /api/mcp/tools/creator_marketplace?action=list_review_queue` (admin only)
+- `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (admin only)
+- `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
 - `GET /api/souls/{id}/download`
 - `GET /api/health/facilitator`
 
 ## Marketplace Foundations (Phase 1)
 
-- `GET /api/mcp/tools/get_listing_template`:
+- `GET /api/mcp/tools/creator_marketplace?action=get_listing_template`:
 returns creator draft contract template for user-submitted soul listings.
-- `POST /api/mcp/tools/validate_listing_draft`:
+- `POST /api/mcp/tools/creator_marketplace?action=validate_listing_draft`:
 validates and normalizes listing + soul content payload and returns deterministic `draft_id`.
 - Scope:
 validation/normalization only in this phase; publish/listing activation is intentionally not enabled yet.

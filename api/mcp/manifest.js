@@ -90,16 +90,20 @@ export default function handler(req, res) {
       {
         name: 'get_listing_template',
         description: 'Get marketplace creator draft template for user-uploaded soul listings',
-        endpoint: '/api/mcp/tools/get_listing_template',
+        endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'GET',
+        parameters: {
+          action: { type: 'string', required: true, description: 'Set action=get_listing_template' }
+        },
         returns: { type: 'object', description: 'Template payload for creator listing draft contracts' }
       },
       {
         name: 'validate_listing_draft',
         description: 'Validate and normalize a creator-provided marketplace listing draft',
-        endpoint: '/api/mcp/tools/validate_listing_draft',
+        endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'POST',
         parameters: {
+          action: { type: 'string', required: true, description: 'Set action=validate_listing_draft' },
           listing: { type: 'object', required: true, description: 'Listing metadata and fee split fields' },
           assets: { type: 'object', required: true, description: 'Soul markdown and optional source attribution fields' }
         },
@@ -108,9 +112,10 @@ export default function handler(req, res) {
       {
         name: 'save_listing_draft',
         description: 'Save a validated creator listing draft under wallet-scoped private storage',
-        endpoint: '/api/mcp/tools/save_listing_draft',
+        endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'POST',
         parameters: {
+          action: { type: 'string', required: true, description: 'Set action=save_listing_draft' },
           wallet_address: { type: 'string', required: true, description: 'Creator wallet address' },
           auth_signature: { type: 'string', required: true, description: 'Wallet signature over creator auth message' },
           auth_timestamp: { type: 'number', required: true, description: 'Unix ms timestamp used in auth message' },
@@ -121,17 +126,21 @@ export default function handler(req, res) {
       {
         name: 'list_my_listing_drafts',
         description: 'List creator-owned saved listing drafts (wallet-authenticated)',
-        endpoint: '/api/mcp/tools/list_my_listing_drafts',
+        endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'GET',
+        parameters: {
+          action: { type: 'string', required: true, description: 'Set action=list_my_listing_drafts' }
+        },
         auth_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
         returns: { type: 'object', description: 'Wallet-scoped list of draft summaries' }
       },
       {
         name: 'get_my_listing_draft',
         description: 'Get full creator-owned draft payload by draft_id (wallet-authenticated)',
-        endpoint: '/api/mcp/tools/get_my_listing_draft',
+        endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'GET',
         parameters: {
+          action: { type: 'string', required: true, description: 'Set action=get_my_listing_draft' },
           draft_id: { type: 'string', required: true, description: 'Draft identifier from save/validate response' }
         },
         auth_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
@@ -140,9 +149,10 @@ export default function handler(req, res) {
       {
         name: 'submit_listing_for_review',
         description: 'Move a creator draft from draft state to submitted_for_review with moderation metadata',
-        endpoint: '/api/mcp/tools/submit_listing_for_review',
+        endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'POST',
         parameters: {
+          action: { type: 'string', required: true, description: 'Set action=submit_listing_for_review' },
           wallet_address: { type: 'string', required: true, description: 'Creator wallet address' },
           auth_signature: { type: 'string', required: true, description: 'Wallet signature over creator auth message' },
           auth_timestamp: { type: 'number', required: true, description: 'Unix ms timestamp used in auth message' },
@@ -153,11 +163,12 @@ export default function handler(req, res) {
       {
         name: 'review_listing_submission',
         description: 'Admin-only moderation decision for submitted creator drafts (approve or reject)',
-        endpoint: '/api/mcp/tools/review_listing_submission',
+        endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'POST',
         admin_only: true,
         auth_headers: ['X-ADMIN-TOKEN'],
         parameters: {
+          action: { type: 'string', required: true, description: 'Set action=review_listing_submission' },
           wallet_address: { type: 'string', required: true, description: 'Creator wallet address owning the draft' },
           draft_id: { type: 'string', required: true, description: 'Draft identifier under review' },
           decision: { type: 'string', required: true, description: 'approve | reject' },
@@ -169,20 +180,24 @@ export default function handler(req, res) {
       {
         name: 'list_review_queue',
         description: 'Admin-only list of drafts waiting moderation review',
-        endpoint: '/api/mcp/tools/list_review_queue',
+        endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'GET',
         admin_only: true,
         auth_headers: ['X-ADMIN-TOKEN'],
+        parameters: {
+          action: { type: 'string', required: true, description: 'Set action=list_review_queue' }
+        },
         returns: { type: 'object', description: 'Submitted-for-review draft queue' }
       },
       {
         name: 'publish_listing',
         description: 'Admin-only transition of approved draft to published',
-        endpoint: '/api/mcp/tools/publish_listing',
+        endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'POST',
         admin_only: true,
         auth_headers: ['X-ADMIN-TOKEN'],
         parameters: {
+          action: { type: 'string', required: true, description: 'Set action=publish_listing' },
           wallet_address: { type: 'string', required: true, description: 'Creator wallet address owning the draft' },
           draft_id: { type: 'string', required: true, description: 'Draft identifier to publish' },
           reviewer: { type: 'string', required: false, description: 'Optional reviewer id/name for audit trail' },
@@ -193,8 +208,11 @@ export default function handler(req, res) {
       {
         name: 'list_published_listings',
         description: 'List all published creator listings from marketplace draft store',
-        endpoint: '/api/mcp/tools/list_published_listings',
+        endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'GET',
+        parameters: {
+          action: { type: 'string', required: true, description: 'Set action=list_published_listings' }
+        },
         returns: { type: 'object', description: 'Published marketplace listing summaries' }
       }
     ],
