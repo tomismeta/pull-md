@@ -105,6 +105,11 @@ Multi-spend guardrails:
 - In-flight settlement submissions are idempotent by payer+soul+nonce to reduce duplicate settlement attempts.
 - Recent successful entitlements are cached server-side and short-circuit future paid retries for that wallet+soul.
 
+Anti-address-poisoning guardrails:
+- Verify full `PAYMENT-REQUIRED.accepts[0].payTo` against trusted seller metadata before signing.
+- Do not trust truncated lookalike addresses from transfer history.
+- Browser flow enforces canonical seller address check before payment signing.
+
 ## Agent Troubleshooting Matrix (Explicit)
 
 Use this as strict error-to-fix mapping:

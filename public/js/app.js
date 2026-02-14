@@ -26,6 +26,7 @@ const TRANSFER_WITH_AUTHORIZATION_TYPE = {
 const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 const X402_EXACT_PERMIT2_PROXY = '0x4020615294c913F045dc10f0a5cdEbd86c280001';
 const MAX_UINT256_DEC = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
+const EXPECTED_SELLER_ADDRESS = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
 
 const PERMIT2_WITNESS_TYPES = {
   PermitWitnessTransferFrom: [
@@ -206,6 +207,27 @@ function buildAuthMessage({ wallet, soulId, action, timestamp }) {
   ].join('\n');
 }
 
+function normalizeAddress(address) {
+  try {
+    return ethers.getAddress(String(address || '').trim());
+  } catch (_) {
+    return null;
+  }
+}
+
+function assertExpectedSellerAddress(payTo) {
+  const expected = normalizeAddress(EXPECTED_SELLER_ADDRESS);
+  const actual = normalizeAddress(payTo);
+  if (!expected || !actual) {
+    throw new Error('Invalid seller address in payment requirements');
+  }
+  if (expected !== actual) {
+    throw new Error(
+      `Security check failed: payment recipient mismatch. Expected ${expected}, got ${actual}. Do not continue.`
+    );
+  }
+}
+
 async function signRedownloadAuth(soulId) {
   const timestamp = Date.now();
   const message = buildAuthMessage({
@@ -227,6 +249,7 @@ async function buildX402PaymentSignature(paymentRequired) {
   if (!accepted) {
     throw new Error('No payment requirements available');
   }
+  assertExpectedSellerAddress(accepted.payTo);
 
   if (!accepted.extra?.name || !accepted.extra?.version) {
     throw new Error('Missing EIP-712 domain parameters in payment requirements');
@@ -605,6 +628,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadWalletConfig();
   updateWalletUI();
   loadSouls();
+  showToast(
+    `Security: verify full seller address ${EXPECTED_SELLER_ADDRESS} and ignore tiny unsolicited transfers.`,
+    'info'
+  );
 });
 
 window.openWalletModal = openWalletModal;

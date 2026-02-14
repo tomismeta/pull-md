@@ -69,6 +69,8 @@ If `401` or `402`, continue to purchase flow.
 2. Decode `PAYMENT-REQUIRED` and create x402 payment payload.
    - For v2, include:
    `accepted: PAYMENT_REQUIRED.accepts[0]` (exact object, unchanged)
+   - Verify `accepted.payTo` equals trusted seller address from SoulStarter metadata before signing.
+   - Never trust truncated addresses from wallet/explorer transfer history.
 3. Retry same endpoint with header:
 - Preferred:
 `PAYMENT-SIGNATURE: <base64-json-payload>`

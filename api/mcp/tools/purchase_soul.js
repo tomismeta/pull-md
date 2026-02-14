@@ -96,7 +96,9 @@ export default async function handler(req, res) {
       },
       security_rules: {
         never_share_bankr_key_with_soulstarter: true,
-        note: 'Bankr API keys must stay inside the agent/Bankr runtime. SoulStarter only accepts signed x402 payment headers.'
+        note: 'Bankr API keys must stay inside the agent/Bankr runtime. SoulStarter only accepts signed x402 payment headers.',
+        anti_poisoning:
+          'Before signing, verify accepts[0].payTo exactly matches the trusted seller address from SoulStarter metadata. Do not trust truncated addresses from transfer history.'
       },
       header_format: {
         preferred: 'PAYMENT-SIGNATURE: <base64(JSON x402 payload)>',

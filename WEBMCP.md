@@ -85,6 +85,8 @@ base64(JSON.stringify({
 Important:
 - `accepted` is mandatory for v2 in this implementation.
 - If `accepted` is missing or altered, server returns `No matching payment requirements`.
+- Before signing, verify `accepted.payTo` matches trusted seller metadata exactly (full address, checksum comparison).
+- Ignore tiny unsolicited transfers and never copy destination addresses from transfer history.
 
 #### Wallet Notes
 
