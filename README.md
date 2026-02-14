@@ -72,6 +72,8 @@ once a draft is `published`, it is promoted into the live catalog and becomes pu
 Audit trail:
 - Marketplace moderation actions append immutable JSONL entries at:
 `.marketplace-drafts/review-audit.jsonl`
+- Lightweight moderation UI:
+`/admin.html` (requires manual entry of `MARKETPLACE_REVIEW_ADMIN_TOKEN` in browser session to call admin endpoints).
 
 ## Environment Variables
 

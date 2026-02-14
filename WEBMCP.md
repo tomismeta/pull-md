@@ -83,6 +83,10 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 14. `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
 - Public listing of all drafts currently in `published` status.
 
+UI companion:
+- `/admin.html` provides a lightweight human moderation console for queue review, approve/reject, and publish actions.
+- It calls the same `creator_marketplace` actions and passes `X-ADMIN-TOKEN` from local browser storage.
+
 ## Download Endpoint
 
 `GET /api/souls/{id}/download`

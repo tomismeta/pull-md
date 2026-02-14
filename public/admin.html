@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SoulStarter Admin</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/" class="logo">
+          <span class="logo-icon">🔮</span>
+          <span>SoulStarter</span>
+        </a>
+        <nav class="nav">
+          <a href="/" class="nav-link">Browse</a>
+          <a href="/admin.html" class="nav-link">Moderate</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <section class="admin-section">
+      <div class="container">
+        <div class="agent-api-card admin-header-card">
+          <h1>Marketplace Moderation</h1>
+          <p>Admin token is used only as request header to moderation endpoints. It is never rendered back by the API.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-section">
+      <div class="container">
+        <div class="agent-api-card">
+          <h3>Admin Session</h3>
+          <div class="admin-token-row">
+            <input id="adminTokenInput" class="admin-input" type="password" autocomplete="off" placeholder="Enter admin token">
+            <button id="saveTokenBtn" class="btn btn-primary">save token</button>
+            <button id="clearTokenBtn" class="btn btn-ghost">clear</button>
+          </div>
+          <p id="tokenStatus" class="admin-status">No token saved.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-section">
+      <div class="container">
+        <div class="agent-api-card">
+          <div class="admin-actions">
+            <h3>Review Queue</h3>
+            <button id="refreshQueueBtn" class="btn btn-ghost">refresh queue</button>
+          </div>
+          <div id="queueContainer" class="admin-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-section">
+      <div class="container">
+        <div class="agent-api-card">
+          <div class="admin-actions">
+            <h3>Published Listings</h3>
+            <button id="refreshPublishedBtn" class="btn btn-ghost">refresh published</button>
+          </div>
+          <div id="publishedContainer" class="admin-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="js/admin.js"></script>
+</body>
+</html>

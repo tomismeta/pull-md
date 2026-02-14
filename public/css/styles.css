@@ -512,6 +512,113 @@ main {
   padding: 7px 9px;
 }
 
+.admin-main {
+  padding: 26px 0 56px;
+}
+
+.admin-section {
+  padding: 0 0 16px;
+}
+
+.admin-header-card h1 {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: clamp(1.2rem, 4vw, 1.9rem);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.admin-token-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.admin-input {
+  flex: 1;
+  min-width: 240px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.76rem;
+}
+
+.admin-status {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+}
+
+.admin-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.admin-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-card {
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 12px;
+}
+
+.admin-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.admin-card h4 {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.admin-line {
+  color: var(--text-soft);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  margin-bottom: 5px;
+}
+
+.admin-line code {
+  color: var(--text);
+}
+
+.admin-card-actions {
+  margin-top: 9px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-card-actions .btn {
+  padding: 8px 10px;
+  font-size: 0.68rem;
+}
+
+.admin-empty {
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--text-muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+}
+
 .footer {
   border-top: 1px solid var(--line-soft);
   padding: 22px 0;
@@ -934,6 +1041,10 @@ main {
   }
 
   .hero-actions .btn {
+    width: 100%;
+  }
+
+  .admin-token-row .btn {
     width: 100%;
   }
 
