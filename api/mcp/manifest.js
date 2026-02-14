@@ -96,6 +96,8 @@ export default function handler(req, res) {
       first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
       claim_request: 'Include PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload to claim entitlement and download',
       redownload_request: 'Include X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, and X-PURCHASE-RECEIPT',
+      redownload_priority:
+        'If re-download headers are present, entitlement path is processed first (prevents accidental repay even when payment headers are also sent).',
       note: 'auth_message_template may appear in a 402 response as helper text; purchase still requires payment header submission.',
       domain_note: 'Use the canonical production host (soulstarter.vercel.app). Preview/alias domains may not reflect the latest contract behavior.',
       v2_requirement: 'Submitted payment JSON must include accepted matching PAYMENT-REQUIRED.accepts[0] exactly.',
@@ -103,6 +105,8 @@ export default function handler(req, res) {
         'Submit exactly one payload method branch. eip3009 => authorization+signature only. permit2 => permit2Authorization(+transaction)+signature only.',
       cdp_default:
         'CDP Base mainnet path defaults to eip3009 in this deployment. If permit2 is disabled by facilitator policy, re-sign as eip3009.',
+      duplicate_settlement_protection:
+        'Server applies single-flight settlement idempotency by payer+soul+nonce to reduce duplicate charge attempts from repeated submissions.',
       wallet_runtime_note:
         'EmblemVault currently has verified successful purchase + re-download runs. Bankr eip3009 remains experimental.',
       permit2_pitfalls: [

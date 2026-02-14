@@ -84,7 +84,9 @@ export default async function handler(req, res) {
         step_2:
           'Use accepts[0].extra.assetTransferMethod: permit2 -> sign PermitWitnessTransferFrom, eip3009 -> sign TransferWithAuthorization; then build x402 payload including accepted',
         step_3: 'Retry GET /api/souls/{soul_id}/download with header PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT)',
-        step_4: 'On success, store X-PURCHASE-RECEIPT for future re-downloads'
+        step_4: 'On success, store X-PURCHASE-RECEIPT for future re-downloads',
+        step_5:
+          'For subsequent access, send re-download headers. Server prioritizes entitlement and avoids accidental repay when those headers are present.'
       },
       method_rules: {
         default_for_cdp_base_mainnet: 'eip3009',
@@ -150,6 +152,8 @@ export default async function handler(req, res) {
           'Facilitator policy disabled permit2. Re-fetch PAYMENT-REQUIRED and submit eip3009 TransferWithAuthorization payload.',
         usdc_invalid_signature:
           'If settlement diagnostics show FiatTokenV2: invalid signature, signer output is incompatible for this flow. Retry with EmblemVault-compatible signer.',
+        duplicate_submission:
+          'Server applies in-flight idempotency by payer+soul+nonce. Reuse the same signed payload only for retry of the same attempt, not to repurchase.',
         network_mismatch:
           'Use top-level network "eip155:8453" exactly; avoid "base".'
       },

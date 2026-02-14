@@ -21,6 +21,9 @@ const SETTLE_RETRY_DELAYS_MS = String(process.env.X402_SETTLE_RETRY_DELAYS_MS ||
   .map((v) => Number(v.trim()))
   .filter((v) => Number.isFinite(v) && v >= 0);
 const SETTLE_INITIAL_DELAY_MS = Number(process.env.X402_SETTLE_INITIAL_DELAY_MS || '1000');
+const inFlightSettlements = new Map();
+const entitlementCache = new Map();
+const ENTITLEMENT_CACHE_TTL_MS = Number(process.env.ENTITLEMENT_CACHE_TTL_MS || String(7 * 24 * 60 * 60 * 1000));
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -49,9 +52,9 @@ export default async function handler(req, res) {
   const authSignature = req.headers['x-auth-signature'];
   const authTimestamp = req.headers['x-auth-timestamp'];
   const receipt = req.headers['x-purchase-receipt'];
-  const paymentSignature = req.headers['payment-signature'];
+  const paymentSignature = req.headers['payment-signature'] || req.headers.payment || req.headers['x-payment'];
 
-  if (wallet && authSignature && authTimestamp && receipt && !paymentSignature) {
+  if (wallet && authSignature && authTimestamp && receipt) {
     const authCheck = verifyWalletAuth({
       wallet,
       soulId,
@@ -81,6 +84,11 @@ export default async function handler(req, res) {
     if (!content) {
       return res.status(500).json({ error: 'Soul unavailable' });
     }
+    cacheEntitlement({
+      wallet: authCheck.wallet,
+      soulId,
+      transaction: receiptCheck.transaction || 'prior-entitlement'
+    });
 
     res.setHeader('Content-Type', 'text/markdown');
     res.setHeader('Content-Disposition', `attachment; filename="${soulId}-SOUL.md"`);
@@ -147,13 +155,46 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Soul unavailable' });
     }
 
+    const payerHint = getPayerFromPaymentPayload(result.paymentPayload);
+    const cachedEntitlement = payerHint ? getCachedEntitlement(payerHint, soulId) : null;
+    if (cachedEntitlement) {
+      const receiptToken = createPurchaseReceipt({
+        wallet: payerHint,
+        soulId,
+        transaction: cachedEntitlement.transaction || 'prior-entitlement'
+      });
+      res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
+      res.setHeader(
+        'PAYMENT-RESPONSE',
+        Buffer.from(
+          JSON.stringify({
+            success: true,
+            transaction: cachedEntitlement.transaction || 'prior-entitlement',
+            network: 'eip155:8453',
+            soulDelivered: soulId,
+            entitlementSource: 'cache'
+          })
+        ).toString('base64')
+      );
+      res.setHeader('Content-Type', 'text/markdown');
+      res.setHeader('Content-Disposition', `attachment; filename="${soulId}-SOUL.md"`);
+      return res.status(200).send(content);
+    }
+
     let settlementResult;
     try {
-      settlementResult = await processSettlementWithRetries(httpServer, {
+      const singleFlightKey = buildSettlementKey({
+        soulId,
         paymentPayload: result.paymentPayload,
-        paymentRequirements: result.paymentRequirements,
-        declaredExtensions: result.declaredExtensions
+        paymentRequirements: result.paymentRequirements
       });
+      settlementResult = await runSingleFlightSettlement(singleFlightKey, () =>
+        processSettlementWithRetries(httpServer, {
+          paymentPayload: result.paymentPayload,
+          paymentRequirements: result.paymentRequirements,
+          declaredExtensions: result.declaredExtensions
+        })
+      );
     } catch (error) {
       return res.status(402).json({
         error: 'Settlement threw an exception',
@@ -204,6 +245,14 @@ export default async function handler(req, res) {
         })
       : null;
 
+    if (settlement.success && settlement.payer) {
+      cacheEntitlement({
+        wallet: settlement.payer,
+        soulId,
+        transaction: settlement.transaction || 'prior-entitlement'
+      });
+    }
+
     if (receiptToken) {
       res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
     }
@@ -218,6 +267,69 @@ export default async function handler(req, res) {
       processing_debug: extractX402Error(error)
     });
   }
+}
+
+function runSingleFlightSettlement(key, run) {
+  const safeKey = String(key || '');
+  if (!safeKey) return run();
+  const existing = inFlightSettlements.get(safeKey);
+  if (existing) {
+    return existing;
+  }
+  const promise = Promise.resolve()
+    .then(run)
+    .finally(() => {
+      inFlightSettlements.delete(safeKey);
+    });
+  inFlightSettlements.set(safeKey, promise);
+  return promise;
+}
+
+function buildSettlementKey({ soulId, paymentPayload, paymentRequirements }) {
+  const transferMethod = String(paymentRequirements?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
+  const payer = getPayerFromPaymentPayload(paymentPayload) || 'unknown';
+  if (transferMethod === 'permit2') {
+    const nonce = String(paymentPayload?.payload?.permit2Authorization?.nonce || '');
+    return `settle:${soulId}:${payer}:permit2:${nonce}`;
+  }
+  const nonce = String(paymentPayload?.payload?.authorization?.nonce || '');
+  return `settle:${soulId}:${payer}:eip3009:${nonce}`;
+}
+
+function getPayerFromPaymentPayload(paymentPayload) {
+  const direct =
+    paymentPayload?.payload?.authorization?.from ||
+    paymentPayload?.payload?.permit2Authorization?.from ||
+    paymentPayload?.payload?.from ||
+    null;
+  if (typeof direct !== 'string') return null;
+  if (!/^0x[a-fA-F0-9]{40}$/.test(direct)) return null;
+  return direct.toLowerCase();
+}
+
+function entitlementKey(wallet, soulId) {
+  return `${String(wallet || '').toLowerCase()}::${String(soulId || '')}`;
+}
+
+function getCachedEntitlement(wallet, soulId) {
+  const key = entitlementKey(wallet, soulId);
+  const hit = entitlementCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    entitlementCache.delete(key);
+    return null;
+  }
+  return hit;
+}
+
+function cacheEntitlement({ wallet, soulId, transaction }) {
+  if (!wallet || !soulId) return;
+  entitlementCache.set(entitlementKey(wallet, soulId), {
+    wallet: String(wallet).toLowerCase(),
+    soulId: String(soulId),
+    transaction: transaction || 'prior-entitlement',
+    expiresAt: Date.now() + ENTITLEMENT_CACHE_TTL_MS
+  });
 }
 
 function decodePaymentRequiredHeader(headers = {}) {

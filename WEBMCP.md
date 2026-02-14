@@ -131,6 +131,7 @@ Headers required:
 - `X-PURCHASE-RECEIPT`
 
 If receipt and wallet auth are valid, response is `200` with soul file.
+If re-download headers are present, server prioritizes entitlement delivery over purchase processing, even if a payment header is also present.
 
 Auth verifier compatibility:
 - Server accepts message signatures over canonical variants:
@@ -155,6 +156,8 @@ Re-sign from latest requirements and verify method-specific shape.
 - `FiatTokenV2: invalid signature` in settlement diagnostics:
 wallet signer is not producing a USDC-compatible EIP-3009 signature for this flow.
 Use EmblemVault or another compatible signer.
+- Duplicate payment concern (same signed authorization submitted multiple times):
+server applies single-flight idempotency by payer + soul + nonce to prevent duplicate settlement attempts in-flight.
 - Facilitator schema errors (`paymentPayload is invalid`, `must match oneOf`):
 for permit2 use `payload.from`, `payload.permit2Authorization`, `payload.transaction`, `payload.signature`.
 Do not send `payload.permit2`. Do not include `payload.authorization` in permit2 mode.

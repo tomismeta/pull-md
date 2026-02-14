@@ -99,6 +99,11 @@ It does **not** replace the purchase flow.
 
 Re-download auth compatibility note:
 - Server verification accepts canonical variants (`lowercase` or checksummed `address:` line, `LF` or `CRLF` newlines).
+- If re-download headers are present, server prioritizes entitlement delivery and skips payment processing.
+
+Multi-spend guardrails:
+- In-flight settlement submissions are idempotent by payer+soul+nonce to reduce duplicate settlement attempts.
+- Recent successful entitlements are cached server-side and short-circuit future paid retries for that wallet+soul.
 
 ## Agent Troubleshooting Matrix (Explicit)
 
