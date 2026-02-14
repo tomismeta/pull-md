@@ -710,6 +710,40 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
   const transferMethod = String(paymentRequirements?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
   const nowSec = Math.floor(Date.now() / 1000);
   const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
+  const expectedChainId = toChainId(paymentRequirements?.network) ?? 8453;
+  const domain = {
+    name: paymentRequirements?.extra?.name ?? 'USD Coin',
+    version: paymentRequirements?.extra?.version ?? '2',
+    chainId: expectedChainId,
+    verifyingContract: paymentRequirements?.asset ?? null
+  };
+  const typedDataTypes = {
+    TransferWithAuthorization: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'validAfter', type: 'uint256' },
+      { name: 'validBefore', type: 'uint256' },
+      { name: 'nonce', type: 'bytes32' }
+    ]
+  };
+  let signatureParts = null;
+  try {
+    signatureParts = payload?.signature ? ethers.Signature.from(payload.signature) : null;
+  } catch (_) {
+    signatureParts = null;
+  }
+  let recoveredSigner = null;
+  let typedDataDigest = null;
+  if (auth && payload?.signature && domain.verifyingContract) {
+    try {
+      typedDataDigest = ethers.TypedDataEncoder.hash(domain, typedDataTypes, auth);
+      recoveredSigner = ethers.verifyTypedData(domain, typedDataTypes, auth, payload.signature);
+    } catch (_) {
+      typedDataDigest = null;
+      recoveredSigner = null;
+    }
+  }
 
   const diagnostics = {
     transfer_method: transferMethod,
@@ -731,6 +765,18 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
       valid_after_not_future: auth ? isBigIntLte(auth.validAfter, String(nowSec)) : null,
       valid_before_not_expired: auth ? isBigIntGt(auth.validBefore, String(nowSec + 6)) : null,
       nonce_hex_32bytes: auth?.nonce ? /^0x[0-9a-fA-F]{64}$/.test(String(auth.nonce)) : null
+    },
+    eip712_precheck: {
+      domain,
+      type: 'TransferWithAuthorization',
+      signature: payload?.signature ? redactHex(payload.signature) : null,
+      signature_hex_length: typeof payload?.signature === 'string' ? payload.signature.length : null,
+      signature_parse_ok: Boolean(signatureParts),
+      signature_v: signatureParts?.v ?? null,
+      signature_y_parity: signatureParts?.yParity ?? null,
+      typed_data_digest: typedDataDigest,
+      recovered_signer: recoveredSigner,
+      from_matches_recovered: recoveredSigner && auth?.from ? equalAddress(recoveredSigner, auth.from) : null
     },
     chain_prechecks: null
   };
@@ -792,4 +838,11 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
   }
 
   return diagnostics;
+}
+
+function redactHex(value) {
+  const raw = String(value || '');
+  if (!raw) return null;
+  if (raw.length <= 20) return raw;
+  return `${raw.slice(0, 10)}...${raw.slice(-10)} (len=${raw.length})`;
 }
