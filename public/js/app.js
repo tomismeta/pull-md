@@ -29,6 +29,7 @@ const MAX_UINT256_DEC = '1157920892373161954235709850086879078532699846656405640
 const EXPECTED_SELLER_ADDRESS = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 const RECEIPT_PREFIX = 'soulstarter.receipt.';
+const REDOWNLOAD_SESSION_PREFIX = 'soulstarter.redownload.session.';
 const sellerAddressCache = new Map();
 const entitlementCacheByWallet = new Map();
 let moderatorAllowlist = new Set();
@@ -74,6 +75,9 @@ function connectWallet() {
 }
 
 function disconnectWallet() {
+  if (walletAddress) {
+    clearRedownloadSession(walletAddress);
+  }
   provider = null;
   signer = null;
   walletAddress = null;
@@ -467,16 +471,37 @@ async function getExpectedSellerAddressForSoul(soulId) {
   }
 }
 
-async function signRedownloadAuth(soulId) {
+async function ensureRedownloadSession() {
+  if (!walletAddress || !signer) throw new Error('Connect your wallet first');
+  const existing = getStoredRedownloadSession(walletAddress);
+  if (existing) return existing;
+
   const timestamp = Date.now();
   const message = buildAuthMessage({
     wallet: walletAddress,
-    soulId,
-    action: 'redownload',
+    soulId: '*',
+    action: 'session',
     timestamp
   });
   const signature = await signer.signMessage(message);
-  return { timestamp, signature };
+  const response = await fetchWithTimeout(`${CONFIG.apiBase}/auth/session`, {
+    method: 'GET',
+    headers: {
+      'X-WALLET-ADDRESS': walletAddress,
+      'X-AUTH-SIGNATURE': signature,
+      'X-AUTH-TIMESTAMP': String(timestamp),
+      Accept: 'application/json'
+    }
+  });
+  if (!response.ok) {
+    const error = await readError(response);
+    throw new Error(error || 'Session authentication failed');
+  }
+  const body = await response.json().catch(() => ({}));
+  const token = response.headers.get('X-REDOWNLOAD-SESSION') || body?.token || null;
+  const expiresAtMs = Number(body?.expires_at_ms || Date.now() + 10 * 60 * 1000);
+  if (token) storeRedownloadSession(walletAddress, token, expiresAtMs);
+  return { token, expiresAtMs };
 }
 
 async function buildX402PaymentSignature(paymentRequired, soulId) {
@@ -583,14 +608,17 @@ async function tryRedownload(soulId) {
 
   const receipt = getStoredReceipt(soulId, walletAddress);
   if (!receipt) return { ok: false, requiresPayment: true };
+  const activeSession = getStoredRedownloadSession(walletAddress);
+  const passiveHeaders = {
+    'X-WALLET-ADDRESS': walletAddress,
+    'X-PURCHASE-RECEIPT': receipt,
+    Accept: 'text/markdown'
+  };
+  if (activeSession?.token) passiveHeaders['X-REDOWNLOAD-SESSION'] = activeSession.token;
 
   const passive = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
     method: 'GET',
-    headers: {
-      'X-WALLET-ADDRESS': walletAddress,
-      'X-PURCHASE-RECEIPT': receipt,
-      Accept: 'text/markdown'
-    }
+    headers: passiveHeaders
   });
 
   if (passive.ok) {
@@ -607,17 +635,19 @@ async function tryRedownload(soulId) {
     throw new Error(error || 'Re-download failed');
   }
 
-  // Fallback: one explicit wallet signature to bootstrap/refresh secure re-download session.
-  const auth = await signRedownloadAuth(soulId);
+  // One-time wallet session bootstrap, then retry receipt-based download.
+  await ensureRedownloadSession();
+  const refreshedSession = getStoredRedownloadSession(walletAddress);
+  const retryHeaders = {
+    'X-WALLET-ADDRESS': walletAddress,
+    'X-PURCHASE-RECEIPT': receipt,
+    Accept: 'text/markdown'
+  };
+  if (refreshedSession?.token) retryHeaders['X-REDOWNLOAD-SESSION'] = refreshedSession.token;
+
   const signed = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
     method: 'GET',
-    headers: {
-      'X-WALLET-ADDRESS': walletAddress,
-      'X-AUTH-SIGNATURE': auth.signature,
-      'X-AUTH-TIMESTAMP': String(auth.timestamp),
-      'X-PURCHASE-RECEIPT': receipt,
-      Accept: 'text/markdown'
-    }
+    headers: retryHeaders
   });
 
   if (signed.ok) {
@@ -764,6 +794,43 @@ async function readError(response) {
 
 function receiptStorageKey(wallet, soulId) {
   return `soulstarter.receipt.${wallet.toLowerCase()}.${soulId}`;
+}
+
+function redownloadSessionStorageKey(wallet) {
+  return `${REDOWNLOAD_SESSION_PREFIX}${String(wallet || '').toLowerCase()}`;
+}
+
+function getStoredRedownloadSession(wallet) {
+  try {
+    const raw = localStorage.getItem(redownloadSessionStorageKey(wallet));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const token = String(parsed.token || '');
+    const expiresAtMs = Number(parsed.expiresAtMs || 0);
+    if (!token || !Number.isFinite(expiresAtMs) || Date.now() >= expiresAtMs) return null;
+    return { token, expiresAtMs };
+  } catch (_) {
+    return null;
+  }
+}
+
+function storeRedownloadSession(wallet, token, expiresAtMs) {
+  try {
+    localStorage.setItem(
+      redownloadSessionStorageKey(wallet),
+      JSON.stringify({
+        token: String(token || ''),
+        expiresAtMs: Number(expiresAtMs || 0)
+      })
+    );
+  } catch (_) {}
+}
+
+function clearRedownloadSession(wallet) {
+  try {
+    localStorage.removeItem(redownloadSessionStorageKey(wallet));
+  } catch (_) {}
 }
 
 function storeReceipt(soulId, wallet, receipt) {
