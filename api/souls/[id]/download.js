@@ -802,24 +802,35 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
     }
 
     // Simulate transferWithAuthorization to surface revert reason candidates.
-    let transfer_simulation = { ok: null, error: null };
-    try {
-      const data = usdc.interface.encodeFunctionData('transferWithAuthorization', [
-        auth.from,
-        auth.to,
-        auth.value,
-        auth.validAfter,
-        auth.validBefore,
-        auth.nonce,
-        payload.signature
-      ]);
-      await provider.call({
-        to: paymentRequirements.asset,
-        data
+    const transfer_simulation = await simulateTransferWithAuthorization({
+      provider,
+      usdc,
+      asset: paymentRequirements.asset,
+      auth,
+      signature: payload.signature
+    });
+
+    let signature_variant_simulations = null;
+    if (payload?.signature) {
+      signature_variant_simulations = await runSignatureVariantMatrix({
+        provider,
+        usdc,
+        asset: paymentRequirements.asset,
+        auth,
+        signature: payload.signature
       });
-      transfer_simulation = { ok: true, error: null };
-    } catch (error) {
-      transfer_simulation = { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+
+    let time_window_variant_simulations = null;
+    if (payload?.signature) {
+      time_window_variant_simulations = await runTimeWindowVariantMatrix({
+        provider,
+        usdc,
+        asset: paymentRequirements.asset,
+        auth,
+        signature: payload.signature,
+        nowSec
+      });
     }
 
     diagnostics.chain_prechecks = {
@@ -828,7 +839,9 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
       required_amount: String(paymentRequirements.amount),
       balance_gte_required: isBigIntGte(balance?.toString?.() ?? null, paymentRequirements.amount),
       authorization_used: authorizationUsed == null ? null : Boolean(authorizationUsed),
-      transfer_simulation
+      transfer_simulation,
+      signature_variant_simulations,
+      time_window_variant_simulations
     };
   } catch (error) {
     diagnostics.chain_prechecks = {
@@ -845,4 +858,120 @@ function redactHex(value) {
   if (!raw) return null;
   if (raw.length <= 20) return raw;
   return `${raw.slice(0, 10)}...${raw.slice(-10)} (len=${raw.length})`;
+}
+
+async function simulateTransferWithAuthorization({ provider, usdc, asset, auth, signature }) {
+  try {
+    const data = usdc.interface.encodeFunctionData('transferWithAuthorization', [
+      auth.from,
+      auth.to,
+      auth.value,
+      auth.validAfter,
+      auth.validBefore,
+      auth.nonce,
+      signature
+    ]);
+    await provider.call({
+      to: asset,
+      data
+    });
+    return { ok: true, error: null };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function runSignatureVariantMatrix({ provider, usdc, asset, auth, signature }) {
+  const parts = ethers.Signature.from(signature);
+  const variants = [];
+
+  const original = parts.serialized;
+  const v27 = ethers.Signature.from({ r: parts.r, s: parts.s, yParity: 0 }).serialized;
+  const v28 = ethers.Signature.from({ r: parts.r, s: parts.s, yParity: 1 }).serialized;
+  const compact = parts.compactSerialized;
+
+  variants.push({ label: 'original', signature: original });
+  variants.push({ label: 'force_v27', signature: v27 });
+  variants.push({ label: 'force_v28', signature: v28 });
+  variants.push({ label: 'compact_2098', signature: compact });
+  if (compact && compact !== original) {
+    const expandedFromCompact = ethers.Signature.from(compact).serialized;
+    variants.push({ label: 'expanded_from_2098', signature: expandedFromCompact });
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  for (const item of variants) {
+    if (seen.has(item.signature)) continue;
+    seen.add(item.signature);
+    deduped.push(item);
+  }
+
+  const results = [];
+  for (const item of deduped) {
+    const simulation = await simulateTransferWithAuthorization({
+      provider,
+      usdc,
+      asset,
+      auth,
+      signature: item.signature
+    });
+    const parsed = ethers.Signature.from(item.signature);
+    results.push({
+      label: item.label,
+      signature: redactHex(item.signature),
+      length: item.signature.length,
+      v: parsed.v,
+      y_parity: parsed.yParity,
+      ok: simulation.ok,
+      error: simulation.error
+    });
+  }
+
+  return results;
+}
+
+async function runTimeWindowVariantMatrix({ provider, usdc, asset, auth, signature, nowSec }) {
+  const variants = [
+    {
+      label: 'as_submitted',
+      validAfter: auth.validAfter,
+      validBefore: auth.validBefore
+    },
+    {
+      label: 'validAfter_now_minus_60',
+      validAfter: String(Math.max(0, nowSec - 60)),
+      validBefore: auth.validBefore
+    },
+    {
+      label: 'validAfter_zero_validBefore_now_plus_300',
+      validAfter: '0',
+      validBefore: String(nowSec + 300)
+    }
+  ];
+
+  const results = [];
+  for (const variant of variants) {
+    const variantAuth = {
+      ...auth,
+      validAfter: variant.validAfter,
+      validBefore: variant.validBefore
+    };
+    const simulation = await simulateTransferWithAuthorization({
+      provider,
+      usdc,
+      asset,
+      auth: variantAuth,
+      signature
+    });
+    results.push({
+      label: variant.label,
+      validAfter: variant.validAfter,
+      validBefore: variant.validBefore,
+      ok: simulation.ok,
+      error: simulation.error
+    });
+  }
+
+  return results;
 }
