@@ -184,19 +184,47 @@ Only the SoulStarter server needs facilitator credentials.
 
 ### Re-download (no repay)
 
-Headers required:
+Required base headers:
 
 - `X-WALLET-ADDRESS`
-- `X-AUTH-SIGNATURE`
-- `X-AUTH-TIMESTAMP`
 - `X-PURCHASE-RECEIPT`
 
-If receipt and wallet auth are valid, response is `200` with soul file.
+Then provide one auth mode:
+
+- Session mode (preferred):
+`X-REDOWNLOAD-SESSION`
+- Signed mode (fallback):
+`X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`
+
+If receipt and wallet auth/session are valid, response is `200` with soul file.
 If re-download headers are present, server prioritizes entitlement delivery over purchase processing, even if a payment header is also present.
 
 Auth verifier compatibility:
 - Server accepts message signatures over canonical variants:
 `address:` line in lowercase or checksummed form, and either `LF` or `CRLF` line endings.
+
+### Session Bootstrap Endpoint (Human/Hybrid Clients)
+
+`GET /api/auth/session`
+
+Headers:
+- `X-WALLET-ADDRESS`
+- `X-AUTH-SIGNATURE`
+- `X-AUTH-TIMESTAMP`
+
+Sign message:
+
+```text
+SoulStarter Wallet Authentication
+address:<wallet_lowercase>
+soul:*
+action:session
+timestamp:<unix_ms>
+```
+
+Success response includes:
+- `X-REDOWNLOAD-SESSION` header
+- session token JSON body fields (`token`, `expires_at_ms`)
 
 ## Common Misread
 
@@ -211,6 +239,8 @@ continue purchase flow; submit `PAYMENT-SIGNATURE` on `GET /api/souls/{id}/downl
 - `No matching payment requirements`:
 your `accepted` object is stale or mutated.
 Refresh `PAYMENT-REQUIRED` and copy `accepts[0]` exactly, unchanged.
+- Payment 402 with copy-paste scaffold:
+use `accepted_copy_paste` exactly as top-level `accepted`, then fill `copy_paste_payment_payload.payload` signer fields and resubmit.
 - `flow_hint: Payment header was detected but could not be verified/settled`:
 header parsed but signature/authorization failed verification.
 Re-sign from latest requirements and verify method-specific shape.

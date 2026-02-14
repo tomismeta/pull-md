@@ -34,7 +34,19 @@ export default function handler(req, res) {
         'PAYMENT-REQUIRED',
         'PAYMENT-RESPONSE'
       ],
-      redownload_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP', 'X-PURCHASE-RECEIPT'],
+      redownload_headers: [
+        'X-WALLET-ADDRESS',
+        'X-PURCHASE-RECEIPT',
+        'X-REDOWNLOAD-SESSION',
+        'X-AUTH-SIGNATURE',
+        'X-AUTH-TIMESTAMP'
+      ],
+      redownload_modes: {
+        session_preferred: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SESSION'],
+        signed_fallback: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
+      },
+      redownload_session_endpoint: '/api/auth/session',
+      redownload_session_bootstrap_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
       purchase_header_preference: ['PAYMENT-SIGNATURE', 'PAYMENT', 'X-PAYMENT'],
       agent_key_boundary:
         'Never send Bankr API keys or signer secrets to SoulStarter. SoulStarter accepts only signed x402 payment headers.'
@@ -233,7 +245,10 @@ export default function handler(req, res) {
       canonical_purchase_flow: 'GET /api/souls/{id}/download is the authoritative x402 flow for payment requirements and paid retry.',
       first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
       claim_request: 'Include PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload to claim entitlement and download',
-      redownload_request: 'Include X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, and X-PURCHASE-RECEIPT',
+      redownload_request:
+        'Include X-WALLET-ADDRESS + X-PURCHASE-RECEIPT and either X-REDOWNLOAD-SESSION (preferred) or X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP (fallback).',
+      redownload_session_bootstrap:
+        'Bootstrap session at GET /api/auth/session with X-WALLET-ADDRESS + X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP to obtain X-REDOWNLOAD-SESSION.',
       anti_poisoning_rule:
         'Always verify the full PAYMENT-REQUIRED.accepts[0].payTo address against the canonical seller address from trusted SoulStarter metadata before signing.',
       redownload_priority:

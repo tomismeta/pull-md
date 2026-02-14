@@ -161,8 +161,13 @@ export default async function handler(req, res) {
             paymentRequirements: paymentRequired?.accepts?.[0] || null,
             x402Version: paymentRequired?.x402Version ?? submittedPayment?.x402Version ?? 2
           });
+          const copyPastePayload = buildCopyPastePaymentPayloadTemplate(paymentRequired);
           result.response.body.flow_hint =
             'Payment header was detected but could not be verified/settled. Regenerate PAYMENT-SIGNATURE from the latest PAYMENT-REQUIRED and retry.';
+          result.response.body.accepted_copy_paste = paymentRequired?.accepts?.[0] || null;
+          result.response.body.copy_paste_payment_payload = copyPastePayload;
+          result.response.body.copy_paste_header_hint =
+            'PAYMENT-SIGNATURE: base64(JSON.stringify(copy_paste_payment_payload))';
           result.response.body.payment_debug = {
             ...paymentDebug,
             facilitator_verify: facilitatorVerify
@@ -742,6 +747,62 @@ function buildPaymentDebug(req, paymentRequired) {
   }
 
   return info;
+}
+
+function buildCopyPastePaymentPayloadTemplate(paymentRequired) {
+  const accepted = paymentRequired?.accepts?.[0];
+  if (!accepted) return null;
+  const transferMethod = String(accepted?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
+  const baseTemplate = {
+    x402Version: paymentRequired?.x402Version ?? 2,
+    scheme: accepted.scheme,
+    network: accepted.network,
+    accepted
+  };
+
+  if (transferMethod === 'permit2') {
+    return {
+      ...baseTemplate,
+      payload: {
+        from: '<buyer_wallet>',
+        permit2Authorization: {
+          from: '<buyer_wallet>',
+          permitted: {
+            token: accepted.asset,
+            amount: accepted.amount
+          },
+          spender: '0x4020615294c913F045dc10f0a5cdEbd86c280001',
+          nonce: '<uint256_string>',
+          deadline: '<unix_sec>',
+          witness: {
+            to: accepted.payTo,
+            validAfter: '<unix_sec>',
+            extra: '0x'
+          }
+        },
+        transaction: {
+          to: accepted.asset,
+          data: '0x<erc20 approve(PERMIT2_ADDRESS, MAX_UINT256) calldata>'
+        },
+        signature: '0x<eip712_signature>'
+      }
+    };
+  }
+
+  return {
+    ...baseTemplate,
+    payload: {
+      authorization: {
+        from: '<buyer_wallet>',
+        to: accepted.payTo,
+        value: accepted.amount,
+        validAfter: '<unix_sec>',
+        validBefore: '<unix_sec>',
+        nonce: '0x<32byte_hex>'
+      },
+      signature: '0x<eip712_signature>'
+    }
+  };
 }
 
 function toChainId(network) {

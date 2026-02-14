@@ -7,8 +7,10 @@ SoulStarter is an agent-focused marketplace for purchasing and re-downloading AI
 - Strict x402 v2 purchase flow on `GET /api/souls/{id}/download`
 - Required x402 headers for payment flow:
 `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE` (or `PAYMENT` / `X-PAYMENT`), `PAYMENT-RESPONSE`
-- Re-download flow (no second payment) uses:
-`X-WALLET-ADDRESS`, `X-AUTH-SIGNATURE`, `X-AUTH-TIMESTAMP`, `X-PURCHASE-RECEIPT`
+- Re-download flow (no second payment) requires wallet entitlement proof:
+`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` plus either:
+`X-REDOWNLOAD-SESSION` (preferred after session bootstrap) or
+`X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP` (signed fallback)
 - Facilitator resiliency includes:
 preflight checks, multi-endpoint failover, timeout, circuit breaker
 - Agent-discoverable API via WebMCP manifest at `/api/mcp/manifest`
@@ -43,6 +45,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (moderator wallet auth)
 - `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
 - `GET /api/souls/{id}/download`
+- `GET /api/auth/session`
 - `GET /api/health/facilitator`
 
 ## Marketplace Foundations (Phase 1)
@@ -142,9 +145,18 @@ Critical v2 payload requirement:
 If a `402` body contains `auth_message_template`, treat it as optional re-download helper text.
 It does **not** replace the purchase flow.
 
+Copy-paste guidance on payment errors:
+- When payment verification fails, `GET /api/souls/{id}/download` `402` bodies now include:
+`accepted_copy_paste` and `copy_paste_payment_payload`.
+- Use `accepted_copy_paste` unchanged as top-level `accepted`.
+- Fill wallet/signature placeholders and resubmit in `PAYMENT-SIGNATURE`.
+
 Re-download auth compatibility note:
 - Server verification accepts canonical variants (`lowercase` or checksummed `address:` line, `LF` or `CRLF` newlines).
 - If re-download headers are present, server prioritizes entitlement delivery and skips payment processing.
+- Human UX optimization:
+Bootstrap once with `GET /api/auth/session` using wallet signature (`action: session`), then re-download with
+`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SESSION` without repeated soul-specific signing.
 
 Multi-spend guardrails:
 - In-flight settlement submissions are idempotent by payer+soul+nonce to reduce duplicate settlement attempts.

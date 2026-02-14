@@ -86,7 +86,7 @@ export default async function handler(req, res) {
         step_3: 'Retry GET /api/souls/{soul_id}/download with header PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT)',
         step_4: 'On success, store X-PURCHASE-RECEIPT for future re-downloads',
         step_5:
-          'For subsequent access, send re-download headers. Server prioritizes entitlement and avoids accidental repay when those headers are present.'
+          'For subsequent access, call GET /api/souls/{soul_id}/download with X-WALLET-ADDRESS + X-PURCHASE-RECEIPT and either X-REDOWNLOAD-SESSION (preferred) or signed fallback headers.'
       },
       method_rules: {
         default_for_cdp_base_mainnet: 'eip3009',

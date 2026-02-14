@@ -23,7 +23,8 @@ export default function handler(req, res) {
       agent_friendly: true,
       access_type: 'x402_paywall',
       flow: 'GET /api/souls/{id}/download -> 402 PAYMENT-REQUIRED -> GET with PAYMENT-SIGNATURE',
-      reauth_flow: 'GET /api/souls/{id}/download with wallet auth headers + X-PURCHASE-RECEIPT (no repayment)'
+      reauth_flow:
+        'GET /api/souls/{id}/download with X-WALLET-ADDRESS + X-PURCHASE-RECEIPT and either X-REDOWNLOAD-SESSION (preferred) or X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP (fallback)'
     }
   });
 }

@@ -34,13 +34,22 @@ export default function handler(req, res) {
       payment_protocol: 'x402',
       auth_headers: {
         purchase: ['PAYMENT-SIGNATURE'],
-        redownload: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP', 'X-PURCHASE-RECEIPT']
+        redownload: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SESSION'],
+        redownload_signed_fallback: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+        redownload_session_bootstrap: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       },
+      redownload_session_endpoint: '/api/auth/session',
       auth_message_examples: {
         redownload: buildAuthMessage({
           wallet: '0x<your-wallet>',
           soulId: id,
           action: 'redownload',
+          timestamp: Date.now()
+        }),
+        session: buildAuthMessage({
+          wallet: '0x<your-wallet>',
+          soulId: '*',
+          action: 'session',
           timestamp: Date.now()
         })
       },
