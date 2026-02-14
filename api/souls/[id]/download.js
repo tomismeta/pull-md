@@ -790,10 +790,31 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
     const erc20Abi = [
       'function balanceOf(address account) view returns (uint256)',
       'function authorizationState(address authorizer, bytes32 nonce) view returns (bool)',
-      'function transferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce,bytes signature) returns (bool)'
+      'function transferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce,bytes signature) returns (bool)',
+      'function name() view returns (string)',
+      'function version() view returns (string)',
+      'function DOMAIN_SEPARATOR() view returns (bytes32)'
     ];
     const usdc = new ethers.Contract(paymentRequirements.asset, erc20Abi, provider);
     const balance = await usdc.balanceOf(auth.from);
+    let tokenName = null;
+    let tokenVersion = null;
+    let tokenDomainSeparator = null;
+    try {
+      tokenName = await usdc.name();
+    } catch (_) {
+      tokenName = null;
+    }
+    try {
+      tokenVersion = await usdc.version();
+    } catch (_) {
+      tokenVersion = null;
+    }
+    try {
+      tokenDomainSeparator = await usdc.DOMAIN_SEPARATOR();
+    } catch (_) {
+      tokenDomainSeparator = null;
+    }
     let authorizationUsed = null;
     try {
       authorizationUsed = await usdc.authorizationState(auth.from, auth.nonce);
@@ -839,6 +860,13 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
       required_amount: String(paymentRequirements.amount),
       balance_gte_required: isBigIntGte(balance?.toString?.() ?? null, paymentRequirements.amount),
       authorization_used: authorizationUsed == null ? null : Boolean(authorizationUsed),
+      token_metadata: {
+        name: tokenName,
+        version: tokenVersion,
+        domain_separator: tokenDomainSeparator,
+        domain_name_matches_signed: tokenName ? tokenName === domain.name : null,
+        domain_version_matches_signed: tokenVersion ? tokenVersion === domain.version : null
+      },
       transfer_simulation,
       signature_variant_simulations,
       time_window_variant_simulations
