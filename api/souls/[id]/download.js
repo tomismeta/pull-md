@@ -16,11 +16,11 @@ import {
   inspectFacilitatorVerify
 } from '../../_lib/x402.js';
 
-const SETTLE_RETRY_DELAYS_MS = String(process.env.X402_SETTLE_RETRY_DELAYS_MS || '500,1000,2000')
+const SETTLE_RETRY_DELAYS_MS = String(process.env.X402_SETTLE_RETRY_DELAYS_MS || '500')
   .split(',')
   .map((v) => Number(v.trim()))
   .filter((v) => Number.isFinite(v) && v >= 0);
-const SETTLE_INITIAL_DELAY_MS = Number(process.env.X402_SETTLE_INITIAL_DELAY_MS || '1000');
+const SETTLE_INITIAL_DELAY_MS = Number(process.env.X402_SETTLE_INITIAL_DELAY_MS || '0');
 const inFlightSettlements = new Map();
 const entitlementCache = new Map();
 const ENTITLEMENT_CACHE_TTL_MS = Number(process.env.ENTITLEMENT_CACHE_TTL_MS || String(7 * 24 * 60 * 60 * 1000));
