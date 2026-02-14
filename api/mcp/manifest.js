@@ -86,6 +86,24 @@ export default function handler(req, res) {
           proofs: { type: 'array', required: true, description: 'List of { soul_id, receipt } proofs' }
         },
         returns: { type: 'object', description: 'Per-proof entitlement status' }
+      },
+      {
+        name: 'get_listing_template',
+        description: 'Get marketplace creator draft template for user-uploaded soul listings',
+        endpoint: '/api/mcp/tools/get_listing_template',
+        method: 'GET',
+        returns: { type: 'object', description: 'Template payload for creator listing draft contracts' }
+      },
+      {
+        name: 'validate_listing_draft',
+        description: 'Validate and normalize a creator-provided marketplace listing draft',
+        endpoint: '/api/mcp/tools/validate_listing_draft',
+        method: 'POST',
+        parameters: {
+          listing: { type: 'object', required: true, description: 'Listing metadata and fee split fields' },
+          assets: { type: 'object', required: true, description: 'Soul markdown and optional source attribution fields' }
+        },
+        returns: { type: 'object', description: 'Validation outcome, normalized draft, and deterministic draft_id' }
       }
     ],
     download_contract: {

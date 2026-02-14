@@ -31,8 +31,19 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
 - `POST /api/mcp/tools/purchase_soul`
 - `POST /api/mcp/tools/check_entitlements`
+- `GET /api/mcp/tools/get_listing_template`
+- `POST /api/mcp/tools/validate_listing_draft`
 - `GET /api/souls/{id}/download`
 - `GET /api/health/facilitator`
+
+## Marketplace Foundations (Phase 1)
+
+- `GET /api/mcp/tools/get_listing_template`:
+returns creator draft contract template for user-submitted soul listings.
+- `POST /api/mcp/tools/validate_listing_draft`:
+validates and normalizes listing + soul content payload and returns deterministic `draft_id`.
+- Scope:
+validation/normalization only in this phase; publish/listing activation is intentionally not enabled yet.
 
 ## Environment Variables
 

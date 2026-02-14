@@ -36,6 +36,14 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 - Verifies receipt proof(s) for re-download:
 `{ wallet_address, proofs: [{ soul_id, receipt }] }`
 
+5. `GET /api/mcp/tools/get_listing_template`
+- Returns marketplace listing draft template for creator upload workflows.
+
+6. `POST /api/mcp/tools/validate_listing_draft`
+- Validates and normalizes creator listing payloads.
+- Returns deterministic `draft_id`, `errors`, `warnings`, and normalized payload.
+- This phase does not publish listings; it only prepares validated drafts.
+
 ## Download Endpoint
 
 `GET /api/souls/{id}/download`
