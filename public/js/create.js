@@ -2,11 +2,13 @@ const API_BASE = '/api/mcp/tools/creator_marketplace';
 const DEFAULT_SELLER = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
+const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 let walletConnectProjectId = null;
 const STATE = {
   provider: null,
   signer: null,
   wallet: null,
+  walletType: null,
   lastDraftId: null
 };
 
@@ -34,8 +36,45 @@ function setWalletButton() {
   if (!btn) return;
   if (STATE.wallet) {
     btn.textContent = `${STATE.wallet.slice(0, 6)}...${STATE.wallet.slice(-4)}`;
+    btn.classList.add('connected');
+    btn.onclick = disconnectWallet;
   } else {
     btn.textContent = 'Connect Wallet';
+    btn.classList.remove('connected');
+    btn.onclick = openWalletModal;
+  }
+}
+
+function saveWalletSession() {
+  if (!STATE.wallet || !STATE.walletType) return;
+  try {
+    localStorage.setItem(
+      WALLET_SESSION_KEY,
+      JSON.stringify({
+        wallet: STATE.wallet,
+        walletType: STATE.walletType
+      })
+    );
+  } catch (_) {}
+}
+
+function clearWalletSession() {
+  try {
+    localStorage.removeItem(WALLET_SESSION_KEY);
+  } catch (_) {}
+}
+
+function readWalletSession() {
+  try {
+    const raw = localStorage.getItem(WALLET_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const wallet = String(parsed?.wallet || '').toLowerCase();
+    const walletType = String(parsed?.walletType || '').toLowerCase();
+    if (!wallet || !walletType) return null;
+    return { wallet, walletType };
+  } catch (_) {
+    return null;
   }
 }
 
@@ -80,16 +119,38 @@ async function connectWithProvider(rawProvider) {
     toast('Wallet provider not found', 'error');
     return;
   }
+  return connectWithProviderInternal(rawProvider, 'injected', false);
+}
+
+async function connectWithProviderInternal(rawProvider, walletType, silent) {
+  if (!rawProvider) {
+    throw new Error('Wallet provider not found');
+  }
   closeWalletModal();
-  STATE.provider = new ethers.BrowserProvider(rawProvider, 'any');
-  await STATE.provider.send('eth_requestAccounts', []);
-  STATE.signer = await STATE.provider.getSigner();
-  STATE.wallet = (await STATE.signer.getAddress()).toLowerCase();
-  await ensureBaseNetwork(STATE.provider);
-  setWalletButton();
-  const seller = document.getElementById('sellerAddress');
-  if (seller && !seller.value.trim()) seller.value = DEFAULT_SELLER;
-  toast('Wallet connected', 'success');
+  try {
+    STATE.provider = new ethers.BrowserProvider(rawProvider, 'any');
+    if (silent) {
+      const accounts = await STATE.provider.send('eth_accounts', []);
+      const first = Array.isArray(accounts) && accounts[0] ? String(accounts[0]) : '';
+      if (!first) throw new Error('No existing wallet authorization found');
+    } else {
+      await STATE.provider.send('eth_requestAccounts', []);
+    }
+    STATE.signer = await STATE.provider.getSigner();
+    STATE.wallet = (await STATE.signer.getAddress()).toLowerCase();
+    STATE.walletType = walletType;
+    await ensureBaseNetwork(STATE.provider);
+    saveWalletSession();
+    setWalletButton();
+    const seller = document.getElementById('sellerAddress');
+    if (seller && !seller.value.trim()) seller.value = DEFAULT_SELLER;
+    if (!silent) toast('Wallet connected', 'success');
+  } catch (error) {
+    if (!silent) {
+      toast(error.message || 'Wallet connection failed', 'error');
+    }
+    throw error;
+  }
 }
 
 async function connectMetaMask() {
@@ -99,9 +160,9 @@ async function connectMetaMask() {
   }
   if (Array.isArray(window.ethereum.providers)) {
     const mm = window.ethereum.providers.find((p) => p.isMetaMask);
-    if (mm) return connectWithProvider(mm);
+    if (mm) return connectWithProviderInternal(mm, 'metamask', false);
   }
-  return connectWithProvider(window.ethereum);
+  return connectWithProviderInternal(window.ethereum, 'metamask', false);
 }
 
 async function connectCoinbase() {
@@ -111,10 +172,10 @@ async function connectCoinbase() {
   }
   if (Array.isArray(window.ethereum.providers)) {
     const cb = window.ethereum.providers.find((p) => p.isCoinbaseWallet);
-    if (cb) return connectWithProvider(cb);
+    if (cb) return connectWithProviderInternal(cb, 'coinbase', false);
   }
   if (window.ethereum.isCoinbaseWallet) {
-    return connectWithProvider(window.ethereum);
+    return connectWithProviderInternal(window.ethereum, 'coinbase', false);
   }
   toast('Coinbase provider not detected', 'warning');
 }
@@ -124,7 +185,7 @@ async function connectInjected() {
     toast('No injected wallet found', 'error');
     return;
   }
-  return connectWithProvider(window.ethereum);
+  return connectWithProviderInternal(window.ethereum, 'injected', false);
 }
 
 async function connectWalletConnect() {
@@ -144,7 +205,62 @@ async function connectWalletConnect() {
     showQrModal: true
   });
   await wcProvider.enable();
-  return connectWithProvider(wcProvider);
+  return connectWithProviderInternal(wcProvider, 'walletconnect', false);
+}
+
+async function disconnectWallet() {
+  STATE.provider = null;
+  STATE.signer = null;
+  STATE.wallet = null;
+  STATE.walletType = null;
+  clearWalletSession();
+  setWalletButton();
+  toast('Wallet disconnected', 'info');
+}
+
+async function restoreWalletSession() {
+  const session = readWalletSession();
+  if (!session) return;
+
+  if (session.walletType === 'walletconnect') {
+    if (!window.EthereumProvider || !walletConnectProjectId) {
+      clearWalletSession();
+      return;
+    }
+    try {
+      const wcProvider = await window.EthereumProvider.init({
+        projectId: walletConnectProjectId,
+        chains: [BASE_CHAIN_DEC],
+        optionalChains: [1, 8453],
+        showQrModal: false
+      });
+      await connectWithProviderInternal(wcProvider, 'walletconnect', true);
+      if (STATE.wallet !== session.wallet) clearWalletSession();
+    } catch (_) {
+      clearWalletSession();
+    }
+    return;
+  }
+
+  if (!window.ethereum) {
+    clearWalletSession();
+    return;
+  }
+
+  try {
+    let providerCandidate = window.ethereum;
+    if (Array.isArray(window.ethereum.providers)) {
+      if (session.walletType === 'metamask') {
+        providerCandidate = window.ethereum.providers.find((p) => p.isMetaMask) || window.ethereum;
+      } else if (session.walletType === 'coinbase') {
+        providerCandidate = window.ethereum.providers.find((p) => p.isCoinbaseWallet) || window.ethereum;
+      }
+    }
+    await connectWithProviderInternal(providerCandidate, session.walletType, true);
+    if (STATE.wallet !== session.wallet) clearWalletSession();
+  } catch (_) {
+    clearWalletSession();
+  }
 }
 
 async function loadWalletConfig() {
@@ -370,7 +486,6 @@ async function submitForReview(draftId) {
 }
 
 function bindEvents() {
-  document.getElementById('walletBtn')?.addEventListener('click', openWalletModal);
   document.getElementById('loadTemplateBtn')?.addEventListener('click', async () => {
     try {
       await loadTemplate();
@@ -438,7 +553,7 @@ function initDefaults() {
 
 bindEvents();
 initDefaults();
-loadWalletConfig();
+loadWalletConfig().then(() => restoreWalletSession());
 
 window.closeWalletModal = closeWalletModal;
 window.connectMetaMask = () => connectMetaMask().catch((error) => toast(error.message || 'Wallet connection failed', 'error'));

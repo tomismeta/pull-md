@@ -27,6 +27,7 @@ const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 const X402_EXACT_PERMIT2_PROXY = '0x4020615294c913F045dc10f0a5cdEbd86c280001';
 const MAX_UINT256_DEC = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
 const EXPECTED_SELLER_ADDRESS = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
+const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 const sellerAddressCache = new Map();
 
 const PERMIT2_WITNESS_TYPES = {
@@ -51,6 +52,7 @@ const PERMIT2_WITNESS_TYPES = {
 let provider = null;
 let signer = null;
 let walletAddress = null;
+let walletType = null;
 let walletConnectProjectId = null;
 
 function openWalletModal() {
@@ -71,30 +73,67 @@ function disconnectWallet() {
   provider = null;
   signer = null;
   walletAddress = null;
+  walletType = null;
+  clearWalletSession();
   updateWalletUI();
   showToast('Wallet disconnected', 'info');
 }
 
-async function connectWithProvider(rawProvider) {
-  if (!rawProvider) {
-    showToast('Wallet provider not found', 'error');
-    return;
-  }
-
-  closeWalletModal();
-
+function saveWalletSession() {
+  if (!walletAddress || !walletType) return;
   try {
-    provider = new ethers.BrowserProvider(rawProvider, 'any');
-    await provider.send('eth_requestAccounts', []);
-    signer = await provider.getSigner();
-    walletAddress = (await signer.getAddress()).toLowerCase();
-    await ensureBaseNetwork();
-    updateWalletUI();
-    showToast('Wallet connected', 'success');
-  } catch (error) {
-    console.error('Wallet connection failed:', error);
-    showToast(`Connection failed: ${error.message || 'Unknown error'}`, 'error');
+    localStorage.setItem(
+      WALLET_SESSION_KEY,
+      JSON.stringify({
+        wallet: walletAddress,
+        walletType
+      })
+    );
+  } catch (_) {}
+}
+
+function clearWalletSession() {
+  try {
+    localStorage.removeItem(WALLET_SESSION_KEY);
+  } catch (_) {}
+}
+
+function readWalletSession() {
+  try {
+    const raw = localStorage.getItem(WALLET_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const wallet = String(parsed?.wallet || '').toLowerCase();
+    const type = String(parsed?.walletType || '').toLowerCase();
+    if (!wallet || !type) return null;
+    return { wallet, walletType: type };
+  } catch (_) {
+    return null;
   }
+}
+
+async function connectWithProvider(rawProvider) {
+  return connectWithProviderInternal(rawProvider, 'injected', false);
+}
+
+async function connectWithProviderInternal(rawProvider, type, silent) {
+  if (!rawProvider) throw new Error('Wallet provider not found');
+  closeWalletModal();
+  provider = new ethers.BrowserProvider(rawProvider, 'any');
+  if (silent) {
+    const accounts = await provider.send('eth_accounts', []);
+    const first = Array.isArray(accounts) && accounts[0] ? String(accounts[0]) : '';
+    if (!first) throw new Error('No existing wallet authorization found');
+  } else {
+    await provider.send('eth_requestAccounts', []);
+  }
+  signer = await provider.getSigner();
+  walletAddress = (await signer.getAddress()).toLowerCase();
+  walletType = type;
+  await ensureBaseNetwork();
+  saveWalletSession();
+  updateWalletUI();
+  if (!silent) showToast('Wallet connected', 'success');
 }
 
 async function connectMetaMask() {
@@ -105,10 +144,10 @@ async function connectMetaMask() {
 
   if (Array.isArray(window.ethereum.providers)) {
     const mm = window.ethereum.providers.find((p) => p.isMetaMask);
-    if (mm) return connectWithProvider(mm);
+    if (mm) return connectWithProviderInternal(mm, 'metamask', false);
   }
 
-  return connectWithProvider(window.ethereum);
+  return connectWithProviderInternal(window.ethereum, 'metamask', false);
 }
 
 async function connectCoinbase() {
@@ -119,11 +158,11 @@ async function connectCoinbase() {
 
   if (Array.isArray(window.ethereum.providers)) {
     const cb = window.ethereum.providers.find((p) => p.isCoinbaseWallet);
-    if (cb) return connectWithProvider(cb);
+    if (cb) return connectWithProviderInternal(cb, 'coinbase', false);
   }
 
   if (window.ethereum.isCoinbaseWallet) {
-    return connectWithProvider(window.ethereum);
+    return connectWithProviderInternal(window.ethereum, 'coinbase', false);
   }
 
   showToast('Coinbase provider not detected. Use Browser Wallet instead.', 'warning');
@@ -134,7 +173,7 @@ async function connectInjected() {
     showToast('No injected wallet found', 'error');
     return;
   }
-  return connectWithProvider(window.ethereum);
+  return connectWithProviderInternal(window.ethereum, 'injected', false);
 }
 
 async function connectWalletConnect() {
@@ -158,7 +197,7 @@ async function connectWalletConnect() {
       showQrModal: true
     });
     await wcProvider.enable();
-    await connectWithProvider(wcProvider);
+    await connectWithProviderInternal(wcProvider, 'walletconnect', false);
   } catch (error) {
     console.error('WalletConnect failed:', error);
     showToast(`WalletConnect failed: ${error.message || 'Unknown error'}`, 'error');
@@ -195,6 +234,50 @@ function updateWalletUI() {
     text.textContent = 'Connect Wallet';
     btn.classList.remove('connected');
     btn.onclick = openWalletModal;
+  }
+}
+
+async function restoreWalletSession() {
+  const session = readWalletSession();
+  if (!session) return;
+
+  if (session.walletType === 'walletconnect') {
+    if (!walletConnectProjectId || !window.EthereumProvider) {
+      clearWalletSession();
+      return;
+    }
+    try {
+      const wcProvider = await window.EthereumProvider.init({
+        projectId: walletConnectProjectId,
+        chains: [CONFIG.baseChainIdDec],
+        optionalChains: [1, 8453],
+        showQrModal: false
+      });
+      await connectWithProviderInternal(wcProvider, 'walletconnect', true);
+      if (walletAddress !== session.wallet) clearWalletSession();
+    } catch (_) {
+      clearWalletSession();
+    }
+    return;
+  }
+
+  if (!window.ethereum) {
+    clearWalletSession();
+    return;
+  }
+  try {
+    let providerCandidate = window.ethereum;
+    if (Array.isArray(window.ethereum.providers)) {
+      if (session.walletType === 'metamask') {
+        providerCandidate = window.ethereum.providers.find((p) => p.isMetaMask) || window.ethereum;
+      } else if (session.walletType === 'coinbase') {
+        providerCandidate = window.ethereum.providers.find((p) => p.isCoinbaseWallet) || window.ethereum;
+      }
+    }
+    await connectWithProviderInternal(providerCandidate, session.walletType, true);
+    if (walletAddress !== session.wallet) clearWalletSession();
+  } catch (_) {
+    clearWalletSession();
   }
 }
 
@@ -647,6 +730,7 @@ function showToast(message, type = 'info') {
 document.addEventListener('DOMContentLoaded', async () => {
   await loadWalletConfig();
   updateWalletUI();
+  await restoreWalletSession();
   loadSouls();
   showToast(
     `Security: verify full seller address ${EXPECTED_SELLER_ADDRESS} and ignore tiny unsolicited transfers.`,
@@ -657,10 +741,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 window.openWalletModal = openWalletModal;
 window.closeWalletModal = closeWalletModal;
 window.connectWallet = connectWallet;
-window.connectMetaMask = connectMetaMask;
-window.connectWalletConnect = connectWalletConnect;
-window.connectCoinbase = connectCoinbase;
-window.connectInjected = connectInjected;
+window.connectMetaMask = () => connectMetaMask().catch((error) => showToast(error.message || 'Wallet connection failed', 'error'));
+window.connectWalletConnect = () =>
+  connectWalletConnect().catch((error) => showToast(error.message || 'Wallet connection failed', 'error'));
+window.connectCoinbase = () => connectCoinbase().catch((error) => showToast(error.message || 'Wallet connection failed', 'error'));
+window.connectInjected = () => connectInjected().catch((error) => showToast(error.message || 'Wallet connection failed', 'error'));
 window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
 window.showToast = showToast;

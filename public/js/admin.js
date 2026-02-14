@@ -1,11 +1,13 @@
 const API_BASE = '/api/mcp/tools/creator_marketplace';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
+const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 let walletConnectProjectId = null;
 const state = {
   provider: null,
   signer: null,
   wallet: null,
+  walletType: null,
   moderators: []
 };
 
@@ -39,6 +41,18 @@ function isAllowedModerator(wallet) {
 function setStatus(text) {
   const el = document.getElementById('tokenStatus');
   if (el) el.textContent = text;
+}
+
+function setConnectButton() {
+  const btn = document.getElementById('connectWalletBtn');
+  if (!btn) return;
+  if (state.wallet) {
+    btn.textContent = `${state.wallet.slice(0, 6)}...${state.wallet.slice(-4)} (disconnect)`;
+    btn.classList.add('connected');
+  } else {
+    btn.textContent = 'connect moderator wallet';
+    btn.classList.remove('connected');
+  }
 }
 
 function renderEmpty(containerId, text) {
@@ -91,16 +105,59 @@ async function ensureBaseNetwork(provider) {
 }
 
 async function connectWithProvider(rawProvider) {
-  if (!rawProvider) {
-    showToast('Wallet provider not found', 'error');
-    return;
+  return connectWithProviderInternal(rawProvider, 'injected', false);
+}
+
+function saveWalletSession() {
+  if (!state.wallet || !state.walletType) return;
+  try {
+    localStorage.setItem(
+      WALLET_SESSION_KEY,
+      JSON.stringify({
+        wallet: state.wallet,
+        walletType: state.walletType
+      })
+    );
+  } catch (_) {}
+}
+
+function clearWalletSession() {
+  try {
+    localStorage.removeItem(WALLET_SESSION_KEY);
+  } catch (_) {}
+}
+
+function readWalletSession() {
+  try {
+    const raw = localStorage.getItem(WALLET_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const wallet = String(parsed?.wallet || '').toLowerCase();
+    const walletType = String(parsed?.walletType || '').toLowerCase();
+    if (!wallet || !walletType) return null;
+    return { wallet, walletType };
+  } catch (_) {
+    return null;
   }
+}
+
+async function connectWithProviderInternal(rawProvider, walletType, silent) {
+  if (!rawProvider) throw new Error('Wallet provider not found');
   closeWalletModal();
   state.provider = new ethers.BrowserProvider(rawProvider, 'any');
-  await state.provider.send('eth_requestAccounts', []);
+  if (silent) {
+    const accounts = await state.provider.send('eth_accounts', []);
+    const first = Array.isArray(accounts) && accounts[0] ? String(accounts[0]) : '';
+    if (!first) throw new Error('No existing wallet authorization found');
+  } else {
+    await state.provider.send('eth_requestAccounts', []);
+  }
   state.signer = await state.provider.getSigner();
   state.wallet = (await state.signer.getAddress()).toLowerCase();
+  state.walletType = walletType;
   await ensureBaseNetwork(state.provider);
+  saveWalletSession();
+  setConnectButton();
 }
 
 async function connectMetaMask() {
@@ -110,9 +167,9 @@ async function connectMetaMask() {
   }
   if (Array.isArray(window.ethereum.providers)) {
     const mm = window.ethereum.providers.find((p) => p.isMetaMask);
-    if (mm) return connectWithProvider(mm);
+    if (mm) return connectWithProviderInternal(mm, 'metamask', false);
   }
-  return connectWithProvider(window.ethereum);
+  return connectWithProviderInternal(window.ethereum, 'metamask', false);
 }
 
 async function connectCoinbase() {
@@ -122,9 +179,9 @@ async function connectCoinbase() {
   }
   if (Array.isArray(window.ethereum.providers)) {
     const cb = window.ethereum.providers.find((p) => p.isCoinbaseWallet);
-    if (cb) return connectWithProvider(cb);
+    if (cb) return connectWithProviderInternal(cb, 'coinbase', false);
   }
-  if (window.ethereum.isCoinbaseWallet) return connectWithProvider(window.ethereum);
+  if (window.ethereum.isCoinbaseWallet) return connectWithProviderInternal(window.ethereum, 'coinbase', false);
   showToast('Coinbase provider not detected', 'warning');
 }
 
@@ -133,7 +190,7 @@ async function connectInjected() {
     showToast('No injected wallet detected', 'error');
     return;
   }
-  return connectWithProvider(window.ethereum);
+  return connectWithProviderInternal(window.ethereum, 'injected', false);
 }
 
 async function connectWalletConnect() {
@@ -153,7 +210,7 @@ async function connectWalletConnect() {
     showQrModal: true
   });
   await wcProvider.enable();
-  return connectWithProvider(wcProvider);
+  return connectWithProviderInternal(wcProvider, 'walletconnect', false);
 }
 
 async function loadWalletConfig() {
@@ -303,6 +360,68 @@ async function connectWallet() {
   }
 }
 
+function disconnectWallet() {
+  state.provider = null;
+  state.signer = null;
+  state.wallet = null;
+  state.walletType = null;
+  clearWalletSession();
+  setConnectButton();
+  setStatus('Wallet not connected.');
+  renderEmpty('queueContainer', 'Connect an allowlisted moderator wallet.');
+  renderEmpty('publishedContainer', 'Connect an allowlisted moderator wallet.');
+  showToast('Wallet disconnected', 'info');
+}
+
+async function restoreWalletSession() {
+  const session = readWalletSession();
+  if (!session) return;
+
+  if (session.walletType === 'walletconnect') {
+    if (!window.EthereumProvider || !walletConnectProjectId) {
+      clearWalletSession();
+      return;
+    }
+    try {
+      const wcProvider = await window.EthereumProvider.init({
+        projectId: walletConnectProjectId,
+        chains: [BASE_CHAIN_DEC],
+        optionalChains: [1, 8453],
+        showQrModal: false
+      });
+      await connectWithProviderInternal(wcProvider, 'walletconnect', true);
+      if (state.wallet !== session.wallet) clearWalletSession();
+      await connectWallet();
+    } catch (_) {
+      clearWalletSession();
+    }
+    return;
+  }
+
+  if (!window.ethereum) {
+    clearWalletSession();
+    return;
+  }
+  try {
+    let providerCandidate = window.ethereum;
+    if (Array.isArray(window.ethereum.providers)) {
+      if (session.walletType === 'metamask') {
+        providerCandidate = window.ethereum.providers.find((p) => p.isMetaMask) || window.ethereum;
+      } else if (session.walletType === 'coinbase') {
+        providerCandidate = window.ethereum.providers.find((p) => p.isCoinbaseWallet) || window.ethereum;
+      }
+    }
+    await connectWithProviderInternal(providerCandidate, session.walletType, true);
+    if (state.wallet !== session.wallet) {
+      clearWalletSession();
+      return;
+    }
+    await connectWallet();
+  } catch (_) {
+    clearWalletSession();
+  }
+}
+
 async function requireAllowedModerator() {
   if (!state.wallet || !state.signer) throw new Error('Connect an allowlisted moderator wallet first');
   if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
@@ -350,7 +469,11 @@ async function publishDraft(walletAddress, draftId) {
 function bindEvents() {
   document.getElementById('connectWalletBtn')?.addEventListener('click', async () => {
     try {
-      openWalletModal();
+      if (state.wallet) {
+        disconnectWallet();
+      } else {
+        openWalletModal();
+      }
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -431,9 +554,11 @@ async function init() {
   bindWalletChoiceHandlers();
   await loadWalletConfig();
   await loadModerators();
+  setConnectButton();
   setStatus('Wallet not connected.');
   renderEmpty('queueContainer', 'Connect an allowlisted moderator wallet.');
   renderEmpty('publishedContainer', 'Connect an allowlisted moderator wallet.');
+  await restoreWalletSession();
 }
 
 window.closeWalletModal = closeWalletModal;
