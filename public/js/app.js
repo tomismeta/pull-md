@@ -28,7 +28,9 @@ const X402_EXACT_PERMIT2_PROXY = '0x4020615294c913F045dc10f0a5cdEbd86c280001';
 const MAX_UINT256_DEC = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
 const EXPECTED_SELLER_ADDRESS = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
+const RECEIPT_PREFIX = 'soulstarter.receipt.';
 const sellerAddressCache = new Map();
+const entitlementCacheByWallet = new Map();
 
 const PERMIT2_WITNESS_TYPES = {
   PermitWitnessTransferFrom: [
@@ -75,7 +77,10 @@ function disconnectWallet() {
   walletAddress = null;
   walletType = null;
   clearWalletSession();
+  entitlementCacheByWallet.clear();
   updateWalletUI();
+  loadSouls();
+  updateSoulPagePurchaseState();
   showToast('Wallet disconnected', 'info');
 }
 
@@ -132,7 +137,10 @@ async function connectWithProviderInternal(rawProvider, type, silent) {
   walletType = type;
   await ensureBaseNetwork();
   saveWalletSession();
+  await refreshEntitlementsForWallet(walletAddress);
   updateWalletUI();
+  loadSouls();
+  updateSoulPagePurchaseState();
   if (!silent) showToast('Wallet connected', 'success');
 }
 
@@ -235,6 +243,80 @@ function updateWalletUI() {
     btn.classList.remove('connected');
     btn.onclick = openWalletModal;
   }
+}
+
+function ownedSoulSetForCurrentWallet() {
+  if (!walletAddress) return new Set();
+  return entitlementCacheByWallet.get(walletAddress) || new Set();
+}
+
+function isSoulOwned(soulId) {
+  if (!walletAddress || !soulId) return false;
+  const owned = ownedSoulSetForCurrentWallet();
+  return owned.has(soulId);
+}
+
+function parseSoulIdFromReceiptKey(key, wallet) {
+  const prefix = `${RECEIPT_PREFIX}${wallet.toLowerCase()}.`;
+  if (!String(key || '').startsWith(prefix)) return null;
+  return String(key).slice(prefix.length);
+}
+
+function collectStoredProofs(wallet) {
+  const proofs = [];
+  try {
+    const normalized = wallet.toLowerCase();
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      const soulId = parseSoulIdFromReceiptKey(key, normalized);
+      if (!soulId) continue;
+      const receipt = localStorage.getItem(key);
+      if (!receipt) continue;
+      proofs.push({ soul_id: soulId, receipt });
+    }
+  } catch (_) {}
+  return proofs;
+}
+
+async function refreshEntitlementsForWallet(wallet) {
+  if (!wallet) return;
+  const proofs = collectStoredProofs(wallet);
+  if (proofs.length === 0) {
+    entitlementCacheByWallet.set(wallet.toLowerCase(), new Set());
+    return;
+  }
+  try {
+    const response = await fetchWithTimeout(`${CONFIG.apiBase}/mcp/tools/check_entitlements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        wallet_address: wallet.toLowerCase(),
+        proofs
+      })
+    });
+    if (!response.ok) throw new Error('entitlement check failed');
+    const payload = await response.json();
+    const owned = new Set(
+      (Array.isArray(payload?.entitlements) ? payload.entitlements : [])
+        .filter((entry) => entry?.entitled && entry?.soul_id)
+        .map((entry) => String(entry.soul_id))
+    );
+    entitlementCacheByWallet.set(wallet.toLowerCase(), owned);
+  } catch (_) {
+    const fallback = new Set(proofs.map((proof) => String(proof.soul_id)));
+    entitlementCacheByWallet.set(wallet.toLowerCase(), fallback);
+  }
+}
+
+function updateSoulPagePurchaseState() {
+  const btn = document.getElementById('buyBtn');
+  if (!btn) return;
+  const onclick = String(btn.getAttribute('onclick') || '');
+  const match = onclick.match(/purchaseSoul\(['"]([^'"]+)['"]\)/);
+  const soulId = match?.[1];
+  if (!soulId) return;
+  const owned = isSoulOwned(soulId);
+  btn.textContent = owned ? 'Download Soul' : 'Buy Soul';
 }
 
 async function restoreWalletSession() {
@@ -494,6 +576,13 @@ async function purchaseSoul(soulId) {
 
     const prior = await tryRedownload(soulId);
     if (prior.ok) {
+      if (walletAddress) {
+        const owned = ownedSoulSetForCurrentWallet();
+        owned.add(soulId);
+        entitlementCacheByWallet.set(walletAddress, owned);
+      }
+      loadSouls();
+      updateSoulPagePurchaseState();
       showToast('Entitlement verified. Download restored.', 'success');
       return;
     }
@@ -535,9 +624,16 @@ async function purchaseSoul(soulId) {
     const tx = readSettlementTx(paid);
     const receipt = paid.headers.get('X-PURCHASE-RECEIPT');
     if (receipt) storeReceipt(soulId, walletAddress, receipt);
+    if (walletAddress) {
+      const owned = ownedSoulSetForCurrentWallet();
+      owned.add(soulId);
+      entitlementCacheByWallet.set(walletAddress, owned);
+    }
 
     showPaymentSuccess(content, tx, soulId, false);
     showToast('Soul acquired successfully!', 'success');
+    loadSouls();
+    updateSoulPagePurchaseState();
   } catch (error) {
     console.error('Purchase failed:', error);
     showToast(`Purchase failed: ${error.message || 'Unknown error'}`, 'error');
@@ -576,6 +672,10 @@ function receiptStorageKey(wallet, soulId) {
 function storeReceipt(soulId, wallet, receipt) {
   try {
     localStorage.setItem(receiptStorageKey(wallet, soulId), receipt);
+    const normalized = wallet.toLowerCase();
+    const owned = entitlementCacheByWallet.get(normalized) || new Set();
+    owned.add(soulId);
+    entitlementCacheByWallet.set(normalized, owned);
   } catch (_) {}
 }
 
@@ -652,7 +752,10 @@ async function loadSouls() {
 
     grid.innerHTML = souls
       .map(
-        (soul) => `
+        (soul) => {
+          const owned = isSoulOwned(soul.id);
+          const cta = owned ? 'Download Soul' : 'Buy Soul';
+          return `
       <article class="soul-card ${soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : ''}" data-soul-id="${escapeHtml(soul.id)}">
         <div class="soul-card-icon">${escapeHtml(soul.icon || '🔮')}</div>
         <h3>${escapeHtml(soul.name)}</h3>
@@ -674,9 +777,10 @@ async function loadSouls() {
             <span class="currency">USDC</span>
           </div>
         </div>
-        <button class="btn btn-primary btn-full" onclick="purchaseSoul('${escapeHtml(soul.id)}')">Buy Soul</button>
+        <button class="btn btn-primary btn-full" onclick="purchaseSoul('${escapeHtml(soul.id)}')">${escapeHtml(cta)}</button>
       </article>
-    `
+    `;
+        }
       )
       .join('');
   } catch (error) {
@@ -754,7 +858,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindWalletOptionHandlers();
   updateWalletUI();
   await restoreWalletSession();
+  await refreshEntitlementsForWallet(walletAddress);
   loadSouls();
+  updateSoulPagePurchaseState();
   showToast(
     `Security: verify full seller address ${EXPECTED_SELLER_ADDRESS} and ignore tiny unsolicited transfers.`,
     'info'
