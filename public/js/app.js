@@ -779,22 +779,22 @@ function showPaymentSuccess(content, txHash, soulId, redownload) {
   if (purchaseCard) purchaseCard.style.display = 'none';
 
   const successCard = document.getElementById('successCard');
-  if (!successCard) return;
-  successCard.style.display = 'block';
-
-  const heading = successCard.querySelector('h3');
-  if (heading) {
-    heading.textContent = redownload ? 'Soul Restored!' : 'Soul Acquired!';
-  }
-
-  const firstP = successCard.querySelector('p');
-  if (firstP) {
-    firstP.textContent = redownload
-      ? 'Entitlement verified via wallet re-authentication.'
-      : 'x402 payment settled successfully.';
-  }
-
   const downloadLink = document.getElementById('downloadLink');
+  if (successCard) {
+    successCard.style.display = 'block';
+    const heading = successCard.querySelector('h3');
+    if (heading) {
+      heading.textContent = redownload ? 'Soul Restored!' : 'Soul Acquired!';
+    }
+
+    const firstP = successCard.querySelector('p');
+    if (firstP) {
+      firstP.textContent = redownload
+        ? 'Entitlement verified via wallet re-authentication.'
+        : 'x402 payment settled successfully.';
+    }
+  }
+
   if (downloadLink) {
     const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
     downloadLink.href = url;
@@ -815,7 +815,7 @@ function showPaymentSuccess(content, txHash, soulId, redownload) {
   }
 
   const txHashEl = document.getElementById('txHash');
-  if (txHashEl) {
+  if (txHashEl && successCard) {
     txHashEl.textContent = '';
     if (txHash) {
       txHashEl.appendChild(document.createTextNode('Transaction: '));
@@ -879,7 +879,7 @@ async function loadSouls() {
             <span class="currency">USDC</span>
           </div>
         </div>
-        <button class="btn btn-primary btn-full" onclick="purchaseSoul('${escapeHtml(soul.id)}')">${escapeHtml(cta)}</button>
+        <button class="btn btn-primary btn-full" onclick="${owned ? `downloadOwnedSoul('${escapeHtml(soul.id)}')` : `purchaseSoul('${escapeHtml(soul.id)}')`}">${escapeHtml(cta)}</button>
       </article>
     `;
         }
