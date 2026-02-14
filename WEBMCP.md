@@ -59,20 +59,23 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 `{ state: "pending", submitted_at, reviewed_at: null, reviewer: null, notes: null }`
 - Publish is still intentionally disabled in this phase.
 
-11. `POST /api/mcp/tools/creator_marketplace?action=review_listing_submission` (admin only)
-- Header: `X-ADMIN-TOKEN`
+11. `POST /api/mcp/tools/creator_marketplace?action=review_listing_submission` (moderator wallet auth)
+- Headers:
+`X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
 - Body:
 `{ wallet_address, draft_id, decision: "approve" | "reject", reviewer?, notes? }`
 - Applies moderation decision and updates status:
 `approved_for_publish` or `rejected`.
 - Writes immutable audit entries to local review audit stream.
 
-12. `GET /api/mcp/tools/creator_marketplace?action=list_review_queue` (admin only)
-- Header: `X-ADMIN-TOKEN`
+12. `GET /api/mcp/tools/creator_marketplace?action=list_review_queue` (moderator wallet auth)
+- Headers:
+`X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
 - Returns drafts in `submitted_for_review` status.
 
-13. `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (admin only)
-- Header: `X-ADMIN-TOKEN`
+13. `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (moderator wallet auth)
+- Headers:
+`X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
 - Body:
 `{ wallet_address, draft_id, reviewer?, notes? }`
 - Requires draft status `approved_for_publish`.
@@ -83,9 +86,12 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 14. `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
 - Public listing of all drafts currently in `published` status.
 
+15. `GET /api/mcp/tools/creator_marketplace?action=list_moderators`
+- Lists allowlisted moderator wallet addresses.
+
 UI companion:
 - `/admin.html` provides a lightweight human moderation console for queue review, approve/reject, and publish actions.
-- It calls the same `creator_marketplace` actions and passes `X-ADMIN-TOKEN` from local browser storage.
+- It requires connected allowlisted moderator wallet and signs `SoulStarter Moderator Authentication` messages per moderation action.
 - `/create.html` provides a lightweight creator console for draft template, validate, save, list/load, and submit-for-review flows.
 - Creator auth actions use wallet signatures over `SoulStarter Creator Authentication` messages with action-scoped timestamps.
 
@@ -262,3 +268,24 @@ Where `<tool_action>` is one of:
 - `list_my_listing_drafts`
 - `get_my_listing_draft`
 - `submit_listing_for_review`
+
+## Moderator Auth Message
+
+Moderation tools require wallet-auth headers:
+- `X-MODERATOR-ADDRESS`
+- `X-MODERATOR-SIGNATURE`
+- `X-MODERATOR-TIMESTAMP`
+
+Sign exactly:
+
+```text
+SoulStarter Moderator Authentication
+address:<wallet_lowercase>
+action:<tool_action>
+timestamp:<unix_ms>
+```
+
+Where `<tool_action>` is one of:
+- `list_review_queue`
+- `review_listing_submission`
+- `publish_listing`

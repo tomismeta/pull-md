@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
+  <script src="https://unpkg.com/ethers@6.16.0/dist/ethers.umd.min.js"></script>
 </head>
 <body>
   <header class="header">
@@ -31,7 +32,7 @@
       <div class="container">
         <div class="agent-api-card admin-header-card">
           <h1>Marketplace Moderation</h1>
-          <p>Admin token is used only as request header to moderation endpoints. It is never rendered back by the API.</p>
+          <p>Access is restricted to allowlisted moderator wallets using signed wallet-auth messages per action.</p>
         </div>
       </div>
     </section>
@@ -39,13 +40,13 @@
     <section class="admin-section">
       <div class="container">
         <div class="agent-api-card">
-          <h3>Admin Session</h3>
+          <h3>Moderator Session</h3>
           <div class="admin-token-row">
-            <input id="adminTokenInput" class="admin-input" type="password" autocomplete="off" placeholder="Enter admin token">
-            <button id="saveTokenBtn" class="btn btn-primary">save token</button>
-            <button id="clearTokenBtn" class="btn btn-ghost">clear</button>
+            <button id="connectWalletBtn" class="btn btn-primary">connect moderator wallet</button>
           </div>
-          <p id="tokenStatus" class="admin-status">No token saved.</p>
+          <p id="tokenStatus" class="admin-status">Wallet not connected.</p>
+          <p class="admin-status">Allowed moderators:</p>
+          <div id="moderatorList" class="admin-list"></div>
         </div>
       </div>
     </section>

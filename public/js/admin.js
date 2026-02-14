@@ -1,5 +1,10 @@
 const API_BASE = '/api/mcp/tools/creator_marketplace';
-const TOKEN_KEY = 'soulstarter_admin_token';
+const state = {
+  provider: null,
+  signer: null,
+  wallet: null,
+  moderators: []
+};
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
@@ -15,8 +20,17 @@ function showToast(message, type = 'info') {
   }, 2800);
 }
 
-function getToken() {
-  return localStorage.getItem(TOKEN_KEY) || '';
+function normalizeAddress(value) {
+  try {
+    return ethers.getAddress(String(value || '').trim()).toLowerCase();
+  } catch (_) {
+    return null;
+  }
+}
+
+function isAllowedModerator(wallet) {
+  const normalized = normalizeAddress(wallet);
+  return Boolean(normalized && state.moderators.includes(normalized));
 }
 
 function setStatus(text) {
@@ -30,32 +44,60 @@ function renderEmpty(containerId, text) {
   el.innerHTML = `<p class="admin-empty">${text}</p>`;
 }
 
-async function apiCall(action, { method = 'GET', body } = {}) {
-  const token = getToken();
-  if (!token) {
-    throw new Error('Admin token is required');
-  }
-  const url = `${API_BASE}?action=${encodeURIComponent(action)}`;
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-ADMIN-TOKEN': token
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || `Request failed (${response.status})`);
-  }
-  return payload;
-}
-
 function formatDate(value) {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleString();
+}
+
+function moderatorAuthMessage(action, timestamp) {
+  return [
+    'SoulStarter Moderator Authentication',
+    `address:${state.wallet}`,
+    `action:${action}`,
+    `timestamp:${timestamp}`
+  ].join('\n');
+}
+
+async function signModeratorHeaders(action) {
+  if (!state.wallet || !state.signer) throw new Error('Connect wallet first');
+  if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
+  const timestamp = Date.now();
+  const signature = await state.signer.signMessage(moderatorAuthMessage(action, timestamp));
+  return {
+    'X-MODERATOR-ADDRESS': state.wallet,
+    'X-MODERATOR-SIGNATURE': signature,
+    'X-MODERATOR-TIMESTAMP': String(timestamp)
+  };
+}
+
+async function apiCall(action, { method = 'GET', body, moderatorAuth = false } = {}) {
+  const url = `${API_BASE}?action=${encodeURIComponent(action)}`;
+  const authHeaders = moderatorAuth ? await signModeratorHeaders(action) : {};
+  const response = await fetch(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
+  return payload;
+}
+
+function renderModeratorList() {
+  const container = document.getElementById('moderatorList');
+  if (!container) return;
+  if (!state.moderators.length) {
+    container.innerHTML = '<p class="admin-empty">No moderator wallets configured.</p>';
+    return;
+  }
+  container.innerHTML = state.moderators
+    .map((wallet) => `<p class="admin-line"><code>${wallet}</code></p>`)
+    .join('');
 }
 
 function draftCardActions(item) {
@@ -77,7 +119,6 @@ function renderQueue(items) {
     renderEmpty('queueContainer', 'No drafts waiting review.');
     return;
   }
-
   container.innerHTML = items
     .map((item) => {
       const listing = item.normalized?.listing || {};
@@ -105,7 +146,6 @@ function renderPublished(items) {
     renderEmpty('publishedContainer', 'No published listings yet.');
     return;
   }
-
   container.innerHTML = items
     .map((item) => {
       const listing = item.normalized?.listing || {};
@@ -124,80 +164,104 @@ function renderPublished(items) {
     .join('');
 }
 
-async function loadQueue() {
-  try {
-    const data = await apiCall('list_review_queue');
-    renderQueue(data.queue || []);
-  } catch (error) {
-    renderEmpty('queueContainer', `Queue load failed: ${error.message}`);
+async function loadModerators() {
+  const data = await apiCall('list_moderators');
+  state.moderators = Array.isArray(data.moderators) ? data.moderators.map((w) => String(w).toLowerCase()) : [];
+  renderModeratorList();
+}
+
+async function connectWallet() {
+  if (!window.ethereum) {
+    showToast('No injected wallet detected', 'error');
+    return;
   }
+  state.provider = new ethers.BrowserProvider(window.ethereum, 'any');
+  await state.provider.send('eth_requestAccounts', []);
+  state.signer = await state.provider.getSigner();
+  state.wallet = (await state.signer.getAddress()).toLowerCase();
+  const allowed = isAllowedModerator(state.wallet);
+  if (allowed) {
+    setStatus(`Connected moderator: ${state.wallet}`);
+    showToast('Moderator wallet connected', 'success');
+    await Promise.all([loadQueue(), loadPublished()]);
+  } else {
+    setStatus(`Connected wallet is not allowlisted: ${state.wallet}`);
+    renderEmpty('queueContainer', 'Access denied. Use an allowlisted moderator wallet.');
+    renderEmpty('publishedContainer', 'Access denied. Use an allowlisted moderator wallet.');
+    showToast('Wallet is not in moderator allowlist', 'warning');
+  }
+}
+
+async function requireAllowedModerator() {
+  if (!state.wallet || !state.signer) throw new Error('Connect an allowlisted moderator wallet first');
+  if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
+}
+
+async function loadQueue() {
+  await requireAllowedModerator();
+  const data = await apiCall('list_review_queue', { moderatorAuth: true });
+  renderQueue(data.queue || []);
 }
 
 async function loadPublished() {
-  try {
-    const data = await apiCall('list_published_listings');
-    renderPublished(data.listings || []);
-  } catch (error) {
-    renderEmpty('publishedContainer', `Published load failed: ${error.message}`);
-  }
+  await requireAllowedModerator();
+  const data = await apiCall('list_published_listings');
+  renderPublished(data.listings || []);
 }
 
 async function reviewDecision(walletAddress, draftId, decision) {
+  await requireAllowedModerator();
   await apiCall('review_listing_submission', {
     method: 'POST',
+    moderatorAuth: true,
     body: {
       wallet_address: walletAddress,
       draft_id: draftId,
       decision,
-      reviewer: 'admin-ui'
+      reviewer: state.wallet
     }
   });
 }
 
 async function publishDraft(walletAddress, draftId) {
+  await requireAllowedModerator();
   await apiCall('publish_listing', {
     method: 'POST',
+    moderatorAuth: true,
     body: {
       wallet_address: walletAddress,
       draft_id: draftId,
-      reviewer: 'admin-ui'
+      reviewer: state.wallet
     }
   });
 }
 
 function bindEvents() {
-  const saveBtn = document.getElementById('saveTokenBtn');
-  const clearBtn = document.getElementById('clearTokenBtn');
-  const tokenInput = document.getElementById('adminTokenInput');
-  const refreshQueueBtn = document.getElementById('refreshQueueBtn');
-  const refreshPublishedBtn = document.getElementById('refreshPublishedBtn');
-
-  if (tokenInput) tokenInput.value = getToken();
-  setStatus(getToken() ? 'Token saved locally for this browser.' : 'No token saved.');
-
-  saveBtn?.addEventListener('click', async () => {
-    const value = (tokenInput?.value || '').trim();
-    if (!value) {
-      showToast('Enter a token first', 'warning');
-      return;
+  document.getElementById('connectWalletBtn')?.addEventListener('click', async () => {
+    try {
+      await connectWallet();
+    } catch (error) {
+      showToast(error.message, 'error');
     }
-    localStorage.setItem(TOKEN_KEY, value);
-    setStatus('Token saved locally for this browser.');
-    showToast('Admin token saved', 'success');
-    await Promise.all([loadQueue(), loadPublished()]);
   });
 
-  clearBtn?.addEventListener('click', () => {
-    localStorage.removeItem(TOKEN_KEY);
-    if (tokenInput) tokenInput.value = '';
-    setStatus('No token saved.');
-    renderEmpty('queueContainer', 'Admin token required.');
-    renderEmpty('publishedContainer', 'Admin token required.');
-    showToast('Admin token cleared', 'info');
+  document.getElementById('refreshQueueBtn')?.addEventListener('click', async () => {
+    try {
+      await loadQueue();
+    } catch (error) {
+      showToast(error.message, 'error');
+      renderEmpty('queueContainer', `Queue load failed: ${error.message}`);
+    }
   });
 
-  refreshQueueBtn?.addEventListener('click', loadQueue);
-  refreshPublishedBtn?.addEventListener('click', loadPublished);
+  document.getElementById('refreshPublishedBtn')?.addEventListener('click', async () => {
+    try {
+      await loadPublished();
+    } catch (error) {
+      showToast(error.message, 'error');
+      renderEmpty('publishedContainer', `Published load failed: ${error.message}`);
+    }
+  });
 
   document.addEventListener('click', async (event) => {
     const target = event.target;
@@ -227,12 +291,12 @@ function bindEvents() {
 
 async function init() {
   bindEvents();
-  if (getToken()) {
-    await Promise.all([loadQueue(), loadPublished()]);
-  } else {
-    renderEmpty('queueContainer', 'Admin token required.');
-    renderEmpty('publishedContainer', 'Admin token required.');
-  }
+  await loadModerators();
+  setStatus('Wallet not connected.');
+  renderEmpty('queueContainer', 'Connect an allowlisted moderator wallet.');
+  renderEmpty('publishedContainer', 'Connect an allowlisted moderator wallet.');
 }
 
-init();
+init().catch((error) => {
+  showToast(error.message, 'error');
+});

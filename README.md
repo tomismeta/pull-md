@@ -37,9 +37,10 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `GET /api/mcp/tools/creator_marketplace?action=list_my_listing_drafts`
 - `GET /api/mcp/tools/creator_marketplace?action=get_my_listing_draft&draft_id=<id>`
 - `POST /api/mcp/tools/creator_marketplace?action=submit_listing_for_review`
-- `POST /api/mcp/tools/creator_marketplace?action=review_listing_submission` (admin only)
-- `GET /api/mcp/tools/creator_marketplace?action=list_review_queue` (admin only)
-- `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (admin only)
+- `GET /api/mcp/tools/creator_marketplace?action=list_moderators`
+- `POST /api/mcp/tools/creator_marketplace?action=review_listing_submission` (moderator wallet auth)
+- `GET /api/mcp/tools/creator_marketplace?action=list_review_queue` (moderator wallet auth)
+- `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (moderator wallet auth)
 - `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
 - `GET /api/souls/{id}/download`
 - `GET /api/health/facilitator`
@@ -56,24 +57,25 @@ validation/normalization only in this phase; publish/listing activation is inten
 wallet-authenticated private draft save/list/get endpoints are available for builder workflows.
 - Review submission:
 wallet-authenticated submit endpoint transitions draft -> `submitted_for_review` with moderation metadata (`state: pending`).
-- Admin moderation decision:
+- Moderator moderation decision:
 `review_listing_submission` applies `approve`/`reject` decisions and records immutable audit entries.
 - Review queue + publish:
-admins can list pending queue and transition approved drafts to `published`.
+allowlisted moderators can list pending queue and transition approved drafts to `published`.
 - Active catalog behavior:
 once a draft is `published`, it is promoted into the live catalog and becomes purchasable via `GET /api/souls/{id}/download`.
 
-## Marketplace Admin Configuration
+## Marketplace Moderation Configuration
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `MARKETPLACE_REVIEW_ADMIN_TOKEN` | for moderation endpoints | Comma-separated admin token(s) accepted by `review_listing_submission` |
+| `MODERATOR_WALLETS` | recommended | Comma-separated allowlisted moderator wallet addresses |
+| `MODERATOR_ALLOWLIST` | optional | Alias for `MODERATOR_WALLETS` |
 
 Audit trail:
 - Marketplace moderation actions append immutable JSONL entries at:
 `.marketplace-drafts/review-audit.jsonl`
 - Lightweight moderation UI:
-`/admin.html` (requires manual entry of `MARKETPLACE_REVIEW_ADMIN_TOKEN` in browser session to call admin endpoints).
+`/admin.html` (requires connected wallet in moderator allowlist; action requests are signed per call).
 - Creator UI:
 `/create.html` (wallet-authenticated draft validate/save/list/load/submit workflow against `creator_marketplace` actions).
 

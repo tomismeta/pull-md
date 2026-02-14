@@ -7,8 +7,10 @@ const SOUL_TYPES = new Set(['synthetic', 'organic', 'hybrid']);
 const MAX_SOUL_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
+const MODERATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 const REVIEW_AUDIT_FILE = 'review-audit.jsonl';
 const PUBLISHED_CATALOG_FILE = 'published-catalog.json';
+const DEFAULT_MODERATOR_WALLETS = ['0x7F46aCB709cd8DF5879F84915CA431fB740989E4'];
 
 function asString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -452,19 +454,98 @@ export async function submitCreatorDraftForReview({ walletAddress, draftId }) {
   return { ok: true, draft: next };
 }
 
-export function verifyReviewAdminToken(token) {
-  const presented = String(token || '').trim();
-  const configured = String(process.env.MARKETPLACE_REVIEW_ADMIN_TOKEN || '')
+function parseModeratorWalletEnv() {
+  const fromEnv = [process.env.MODERATOR_WALLETS, process.env.MODERATOR_ALLOWLIST]
+    .map((value) => String(value || ''))
+    .join(',')
     .split(',')
-    .map((v) => v.trim())
+    .map((value) => value.trim())
     .filter(Boolean);
+  const merged = fromEnv.length > 0 ? fromEnv : DEFAULT_MODERATOR_WALLETS;
+  return [...new Set(merged.map((value) => value.toLowerCase()).filter(validateEthAddress))];
+}
 
-  if (!presented) return { ok: false, error: 'Missing admin token' };
-  if (configured.length === 0) {
-    return { ok: false, error: 'Server configuration error: MARKETPLACE_REVIEW_ADMIN_TOKEN is required' };
+export function listModeratorWallets() {
+  return parseModeratorWalletEnv();
+}
+
+function buildModeratorAuthMessageWithNewline({ wallet, action, timestamp, newline }) {
+  return ['SoulStarter Moderator Authentication', `address:${wallet}`, `action:${action}`, `timestamp:${timestamp}`].join(
+    newline
+  );
+}
+
+function buildModeratorAuthMessageCandidates({ wallet, action, timestamp }) {
+  const raw = asString(wallet);
+  const lower = raw.toLowerCase();
+  const checksummed = safeChecksumAddress(raw);
+  const wallets = [...new Set([lower, checksummed].filter(Boolean))];
+  const newlines = ['\n', '\r\n'];
+  const messages = [];
+  for (const walletVariant of wallets) {
+    for (const newline of newlines) {
+      messages.push({
+        variant: `${walletVariant === lower ? 'lowercase' : 'checksummed'}-${newline === '\n' ? 'lf' : 'crlf'}`,
+        message: buildModeratorAuthMessageWithNewline({ wallet: walletVariant, action, timestamp, newline })
+      });
+    }
   }
-  if (!configured.includes(presented)) return { ok: false, error: 'Invalid admin token' };
-  return { ok: true };
+  return messages;
+}
+
+export function buildModeratorAuthMessage({ wallet, action, timestamp }) {
+  return [
+    'SoulStarter Moderator Authentication',
+    `address:${String(wallet || '').toLowerCase()}`,
+    `action:${String(action || '').trim()}`,
+    `timestamp:${timestamp}`
+  ].join('\n');
+}
+
+export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
+  const allowlist = listModeratorWallets();
+  if (allowlist.length === 0) {
+    return { ok: false, error: 'Server configuration error: moderator allowlist is empty' };
+  }
+  if (!wallet || !timestamp || !signature || !action) {
+    return { ok: false, error: 'Missing moderator auth fields' };
+  }
+  if (!validateEthAddress(wallet)) {
+    return { ok: false, error: 'Invalid wallet address' };
+  }
+
+  const normalizedWallet = String(wallet).toLowerCase();
+  if (!allowlist.includes(normalizedWallet)) {
+    return { ok: false, error: 'Wallet is not an allowed moderator' };
+  }
+
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts)) {
+    return { ok: false, error: 'Invalid auth timestamp' };
+  }
+  if (Math.abs(Date.now() - ts) > MODERATOR_AUTH_DRIFT_MS) {
+    return { ok: false, error: 'Authentication message expired' };
+  }
+
+  const candidates = buildModeratorAuthMessageCandidates({ wallet, action, timestamp: ts });
+  for (const candidate of candidates) {
+    try {
+      const recovered = ethers.verifyMessage(candidate.message, signature);
+      if (typeof recovered === 'string' && recovered.toLowerCase() === normalizedWallet) {
+        return { ok: true, wallet: normalizedWallet, matched_variant: candidate.variant };
+      }
+    } catch (_) {}
+  }
+
+  return {
+    ok: false,
+    error: 'Signature does not match wallet address',
+    auth_message_template: buildModeratorAuthMessage({
+      wallet: '0x<your-wallet>',
+      action,
+      timestamp: Date.now()
+    })
+  };
 }
 
 export async function reviewCreatorDraft({ walletAddress, draftId, decision, reviewer, notes }) {

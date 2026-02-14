@@ -161,12 +161,22 @@ export default function handler(req, res) {
         returns: { type: 'object', description: 'Draft submission status with moderation state= pending' }
       },
       {
+        name: 'list_moderators',
+        description: 'List allowlisted moderator wallet addresses',
+        endpoint: '/api/mcp/tools/creator_marketplace',
+        method: 'GET',
+        parameters: {
+          action: { type: 'string', required: true, description: 'Set action=list_moderators' }
+        },
+        returns: { type: 'object', description: 'Allowlisted moderator wallet addresses' }
+      },
+      {
         name: 'review_listing_submission',
-        description: 'Admin-only moderation decision for submitted creator drafts (approve or reject)',
+        description: 'Moderator-only moderation decision for submitted creator drafts (approve or reject)',
         endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'POST',
         admin_only: true,
-        auth_headers: ['X-ADMIN-TOKEN'],
+        auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
         parameters: {
           action: { type: 'string', required: true, description: 'Set action=review_listing_submission' },
           wallet_address: { type: 'string', required: true, description: 'Creator wallet address owning the draft' },
@@ -179,11 +189,11 @@ export default function handler(req, res) {
       },
       {
         name: 'list_review_queue',
-        description: 'Admin-only list of drafts waiting moderation review',
+        description: 'Moderator-only list of drafts waiting moderation review',
         endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'GET',
         admin_only: true,
-        auth_headers: ['X-ADMIN-TOKEN'],
+        auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
         parameters: {
           action: { type: 'string', required: true, description: 'Set action=list_review_queue' }
         },
@@ -191,11 +201,11 @@ export default function handler(req, res) {
       },
       {
         name: 'publish_listing',
-        description: 'Admin-only transition of approved draft to published',
+        description: 'Moderator-only transition of approved draft to published',
         endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'POST',
         admin_only: true,
-        auth_headers: ['X-ADMIN-TOKEN'],
+        auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
         parameters: {
           action: { type: 'string', required: true, description: 'Set action=publish_listing' },
           wallet_address: { type: 'string', required: true, description: 'Creator wallet address owning the draft' },

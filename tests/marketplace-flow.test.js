@@ -6,26 +6,28 @@ import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { ethers } from 'ethers';
 
 import {
+  buildModeratorAuthMessage,
   buildCreatorAuthMessage,
   getMarketplaceDraftTemplate,
+  listModeratorWallets,
   publishCreatorDraft,
   reviewCreatorDraft,
   submitCreatorDraftForReview,
   upsertCreatorDraft,
   validateMarketplaceDraft,
   verifyCreatorAuth,
-  verifyReviewAdminToken
+  verifyModeratorAuth
 } from '../api/_lib/marketplace.js';
 
 test('marketplace draft validation, moderation, and publish promotion flow', async () => {
   const originalCwd = process.cwd();
   const originalDraftDir = process.env.MARKETPLACE_DRAFTS_DIR;
-  const originalAdminToken = process.env.MARKETPLACE_REVIEW_ADMIN_TOKEN;
+  const originalModerators = process.env.MODERATOR_WALLETS;
 
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'soulstarter-marketplace-test-'));
   process.chdir(tempDir);
   process.env.MARKETPLACE_DRAFTS_DIR = path.join(tempDir, '.marketplace-drafts');
-  process.env.MARKETPLACE_REVIEW_ADMIN_TOKEN = 'admin-token-test';
+  process.env.MODERATOR_WALLETS = '0x1111111111111111111111111111111111111111';
 
   try {
     const { getSoul, listSouls } = await import(`../api/_lib/catalog.js?test=${Date.now()}`);
@@ -62,6 +64,25 @@ test('marketplace draft validation, moderation, and publish promotion flow', asy
     });
     assert.equal(auth.ok, true);
     assert.equal(auth.wallet, wallet.address.toLowerCase());
+
+    const moderatorWallet = ethers.Wallet.createRandom();
+    process.env.MODERATOR_WALLETS = moderatorWallet.address;
+    const moderatorTs = Date.now();
+    const moderatorMsg = buildModeratorAuthMessage({
+      wallet: moderatorWallet.address,
+      action: 'list_review_queue',
+      timestamp: moderatorTs
+    });
+    const moderatorSig = await moderatorWallet.signMessage(moderatorMsg);
+    const moderatorAuth = verifyModeratorAuth({
+      wallet: moderatorWallet.address,
+      timestamp: moderatorTs,
+      signature: moderatorSig,
+      action: 'list_review_queue'
+    });
+    assert.equal(moderatorAuth.ok, true);
+    assert.equal(moderatorAuth.wallet, moderatorWallet.address.toLowerCase());
+    assert.deepEqual(listModeratorWallets(), [moderatorWallet.address.toLowerCase()]);
 
     const saved = await upsertCreatorDraft({
       walletAddress: auth.wallet,
@@ -112,14 +133,12 @@ test('marketplace draft validation, moderation, and publish promotion flow', asy
     assert.ok(auditRaw.includes('"event":"review_decision"'));
     assert.ok(auditRaw.includes('"event":"publish"'));
 
-    assert.equal(verifyReviewAdminToken('admin-token-test').ok, true);
-    assert.equal(verifyReviewAdminToken('bad-token').ok, false);
   } finally {
     process.chdir(originalCwd);
     if (originalDraftDir === undefined) delete process.env.MARKETPLACE_DRAFTS_DIR;
     else process.env.MARKETPLACE_DRAFTS_DIR = originalDraftDir;
-    if (originalAdminToken === undefined) delete process.env.MARKETPLACE_REVIEW_ADMIN_TOKEN;
-    else process.env.MARKETPLACE_REVIEW_ADMIN_TOKEN = originalAdminToken;
+    if (originalModerators === undefined) delete process.env.MODERATOR_WALLETS;
+    else process.env.MODERATOR_WALLETS = originalModerators;
     await rm(tempDir, { recursive: true, force: true });
   }
 });

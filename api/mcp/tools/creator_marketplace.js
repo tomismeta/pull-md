@@ -1,17 +1,19 @@
 import { setCors } from '../../_lib/payments.js';
 import {
+  buildModeratorAuthMessage,
   buildCreatorAuthMessage,
   getCreatorDraft,
   getMarketplaceDraftTemplate,
   listCreatorDrafts,
   listDraftsByStatus,
+  listModeratorWallets,
   publishCreatorDraft,
   reviewCreatorDraft,
   submitCreatorDraftForReview,
   upsertCreatorDraft,
   validateMarketplaceDraft,
   verifyCreatorAuth,
-  verifyReviewAdminToken
+  verifyModeratorAuth
 } from '../../_lib/marketplace.js';
 
 function getAction(req) {
@@ -33,8 +35,25 @@ function creatorAuthError(action, auth) {
   };
 }
 
-function adminToken(req) {
-  return req.headers['x-admin-token'] || req.body?.admin_token || req.query?.admin_token;
+function moderatorAuthError(action, auth) {
+  return {
+    error: auth.error,
+    auth_message_template:
+      auth.auth_message_template ||
+      buildModeratorAuthMessage({
+        wallet: '0x<your-wallet>',
+        action,
+        timestamp: Date.now()
+      }),
+    allowed_moderators: listModeratorWallets()
+  };
+}
+
+function moderatorAuthFromRequest(req, action) {
+  const wallet = String(req.headers['x-moderator-address'] || req.body?.moderator_address || '').trim();
+  const signature = String(req.headers['x-moderator-signature'] || req.body?.moderator_signature || '').trim();
+  const timestamp = req.headers['x-moderator-timestamp'] || req.body?.moderator_timestamp;
+  return verifyModeratorAuth({ wallet, signature, timestamp, action });
 }
 
 export default async function handler(req, res) {
@@ -54,6 +73,13 @@ export default async function handler(req, res) {
         'This endpoint validates contract shape only; no on-chain listing is created yet.',
         'Use validate_listing_draft before any creator onboarding workflow.'
       ]
+    });
+  }
+
+  if (action === 'list_moderators' && req.method === 'GET') {
+    return res.status(200).json({
+      count: listModeratorWallets().length,
+      moderators: listModeratorWallets()
     });
   }
 
@@ -164,17 +190,14 @@ export default async function handler(req, res) {
   }
 
   if (action === 'review_listing_submission' && req.method === 'POST') {
-    const admin = verifyReviewAdminToken(adminToken(req));
-    if (!admin.ok) {
-      const code = /configuration/i.test(admin.error) ? 500 : 401;
-      return res.status(code).json({ error: admin.error });
-    }
+    const moderator = moderatorAuthFromRequest(req, action);
+    if (!moderator.ok) return res.status(401).json(moderatorAuthError(action, moderator));
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const result = await reviewCreatorDraft({
       walletAddress: String(body.wallet_address || '').trim(),
       draftId: String(body.draft_id || '').trim(),
       decision: String(body.decision || '').trim().toLowerCase(),
-      reviewer: String(body.reviewer || req.headers['x-reviewer'] || 'admin').trim(),
+      reviewer: String(body.reviewer || moderator.wallet || req.headers['x-reviewer'] || 'moderator').trim(),
       notes: typeof body.notes === 'string' ? body.notes : ''
     });
     if (!result.ok) {
@@ -185,26 +208,20 @@ export default async function handler(req, res) {
   }
 
   if (action === 'list_review_queue' && req.method === 'GET') {
-    const admin = verifyReviewAdminToken(adminToken(req));
-    if (!admin.ok) {
-      const code = /configuration/i.test(admin.error) ? 500 : 401;
-      return res.status(code).json({ error: admin.error });
-    }
+    const moderator = moderatorAuthFromRequest(req, action);
+    if (!moderator.ok) return res.status(401).json(moderatorAuthError(action, moderator));
     const queue = await listDraftsByStatus(['submitted_for_review']);
-    return res.status(200).json({ count: queue.length, queue });
+    return res.status(200).json({ count: queue.length, queue, moderator: moderator.wallet });
   }
 
   if (action === 'publish_listing' && req.method === 'POST') {
-    const admin = verifyReviewAdminToken(adminToken(req));
-    if (!admin.ok) {
-      const code = /configuration/i.test(admin.error) ? 500 : 401;
-      return res.status(code).json({ error: admin.error });
-    }
+    const moderator = moderatorAuthFromRequest(req, action);
+    if (!moderator.ok) return res.status(401).json(moderatorAuthError(action, moderator));
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const result = await publishCreatorDraft({
       walletAddress: String(body.wallet_address || '').trim(),
       draftId: String(body.draft_id || '').trim(),
-      reviewer: String(body.reviewer || req.headers['x-reviewer'] || 'admin').trim(),
+      reviewer: String(body.reviewer || moderator.wallet || req.headers['x-reviewer'] || 'moderator').trim(),
       notes: typeof body.notes === 'string' ? body.notes : ''
     });
     if (!result.ok) {
