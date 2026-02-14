@@ -67,6 +67,20 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 `approved_for_publish` or `rejected`.
 - Writes immutable audit entries to local review audit stream.
 
+12. `GET /api/mcp/tools/list_review_queue` (admin only)
+- Header: `X-ADMIN-TOKEN`
+- Returns drafts in `submitted_for_review` status.
+
+13. `POST /api/mcp/tools/publish_listing` (admin only)
+- Header: `X-ADMIN-TOKEN`
+- Body:
+`{ wallet_address, draft_id, reviewer?, notes? }`
+- Requires draft status `approved_for_publish`.
+- Transitions draft to `published` and writes immutable audit entry.
+
+14. `GET /api/mcp/tools/list_published_listings`
+- Public listing of all drafts currently in `published` status.
+
 ## Download Endpoint
 
 `GET /api/souls/{id}/download`

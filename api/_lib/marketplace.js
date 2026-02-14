@@ -120,6 +120,24 @@ async function appendReviewAudit(entry) {
   await fs.appendFile(filePath, `${JSON.stringify(entry)}\n`, { mode: 0o600 });
 }
 
+async function loadAllWalletDraftStores() {
+  await ensureDraftStore();
+  const dir = getMarketplaceDraftsDir();
+  const entries = await fs.readdir(dir);
+  const files = entries.filter((name) => name.endsWith('.json') && name !== REVIEW_AUDIT_FILE);
+  const stores = [];
+  for (const file of files) {
+    try {
+      const raw = await fs.readFile(path.join(dir, file), 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.drafts)) {
+        stores.push(parsed);
+      }
+    } catch (_) {}
+  }
+  return stores;
+}
+
 export function getMarketplaceDraftTemplate() {
   return {
     schema_version: 'marketplace-draft-v1',
@@ -420,6 +438,71 @@ export async function reviewCreatorDraft({ walletAddress, draftId, decision, rev
     draft_id: draftId,
     actor: next.moderation.reviewer,
     decision: normalizedDecision,
+    status_before: currentStatus,
+    status_after: next.status,
+    notes: next.moderation.notes
+  });
+
+  return { ok: true, draft: next };
+}
+
+export async function listDraftsByStatus(statuses = []) {
+  const allowed = new Set((Array.isArray(statuses) ? statuses : []).map((s) => String(s || '')));
+  const stores = await loadAllWalletDraftStores();
+  const rows = [];
+  for (const store of stores) {
+    const wallet = String(store.wallet || '').toLowerCase();
+    for (const draft of store.drafts || []) {
+      const status = String(draft?.status || 'draft');
+      if (allowed.size > 0 && !allowed.has(status)) continue;
+      rows.push({
+        wallet_address: wallet,
+        draft_id: draft.draft_id,
+        status,
+        moderation: draft.moderation || null,
+        updated_at: draft.updated_at || null,
+        soul_id: draft.normalized?.listing?.soul_id || null,
+        name: draft.normalized?.listing?.name || null
+      });
+    }
+  }
+  return rows.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+}
+
+export async function publishCreatorDraft({ walletAddress, draftId, reviewer, notes }) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const store = await loadWalletDraftFile(wallet);
+  const idx = store.drafts.findIndex((item) => item?.draft_id === draftId);
+  if (idx < 0) return { ok: false, error: 'Draft not found' };
+
+  const existing = store.drafts[idx];
+  const currentStatus = String(existing?.status || 'draft');
+  if (currentStatus !== 'approved_for_publish') {
+    return { ok: false, error: `Draft is not publishable from status=${currentStatus}`, draft: existing };
+  }
+
+  const now = new Date().toISOString();
+  const next = {
+    ...existing,
+    status: 'published',
+    updated_at: now,
+    published_at: now,
+    moderation: {
+      ...(existing.moderation || {}),
+      state: 'published',
+      reviewed_at: now,
+      reviewer: asString(reviewer) || existing?.moderation?.reviewer || 'admin',
+      notes: asString(notes) || existing?.moderation?.notes || null
+    }
+  };
+  store.drafts[idx] = next;
+  await saveWalletDraftFile(wallet, store);
+  await appendReviewAudit({
+    at: now,
+    event: 'publish',
+    wallet,
+    draft_id: draftId,
+    actor: next.moderation.reviewer,
     status_before: currentStatus,
     status_after: next.status,
     notes: next.moderation.notes

@@ -165,6 +165,37 @@ export default function handler(req, res) {
           notes: { type: 'string', required: false, description: 'Optional moderation notes' }
         },
         returns: { type: 'object', description: 'Updated draft moderation state and resulting status' }
+      },
+      {
+        name: 'list_review_queue',
+        description: 'Admin-only list of drafts waiting moderation review',
+        endpoint: '/api/mcp/tools/list_review_queue',
+        method: 'GET',
+        admin_only: true,
+        auth_headers: ['X-ADMIN-TOKEN'],
+        returns: { type: 'object', description: 'Submitted-for-review draft queue' }
+      },
+      {
+        name: 'publish_listing',
+        description: 'Admin-only transition of approved draft to published',
+        endpoint: '/api/mcp/tools/publish_listing',
+        method: 'POST',
+        admin_only: true,
+        auth_headers: ['X-ADMIN-TOKEN'],
+        parameters: {
+          wallet_address: { type: 'string', required: true, description: 'Creator wallet address owning the draft' },
+          draft_id: { type: 'string', required: true, description: 'Draft identifier to publish' },
+          reviewer: { type: 'string', required: false, description: 'Optional reviewer id/name for audit trail' },
+          notes: { type: 'string', required: false, description: 'Optional publication notes' }
+        },
+        returns: { type: 'object', description: 'Published draft status payload' }
+      },
+      {
+        name: 'list_published_listings',
+        description: 'List all published creator listings from marketplace draft store',
+        endpoint: '/api/mcp/tools/list_published_listings',
+        method: 'GET',
+        returns: { type: 'object', description: 'Published marketplace listing summaries' }
       }
     ],
     download_contract: {
