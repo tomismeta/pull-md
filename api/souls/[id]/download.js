@@ -61,7 +61,10 @@ export default async function handler(req, res) {
     });
 
     if (!authCheck.ok) {
-      return res.status(401).json({ error: authCheck.error });
+      return res.status(401).json({
+        error: authCheck.error,
+        auth_debug: authCheck.auth_debug || null
+      });
     }
 
     const receiptCheck = verifyPurchaseReceipt({

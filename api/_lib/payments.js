@@ -56,19 +56,80 @@ export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature 
     return { ok: false, error: 'Authentication message expired' };
   }
 
-  const message = buildAuthMessage({ wallet, soulId, action, timestamp: ts });
-  let recovered;
+  const candidates = buildAuthMessageCandidates({ wallet, soulId, action, timestamp: ts });
+  const recoveredMatches = [];
+  for (const candidate of candidates) {
+    try {
+      const recovered = ethers.verifyMessage(candidate.message, signature);
+      if (typeof recovered === 'string' && recovered.toLowerCase() === wallet.toLowerCase()) {
+        return { ok: true, wallet: wallet.toLowerCase() };
+      }
+      recoveredMatches.push({
+        variant: candidate.variant,
+        recovered: recovered || null
+      });
+    } catch (_) {
+      recoveredMatches.push({
+        variant: candidate.variant,
+        recovered: null
+      });
+    }
+  }
+
+  return {
+    ok: false,
+    error: 'Signature does not match wallet address',
+    auth_debug: {
+      tried_variants: candidates.map((candidate) => candidate.variant),
+      recovered: recoveredMatches
+    }
+  };
+}
+
+function buildAuthMessageCandidates({ wallet, soulId, action, timestamp }) {
+  const rawWallet = String(wallet || '').trim();
+  const walletLower = rawWallet.toLowerCase();
+  const checksummed = safeChecksumAddress(rawWallet);
+  const walletVariants = [walletLower, checksummed].filter(Boolean);
+  const uniqueWallets = [...new Set(walletVariants)];
+  const newlineVariants = ['\n', '\r\n'];
+  const candidates = [];
+
+  for (const walletVariant of uniqueWallets) {
+    for (const newline of newlineVariants) {
+      const message = buildAuthMessageWithNewline({
+        wallet: walletVariant,
+        soulId,
+        action,
+        timestamp,
+        newline
+      });
+      candidates.push({
+        variant: `${walletVariant === walletLower ? 'lowercase' : 'checksummed'}-${newline === '\n' ? 'lf' : 'crlf'}`,
+        message
+      });
+    }
+  }
+
+  return candidates;
+}
+
+function buildAuthMessageWithNewline({ wallet, soulId, action, timestamp, newline }) {
+  return [
+    'SoulStarter Wallet Authentication',
+    `address:${wallet}`,
+    `soul:${soulId}`,
+    `action:${action}`,
+    `timestamp:${timestamp}`
+  ].join(newline);
+}
+
+function safeChecksumAddress(address) {
   try {
-    recovered = ethers.verifyMessage(message, signature);
+    return ethers.getAddress(address);
   } catch (_) {
-    return { ok: false, error: 'Invalid auth signature' };
+    return null;
   }
-
-  if (recovered.toLowerCase() !== wallet.toLowerCase()) {
-    return { ok: false, error: 'Signature does not match wallet address' };
-  }
-
-  return { ok: true, wallet: wallet.toLowerCase() };
 }
 
 function base64UrlEncode(input) {
