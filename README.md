@@ -60,6 +60,8 @@ wallet-authenticated submit endpoint transitions draft -> `submitted_for_review`
 `review_listing_submission` applies `approve`/`reject` decisions and records immutable audit entries.
 - Review queue + publish:
 admins can list pending queue and transition approved drafts to `published`.
+- Active catalog behavior:
+once a draft is `published`, it is promoted into the live catalog and becomes purchasable via `GET /api/souls/{id}/download`.
 
 ## Marketplace Admin Configuration
 

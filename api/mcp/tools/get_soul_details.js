@@ -23,7 +23,7 @@ export default function handler(req, res) {
   }
 
   const summary = listSouls().find((item) => item.id === id);
-  const sellerAddress = getSellerAddress();
+  const sellerAddress = soul.sellerAddress || getSellerAddress();
 
   return res.status(200).json({
     soul: {

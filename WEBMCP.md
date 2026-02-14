@@ -77,6 +77,8 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 `{ wallet_address, draft_id, reviewer?, notes? }`
 - Requires draft status `approved_for_publish`.
 - Transitions draft to `published` and writes immutable audit entry.
+- Published drafts are promoted to active catalog and are purchasable from:
+`GET /api/souls/{published_soul_id}/download`
 
 14. `GET /api/mcp/tools/list_published_listings`
 - Public listing of all drafts currently in `published` status.

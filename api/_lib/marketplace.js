@@ -8,6 +8,7 @@ const MAX_SOUL_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 const REVIEW_AUDIT_FILE = 'review-audit.jsonl';
+const PUBLISHED_CATALOG_FILE = 'published-catalog.json';
 
 function asString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -118,6 +119,80 @@ async function appendReviewAudit(entry) {
   await ensureDraftStore();
   const filePath = path.join(getMarketplaceDraftsDir(), REVIEW_AUDIT_FILE);
   await fs.appendFile(filePath, `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+}
+
+function derivePreview(markdown) {
+  const clean = String(markdown || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))[0];
+  return clean || 'Published creator soul.';
+}
+
+async function loadPublishedCatalog() {
+  await ensureDraftStore();
+  const filePath = path.join(getMarketplaceDraftsDir(), PUBLISHED_CATALOG_FILE);
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.entries)) {
+      return { schema_version: 'published-catalog-v1', entries: [] };
+    }
+    return parsed;
+  } catch (_) {
+    return { schema_version: 'published-catalog-v1', entries: [] };
+  }
+}
+
+async function savePublishedCatalog(payload) {
+  await ensureDraftStore();
+  const filePath = path.join(getMarketplaceDraftsDir(), PUBLISHED_CATALOG_FILE);
+  const normalized = {
+    schema_version: 'published-catalog-v1',
+    updated_at: new Date().toISOString(),
+    entries: Array.isArray(payload?.entries) ? payload.entries : []
+  };
+  await fs.writeFile(filePath, JSON.stringify(normalized, null, 2), { mode: 0o600 });
+  return normalized;
+}
+
+async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
+  const listing = draft?.normalized?.listing || {};
+  const assets = draft?.normalized?.assets || {};
+  const id = asString(listing.soul_id);
+  if (!id) return;
+
+  const catalog = await loadPublishedCatalog();
+  const nextEntry = {
+    id,
+    name: asString(listing.name),
+    description: asString(listing.description),
+    longDescription: asString(listing.long_description),
+    icon: asString(listing.icon) || '🔮',
+    category: asString(listing.category),
+    tags: Array.isArray(listing.tags) ? listing.tags : [],
+    priceMicroUsdc: asString(listing.price_micro_usdc),
+    priceDisplay: `$${(Number(listing.price_usdc) || 0).toFixed(2)}`,
+    provenance: {
+      type: asString(listing.soul_type) || 'hybrid',
+      raised_by: `Creator ${String(walletAddress || '').toLowerCase()}`,
+      days_nurtured: 0
+    },
+    compatibility: { runtimes: ['OpenClaw', 'ElizaOS', 'Olas'], min_memory: '8MB', min_context: 4000 },
+    preview: derivePreview(assets.soul_markdown),
+    sourceLabel: assets.source_label || null,
+    sourceUrl: assets.source_url || null,
+    contentInline: assets.soul_markdown,
+    sellerAddress: asString(listing.seller_address).toLowerCase(),
+    publishedBy: String(walletAddress || '').toLowerCase(),
+    publishedAt: draft?.published_at || new Date().toISOString(),
+    draftId: draft?.draft_id
+  };
+
+  const idx = catalog.entries.findIndex((entry) => entry?.id === id);
+  if (idx >= 0) catalog.entries[idx] = nextEntry;
+  else catalog.entries.push(nextEntry);
+  await savePublishedCatalog(catalog);
 }
 
 async function loadAllWalletDraftStores() {
@@ -497,6 +572,7 @@ export async function publishCreatorDraft({ walletAddress, draftId, reviewer, no
   };
   store.drafts[idx] = next;
   await saveWalletDraftFile(wallet, store);
+  await upsertPublishedCatalogEntry({ walletAddress: wallet, draft: next });
   await appendReviewAudit({
     at: now,
     event: 'publish',

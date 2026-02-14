@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     return res.status(404).json({ error: 'Soul not found', available_souls: soulIds() });
   }
 
-  const sellerAddress = getSellerAddress();
+  const sellerAddress = soul.sellerAddress || getSellerAddress();
   if (!sellerAddress) {
     return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required' });
   }
