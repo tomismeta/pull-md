@@ -867,7 +867,27 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
         domain_name_matches_signed: tokenName ? tokenName === domain.name : null,
         domain_version_matches_signed: tokenVersion ? tokenVersion === domain.version : null
       },
+      call_payload_preview: buildTransferCallPreview({
+        usdc,
+        asset: paymentRequirements.asset,
+        auth,
+        signature: payload.signature
+      }),
       transfer_simulation,
+      transfer_simulation_with_from_variants: await runFromVariantCallMatrix({
+        provider,
+        usdc,
+        asset: paymentRequirements.asset,
+        auth,
+        signature: payload.signature
+      }),
+      transfer_estimate_gas_with_from_variants: await runFromVariantEstimateGasMatrix({
+        provider,
+        usdc,
+        asset: paymentRequirements.asset,
+        auth,
+        signature: payload.signature
+      }),
       signature_variant_simulations,
       time_window_variant_simulations
     };
@@ -907,6 +927,97 @@ async function simulateTransferWithAuthorization({ provider, usdc, asset, auth, 
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+function buildTransferCallPreview({ usdc, asset, auth, signature }) {
+  try {
+    const data = usdc.interface.encodeFunctionData('transferWithAuthorization', [
+      auth.from,
+      auth.to,
+      auth.value,
+      auth.validAfter,
+      auth.validBefore,
+      auth.nonce,
+      signature
+    ]);
+    return {
+      to: asset,
+      selector: data.slice(0, 10),
+      data: redactHex(data),
+      from: auth.from
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function runFromVariantCallMatrix({ provider, usdc, asset, auth, signature }) {
+  const variants = [
+    { label: 'no_from', from: undefined },
+    { label: 'from_authorizer', from: auth.from },
+    { label: 'from_zero', from: '0x0000000000000000000000000000000000000000' }
+  ];
+  const results = [];
+  const data = usdc.interface.encodeFunctionData('transferWithAuthorization', [
+    auth.from,
+    auth.to,
+    auth.value,
+    auth.validAfter,
+    auth.validBefore,
+    auth.nonce,
+    signature
+  ]);
+  for (const variant of variants) {
+    try {
+      const tx = { to: asset, data };
+      if (variant.from) tx.from = variant.from;
+      await provider.call(tx);
+      results.push({ label: variant.label, from: variant.from ?? null, ok: true, error: null });
+    } catch (error) {
+      results.push({
+        label: variant.label,
+        from: variant.from ?? null,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  return results;
+}
+
+async function runFromVariantEstimateGasMatrix({ provider, usdc, asset, auth, signature }) {
+  const variants = [
+    { label: 'no_from', from: undefined },
+    { label: 'from_authorizer', from: auth.from },
+    { label: 'from_zero', from: '0x0000000000000000000000000000000000000000' }
+  ];
+  const results = [];
+  const data = usdc.interface.encodeFunctionData('transferWithAuthorization', [
+    auth.from,
+    auth.to,
+    auth.value,
+    auth.validAfter,
+    auth.validBefore,
+    auth.nonce,
+    signature
+  ]);
+  for (const variant of variants) {
+    try {
+      const tx = { to: asset, data };
+      if (variant.from) tx.from = variant.from;
+      const gas = await provider.estimateGas(tx);
+      results.push({ label: variant.label, from: variant.from ?? null, ok: true, gas: gas?.toString?.() ?? String(gas), error: null });
+    } catch (error) {
+      results.push({
+        label: variant.label,
+        from: variant.from ?? null,
+        ok: false,
+        gas: null,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  return results;
 }
 
 async function runSignatureVariantMatrix({ provider, usdc, asset, auth, signature }) {
