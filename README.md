@@ -33,6 +33,9 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `POST /api/mcp/tools/check_entitlements`
 - `GET /api/mcp/tools/get_listing_template`
 - `POST /api/mcp/tools/validate_listing_draft`
+- `POST /api/mcp/tools/save_listing_draft`
+- `GET /api/mcp/tools/list_my_listing_drafts`
+- `GET /api/mcp/tools/get_my_listing_draft?draft_id=<id>`
 - `GET /api/souls/{id}/download`
 - `GET /api/health/facilitator`
 
@@ -44,6 +47,8 @@ returns creator draft contract template for user-submitted soul listings.
 validates and normalizes listing + soul content payload and returns deterministic `draft_id`.
 - Scope:
 validation/normalization only in this phase; publish/listing activation is intentionally not enabled yet.
+- Creator draft storage:
+wallet-authenticated private draft save/list/get endpoints are available for builder workflows.
 
 ## Environment Variables
 

@@ -104,6 +104,38 @@ export default function handler(req, res) {
           assets: { type: 'object', required: true, description: 'Soul markdown and optional source attribution fields' }
         },
         returns: { type: 'object', description: 'Validation outcome, normalized draft, and deterministic draft_id' }
+      },
+      {
+        name: 'save_listing_draft',
+        description: 'Save a validated creator listing draft under wallet-scoped private storage',
+        endpoint: '/api/mcp/tools/save_listing_draft',
+        method: 'POST',
+        parameters: {
+          wallet_address: { type: 'string', required: true, description: 'Creator wallet address' },
+          auth_signature: { type: 'string', required: true, description: 'Wallet signature over creator auth message' },
+          auth_timestamp: { type: 'number', required: true, description: 'Unix ms timestamp used in auth message' },
+          draft: { type: 'object', required: true, description: 'Draft payload to validate and persist' }
+        },
+        returns: { type: 'object', description: 'Saved draft metadata and deterministic draft_id' }
+      },
+      {
+        name: 'list_my_listing_drafts',
+        description: 'List creator-owned saved listing drafts (wallet-authenticated)',
+        endpoint: '/api/mcp/tools/list_my_listing_drafts',
+        method: 'GET',
+        auth_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+        returns: { type: 'object', description: 'Wallet-scoped list of draft summaries' }
+      },
+      {
+        name: 'get_my_listing_draft',
+        description: 'Get full creator-owned draft payload by draft_id (wallet-authenticated)',
+        endpoint: '/api/mcp/tools/get_my_listing_draft',
+        method: 'GET',
+        parameters: {
+          draft_id: { type: 'string', required: true, description: 'Draft identifier from save/validate response' }
+        },
+        auth_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+        returns: { type: 'object', description: 'Full wallet-scoped draft record' }
       }
     ],
     download_contract: {

@@ -44,6 +44,15 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 - Returns deterministic `draft_id`, `errors`, `warnings`, and normalized payload.
 - This phase does not publish listings; it only prepares validated drafts.
 
+7. `POST /api/mcp/tools/save_listing_draft`
+- Wallet-authenticated save/upsert for creator draft records.
+
+8. `GET /api/mcp/tools/list_my_listing_drafts`
+- Wallet-authenticated list of creator-owned draft summaries.
+
+9. `GET /api/mcp/tools/get_my_listing_draft?draft_id=<id>`
+- Wallet-authenticated fetch of one full creator-owned draft.
+
 ## Download Endpoint
 
 `GET /api/souls/{id}/download`
@@ -195,3 +204,24 @@ soul:<soul_id>
 action:redownload
 timestamp:<unix_ms>
 ```
+
+## Creator Draft Auth Message
+
+Private creator-draft tools require wallet-auth headers:
+- `X-WALLET-ADDRESS`
+- `X-AUTH-SIGNATURE`
+- `X-AUTH-TIMESTAMP`
+
+Sign exactly:
+
+```text
+SoulStarter Creator Authentication
+address:<wallet_lowercase>
+action:<tool_action>
+timestamp:<unix_ms>
+```
+
+Where `<tool_action>` is one of:
+- `save_listing_draft`
+- `list_my_listing_drafts`
+- `get_my_listing_draft`

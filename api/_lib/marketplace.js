@@ -1,8 +1,12 @@
 import crypto from 'crypto';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { ethers } from 'ethers';
 
 const SOUL_TYPES = new Set(['synthetic', 'organic', 'hybrid']);
 const MAX_SOUL_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
+const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 
 function asString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -37,6 +41,78 @@ function validateSoulId(value) {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(value || ''));
 }
 
+function getMarketplaceDraftsDir() {
+  return process.env.MARKETPLACE_DRAFTS_DIR || path.join(process.cwd(), '.marketplace-drafts');
+}
+
+function walletFilePath(walletAddress) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  return path.join(getMarketplaceDraftsDir(), `${wallet}.json`);
+}
+
+function safeChecksumAddress(address) {
+  try {
+    return ethers.getAddress(String(address || '').trim());
+  } catch (_) {
+    return null;
+  }
+}
+
+function buildCreatorAuthMessageWithNewline({ wallet, action, timestamp, newline }) {
+  return ['SoulStarter Creator Authentication', `address:${wallet}`, `action:${action}`, `timestamp:${timestamp}`].join(
+    newline
+  );
+}
+
+function buildCreatorAuthMessageCandidates({ wallet, action, timestamp }) {
+  const raw = asString(wallet);
+  const lower = raw.toLowerCase();
+  const checksummed = safeChecksumAddress(raw);
+  const wallets = [...new Set([lower, checksummed].filter(Boolean))];
+  const newlines = ['\n', '\r\n'];
+  const messages = [];
+  for (const walletVariant of wallets) {
+    for (const newline of newlines) {
+      messages.push({
+        variant: `${walletVariant === lower ? 'lowercase' : 'checksummed'}-${newline === '\n' ? 'lf' : 'crlf'}`,
+        message: buildCreatorAuthMessageWithNewline({ wallet: walletVariant, action, timestamp, newline })
+      });
+    }
+  }
+  return messages;
+}
+
+async function ensureDraftStore() {
+  await fs.mkdir(getMarketplaceDraftsDir(), { recursive: true });
+}
+
+async function loadWalletDraftFile(walletAddress) {
+  await ensureDraftStore();
+  const filePath = walletFilePath(walletAddress);
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.drafts)) {
+      return { wallet: String(walletAddress).toLowerCase(), drafts: [] };
+    }
+    return parsed;
+  } catch (_) {
+    return { wallet: String(walletAddress).toLowerCase(), drafts: [] };
+  }
+}
+
+async function saveWalletDraftFile(walletAddress, payload) {
+  await ensureDraftStore();
+  const filePath = walletFilePath(walletAddress);
+  const next = {
+    wallet: String(walletAddress).toLowerCase(),
+    updated_at: new Date().toISOString(),
+    drafts: Array.isArray(payload?.drafts) ? payload.drafts : []
+  };
+  await fs.writeFile(filePath, JSON.stringify(next, null, 2), { mode: 0o600 });
+  return next;
+}
+
 export function getMarketplaceDraftTemplate() {
   return {
     schema_version: 'marketplace-draft-v1',
@@ -59,6 +135,49 @@ export function getMarketplaceDraftTemplate() {
       source_url: '',
       source_label: ''
     }
+  };
+}
+
+export function buildCreatorAuthMessage({ wallet, action, timestamp }) {
+  return ['SoulStarter Creator Authentication', `address:${String(wallet || '').toLowerCase()}`, `action:${action}`, `timestamp:${timestamp}`].join(
+    '\n'
+  );
+}
+
+export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
+  if (!wallet || !timestamp || !signature || !action) {
+    return { ok: false, error: 'Missing creator auth fields' };
+  }
+  if (!validateEthAddress(wallet)) {
+    return { ok: false, error: 'Invalid wallet address' };
+  }
+
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts)) {
+    return { ok: false, error: 'Invalid auth timestamp' };
+  }
+  if (Math.abs(Date.now() - ts) > CREATOR_AUTH_DRIFT_MS) {
+    return { ok: false, error: 'Authentication message expired' };
+  }
+
+  const candidates = buildCreatorAuthMessageCandidates({ wallet, action, timestamp: ts });
+  for (const candidate of candidates) {
+    try {
+      const recovered = ethers.verifyMessage(candidate.message, signature);
+      if (typeof recovered === 'string' && recovered.toLowerCase() === String(wallet).toLowerCase()) {
+        return { ok: true, wallet: String(wallet).toLowerCase(), matched_variant: candidate.variant };
+      }
+    } catch (_) {}
+  }
+
+  return {
+    ok: false,
+    error: 'Signature does not match wallet address',
+    auth_message_template: buildCreatorAuthMessage({
+      wallet: '0x<your-wallet>',
+      action,
+      timestamp: Date.now()
+    })
   };
 }
 
@@ -143,4 +262,48 @@ export function validateMarketplaceDraft(input) {
     draft_id: draftId,
     normalized
   };
+}
+
+export async function upsertCreatorDraft({ walletAddress, normalizedDraft, draftId }) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const store = await loadWalletDraftFile(wallet);
+  const now = new Date().toISOString();
+  const idx = store.drafts.findIndex((item) => item?.draft_id === draftId);
+
+  const record = {
+    draft_id: draftId,
+    created_at: idx >= 0 ? store.drafts[idx].created_at : now,
+    updated_at: now,
+    status: 'draft',
+    normalized: normalizedDraft
+  };
+
+  if (idx >= 0) store.drafts[idx] = record;
+  else store.drafts.push(record);
+
+  await saveWalletDraftFile(wallet, store);
+  return record;
+}
+
+export async function listCreatorDrafts(walletAddress) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const store = await loadWalletDraftFile(wallet);
+  return store.drafts
+    .slice()
+    .sort((a, b) => new Date(b?.updated_at || 0).getTime() - new Date(a?.updated_at || 0).getTime())
+    .map((draft) => ({
+      draft_id: draft.draft_id,
+      status: draft.status || 'draft',
+      created_at: draft.created_at,
+      updated_at: draft.updated_at,
+      soul_id: draft.normalized?.listing?.soul_id || null,
+      name: draft.normalized?.listing?.name || null,
+      price_micro_usdc: draft.normalized?.listing?.price_micro_usdc || null
+    }));
+}
+
+export async function getCreatorDraft(walletAddress, draftId) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const store = await loadWalletDraftFile(wallet);
+  return store.drafts.find((item) => item?.draft_id === draftId) || null;
 }
