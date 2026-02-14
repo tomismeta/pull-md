@@ -179,7 +179,9 @@ export default async function handler(req, res) {
           top_level_x402Version: cdpSettleRequestDebug?.top_level_x402Version ?? null,
           transfer_method: cdpSettleRequestDebug?.transfer_method ?? null,
           paymentPayload_keys: cdpSettleRequestDebug?.paymentPayload_keys ?? [],
-          paymentRequirements_keys: cdpSettleRequestDebug?.paymentRequirements_keys ?? []
+          paymentRequirements_keys: cdpSettleRequestDebug?.paymentRequirements_keys ?? [],
+          paymentPayload_field_types: cdpSettleRequestDebug?.paymentPayload_field_types ?? null,
+          paymentPayload_field_checks: cdpSettleRequestDebug?.paymentPayload_field_checks ?? null
         },
         cdp_settle_request_redacted: cdpSettleRequestDebug?.cdp_request_redacted ?? null
       });
@@ -735,13 +737,30 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
   }
   let recoveredSigner = null;
   let typedDataDigest = null;
+  let computedDomainSeparator = null;
+  let signatureSIsLow = null;
+  let signatureS = null;
+  let signatureSMaxHalfOrder = null;
+  const secp256k1HalfOrder = BigInt('0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0');
   if (auth && payload?.signature && domain.verifyingContract) {
     try {
       typedDataDigest = ethers.TypedDataEncoder.hash(domain, typedDataTypes, auth);
+      computedDomainSeparator = ethers.TypedDataEncoder.hashDomain(domain);
       recoveredSigner = ethers.verifyTypedData(domain, typedDataTypes, auth, payload.signature);
     } catch (_) {
       typedDataDigest = null;
+      computedDomainSeparator = null;
       recoveredSigner = null;
+    }
+  }
+  if (signatureParts?.s) {
+    signatureS = signatureParts.s;
+    try {
+      const sBigInt = BigInt(signatureParts.s);
+      signatureSMaxHalfOrder = `0x${secp256k1HalfOrder.toString(16)}`;
+      signatureSIsLow = sBigInt <= secp256k1HalfOrder;
+    } catch (_) {
+      signatureSIsLow = null;
     }
   }
 
@@ -774,7 +793,11 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
       signature_parse_ok: Boolean(signatureParts),
       signature_v: signatureParts?.v ?? null,
       signature_y_parity: signatureParts?.yParity ?? null,
+      signature_s: signatureS,
+      signature_s_is_low: signatureSIsLow,
+      signature_s_max_half_order: signatureSMaxHalfOrder,
       typed_data_digest: typedDataDigest,
+      computed_domain_separator: computedDomainSeparator,
       recovered_signer: recoveredSigner,
       from_matches_recovered: recoveredSigner && auth?.from ? equalAddress(recoveredSigner, auth.from) : null
     },
@@ -864,6 +887,11 @@ async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements 
         name: tokenName,
         version: tokenVersion,
         domain_separator: tokenDomainSeparator,
+        computed_domain_separator: computedDomainSeparator,
+        domain_separator_matches_signed:
+          computedDomainSeparator && tokenDomainSeparator
+            ? String(computedDomainSeparator).toLowerCase() === String(tokenDomainSeparator).toLowerCase()
+            : null,
         domain_name_matches_signed: tokenName ? tokenName === domain.name : null,
         domain_version_matches_signed: tokenVersion ? tokenVersion === domain.version : null
       },

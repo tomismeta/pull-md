@@ -352,13 +352,60 @@ export function buildCdpRequestDebug({ paymentPayload, paymentRequirements, x402
   }
 
   const built = buildCdpFacilitatorRequest({ paymentPayload, paymentRequirements, x402Version });
+  const auth = built?.cdpRequest?.paymentPayload?.payload?.authorization;
+  const permit2Auth = built?.cdpRequest?.paymentPayload?.payload?.permit2Authorization;
+  const transaction = built?.cdpRequest?.paymentPayload?.payload?.transaction;
+  const validAfterNum = safeBigInt(auth?.validAfter);
+  const validBeforeNum = safeBigInt(auth?.validBefore);
+  const nonceText = auth?.nonce == null ? null : String(auth.nonce);
+  const nowSec = Math.floor(Date.now() / 1000);
   return {
     top_level_x402Version: built.cdpRequest?.x402Version ?? null,
     transfer_method: getTransferMethod(built.cdpNormalizedPayload, built.cdpMappedRequirements),
     paymentPayload_keys: Object.keys(built.cdpRequest?.paymentPayload?.payload || {}),
     paymentRequirements_keys: Object.keys(built.cdpRequest?.paymentRequirements || {}),
+    paymentPayload_field_types: {
+      authorization: typeOfValue(auth),
+      permit2Authorization: typeOfValue(permit2Auth),
+      signature: typeOfValue(built?.cdpRequest?.paymentPayload?.payload?.signature),
+      transaction: typeOfValue(transaction),
+      authorization_value: typeOfValue(auth?.value),
+      authorization_validAfter: typeOfValue(auth?.validAfter),
+      authorization_validBefore: typeOfValue(auth?.validBefore),
+      authorization_nonce: typeOfValue(auth?.nonce)
+    },
+    paymentPayload_field_checks: {
+      authorization_nonce_is_bytes32_hex: nonceText ? /^0x[0-9a-fA-F]{64}$/.test(nonceText) : null,
+      authorization_validAfter_is_digits: auth?.validAfter == null ? null : /^[0-9]+$/.test(String(auth.validAfter)),
+      authorization_validBefore_is_digits: auth?.validBefore == null ? null : /^[0-9]+$/.test(String(auth.validBefore)),
+      authorization_validAfter_looks_like_ms:
+        validAfterNum == null ? null : validAfterNum > 100000000000n,
+      authorization_validBefore_looks_like_ms:
+        validBeforeNum == null ? null : validBeforeNum > 100000000000n,
+      authorization_validBefore_minus_now_sec:
+        validBeforeNum == null ? null : Number(validBeforeNum - BigInt(nowSec)),
+      transaction_present_for_eip3009:
+        getTransferMethod(built.cdpNormalizedPayload, built.cdpMappedRequirements) === 'eip3009'
+          ? transaction != null
+          : null
+    },
     cdp_request_redacted: redactForSupport(built.cdpRequest)
   };
+}
+
+function typeOfValue(value) {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+}
+
+function safeBigInt(value) {
+  if (value == null) return null;
+  try {
+    return BigInt(String(value));
+  } catch {
+    return null;
+  }
 }
 
 function buildCdpAuthorizationForPermit2(permit2Auth, paymentRequirements) {
