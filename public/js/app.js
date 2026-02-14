@@ -31,6 +31,7 @@ const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 const RECEIPT_PREFIX = 'soulstarter.receipt.';
 const sellerAddressCache = new Map();
 const entitlementCacheByWallet = new Map();
+let moderatorAllowlist = new Set();
 
 const PERMIT2_WITNESS_TYPES = {
   PermitWitnessTransferFrom: [
@@ -79,6 +80,7 @@ function disconnectWallet() {
   clearWalletSession();
   entitlementCacheByWallet.clear();
   updateWalletUI();
+  updateModeratorNavLinkVisibility();
   loadSouls();
   updateSoulPagePurchaseState();
   showToast('Wallet disconnected', 'info');
@@ -139,6 +141,7 @@ async function connectWithProviderInternal(rawProvider, type, silent) {
   saveWalletSession();
   await refreshEntitlementsForWallet(walletAddress);
   updateWalletUI();
+  updateModeratorNavLinkVisibility();
   loadSouls();
   updateSoulPagePurchaseState();
   if (!silent) showToast('Wallet connected', 'success');
@@ -243,6 +246,15 @@ function updateWalletUI() {
     btn.classList.remove('connected');
     btn.onclick = openWalletModal;
   }
+}
+
+function updateModeratorNavLinkVisibility() {
+  const navLinks = document.querySelectorAll('.moderator-nav-link');
+  if (!navLinks.length) return;
+  const show = Boolean(walletAddress && moderatorAllowlist.has(walletAddress));
+  navLinks.forEach((el) => {
+    el.style.display = show ? '' : 'none';
+  });
 }
 
 function ownedSoulSetForCurrentWallet() {
@@ -800,6 +812,25 @@ async function loadWalletConfig() {
   }
 }
 
+async function loadModeratorAllowlist() {
+  try {
+    const response = await fetchWithTimeout(`${CONFIG.apiBase}/mcp/tools/creator_marketplace?action=list_moderators`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' }
+    });
+    if (!response.ok) throw new Error('moderator lookup failed');
+    const payload = await response.json();
+    moderatorAllowlist = new Set(
+      (Array.isArray(payload?.moderators) ? payload.moderators : [])
+        .map((wallet) => String(wallet || '').toLowerCase())
+        .filter((wallet) => /^0x[a-f0-9]{40}$/i.test(wallet))
+    );
+  } catch (_) {
+    moderatorAllowlist = new Set();
+  }
+  updateModeratorNavLinkVisibility();
+}
+
 async function fetchWithTimeout(url, options = {}, timeout = CONFIG.requestTimeout) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -855,6 +886,7 @@ function bindWalletOptionHandlers() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadWalletConfig();
+  await loadModeratorAllowlist();
   bindWalletOptionHandlers();
   updateWalletUI();
   await restoreWalletSession();

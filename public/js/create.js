@@ -4,6 +4,7 @@ const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 let walletConnectProjectId = null;
+let moderatorAllowlist = new Set();
 const STATE = {
   provider: null,
   signer: null,
@@ -43,6 +44,15 @@ function setWalletButton() {
     btn.classList.remove('connected');
     btn.onclick = openWalletModal;
   }
+}
+
+function updateModeratorNavLinkVisibility() {
+  const navLinks = document.querySelectorAll('.moderator-nav-link');
+  if (!navLinks.length) return;
+  const show = Boolean(STATE.wallet && moderatorAllowlist.has(STATE.wallet));
+  navLinks.forEach((el) => {
+    el.style.display = show ? '' : 'none';
+  });
 }
 
 function saveWalletSession() {
@@ -142,6 +152,7 @@ async function connectWithProviderInternal(rawProvider, walletType, silent) {
     await ensureBaseNetwork(STATE.provider);
     saveWalletSession();
     setWalletButton();
+    updateModeratorNavLinkVisibility();
     const seller = document.getElementById('sellerAddress');
     if (seller && !seller.value.trim()) seller.value = DEFAULT_SELLER;
     if (!silent) toast('Wallet connected', 'success');
@@ -215,6 +226,7 @@ async function disconnectWallet() {
   STATE.walletType = null;
   clearWalletSession();
   setWalletButton();
+  updateModeratorNavLinkVisibility();
   toast('Wallet disconnected', 'info');
 }
 
@@ -272,6 +284,22 @@ async function loadWalletConfig() {
   } catch (_) {
     walletConnectProjectId = null;
   }
+}
+
+async function loadModeratorAllowlist() {
+  try {
+    const response = await fetch(`${API_BASE}?action=list_moderators`);
+    if (!response.ok) throw new Error('moderator lookup failed');
+    const payload = await response.json();
+    moderatorAllowlist = new Set(
+      (Array.isArray(payload?.moderators) ? payload.moderators : [])
+        .map((wallet) => String(wallet || '').toLowerCase())
+        .filter((wallet) => /^0x[a-f0-9]{40}$/i.test(wallet))
+    );
+  } catch (_) {
+    moderatorAllowlist = new Set();
+  }
+  updateModeratorNavLinkVisibility();
 }
 
 function authMessage(action, timestamp) {
@@ -553,7 +581,9 @@ function initDefaults() {
 
 bindEvents();
 initDefaults();
-loadWalletConfig().then(() => restoreWalletSession());
+loadWalletConfig()
+  .then(() => loadModeratorAllowlist())
+  .then(() => restoreWalletSession());
 
 window.closeWalletModal = closeWalletModal;
 window.connectMetaMask = connectMetaMask;
