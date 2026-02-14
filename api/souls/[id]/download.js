@@ -1,11 +1,15 @@
 import { getSoul, loadSoulContent, soulIds } from '../../_lib/catalog.js';
 import { ethers } from 'ethers';
 import {
+  buildRedownloadSessionSetCookie,
   buildAuthMessage,
+  createRedownloadSessionToken,
   createPurchaseReceipt,
   getSellerAddress,
+  parseCookieHeader,
   setCors,
   verifyPurchaseReceipt,
+  verifyRedownloadSessionToken,
   verifyWalletAuth
 } from '../../_lib/payments.js';
 import {
@@ -52,27 +56,43 @@ export default async function handler(req, res) {
   const authSignature = req.headers['x-auth-signature'];
   const authTimestamp = req.headers['x-auth-timestamp'];
   const receipt = req.headers['x-purchase-receipt'];
+  const cookies = parseCookieHeader(req.headers.cookie);
+  const redownloadSessionToken = req.headers['x-redownload-session'] || cookies.soulstarter_redownload_session || null;
   const paymentSignature = req.headers['payment-signature'] || req.headers.payment || req.headers['x-payment'];
 
-  if (wallet && authSignature && authTimestamp && receipt) {
-    const authCheck = verifyWalletAuth({
-      wallet,
-      soulId,
-      action: 'redownload',
-      timestamp: authTimestamp,
-      signature: authSignature
-    });
-
-    if (!authCheck.ok) {
-      return res.status(401).json({
-        error: authCheck.error,
-        auth_debug: authCheck.auth_debug || null
+  if (wallet && receipt && ((authSignature && authTimestamp) || redownloadSessionToken)) {
+    let authWallet = String(wallet || '').toLowerCase();
+    let usedSignedAuth = false;
+    if (authSignature && authTimestamp) {
+      const authCheck = verifyWalletAuth({
+        wallet,
+        soulId,
+        action: 'redownload',
+        timestamp: authTimestamp,
+        signature: authSignature
       });
+
+      if (!authCheck.ok) {
+        return res.status(401).json({
+          error: authCheck.error,
+          auth_debug: authCheck.auth_debug || null
+        });
+      }
+      authWallet = authCheck.wallet;
+      usedSignedAuth = true;
+    } else {
+      const sessionCheck = verifyRedownloadSessionToken({
+        token: String(redownloadSessionToken || ''),
+        wallet: authWallet
+      });
+      if (!sessionCheck.ok) {
+        return res.status(401).json({ error: sessionCheck.error });
+      }
     }
 
     const receiptCheck = verifyPurchaseReceipt({
       receipt,
-      wallet: authCheck.wallet,
+      wallet: authWallet,
       soulId
     });
 
@@ -85,10 +105,16 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Soul unavailable' });
     }
     cacheEntitlement({
-      wallet: authCheck.wallet,
+      wallet: authWallet,
       soulId,
       transaction: receiptCheck.transaction || 'prior-entitlement'
     });
+    if (usedSignedAuth) {
+      try {
+        const sessionToken = createRedownloadSessionToken({ wallet: authWallet });
+        res.setHeader('Set-Cookie', buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host }));
+      } catch (_) {}
+    }
 
     res.setHeader('Content-Type', 'text/markdown');
     res.setHeader('Content-Disposition', `attachment; filename="${soulId}-SOUL.md"`);
@@ -255,6 +281,12 @@ export default async function handler(req, res) {
 
     if (receiptToken) {
       res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
+    }
+    if (settlement.success && settlement.payer) {
+      try {
+        const sessionToken = createRedownloadSessionToken({ wallet: settlement.payer });
+        res.setHeader('Set-Cookie', buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host }));
+      } catch (_) {}
     }
 
     res.setHeader('Content-Type', 'text/markdown');

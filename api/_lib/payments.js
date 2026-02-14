@@ -151,6 +151,15 @@ function receiptSecret() {
   return secret || null;
 }
 
+function sessionSecret() {
+  return receiptSecret();
+}
+
+function redownloadSessionTtlSeconds() {
+  const parsed = Number(process.env.REDOWNLOAD_SESSION_TTL_SECONDS || '43200');
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 43200;
+}
+
 export function createPurchaseReceipt({ wallet, soulId, transaction }) {
   const secret = receiptSecret();
   if (!secret) {
@@ -207,4 +216,70 @@ export function verifyPurchaseReceipt({ receipt, wallet, soulId }) {
   }
 
   return { ok: true, transaction: payload.transaction || null };
+}
+
+export function createRedownloadSessionToken({ wallet }) {
+  const secret = sessionSecret();
+  if (!secret) throw new Error('Server configuration error: PURCHASE_RECEIPT_SECRET is required');
+  const now = Date.now();
+  const ttlMs = redownloadSessionTtlSeconds() * 1000;
+  const payload = JSON.stringify({
+    wallet: String(wallet || '').toLowerCase(),
+    iat: now,
+    exp: now + ttlMs
+  });
+  const payloadB64 = base64UrlEncode(payload);
+  const sig = crypto.createHmac('sha256', secret).update(payloadB64).digest('base64');
+  const sigB64 = sig.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return `${payloadB64}.${sigB64}`;
+}
+
+export function verifyRedownloadSessionToken({ token, wallet }) {
+  const secret = sessionSecret();
+  if (!secret) return { ok: false, error: 'Server configuration error: PURCHASE_RECEIPT_SECRET is required' };
+  if (!token || typeof token !== 'string' || !token.includes('.')) {
+    return { ok: false, error: 'Missing re-download session token' };
+  }
+  const [payloadB64, sigB64] = token.split('.');
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(payloadB64)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+  if (sigB64 !== expected) return { ok: false, error: 'Invalid re-download session signature' };
+
+  let payload;
+  try {
+    payload = JSON.parse(base64UrlDecode(payloadB64));
+  } catch (_) {
+    return { ok: false, error: 'Invalid re-download session payload' };
+  }
+  if (String(payload.wallet || '').toLowerCase() !== String(wallet || '').toLowerCase()) {
+    return { ok: false, error: 'Re-download session wallet mismatch' };
+  }
+  if (!Number.isFinite(Number(payload.exp)) || Date.now() > Number(payload.exp)) {
+    return { ok: false, error: 'Re-download session expired' };
+  }
+  return { ok: true, exp: Number(payload.exp) };
+}
+
+export function parseCookieHeader(cookieHeader) {
+  const parsed = {};
+  const raw = String(cookieHeader || '');
+  if (!raw) return parsed;
+  for (const part of raw.split(';')) {
+    const [k, ...rest] = part.trim().split('=');
+    if (!k) continue;
+    parsed[k] = decodeURIComponent(rest.join('=') || '');
+  }
+  return parsed;
+}
+
+export function buildRedownloadSessionSetCookie({ token, reqHost }) {
+  const ttl = redownloadSessionTtlSeconds();
+  const host = String(reqHost || '').toLowerCase();
+  const secure = host.includes('localhost') ? '' : '; Secure';
+  return `soulstarter_redownload_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttl}${secure}`;
 }

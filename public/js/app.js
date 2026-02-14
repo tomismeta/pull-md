@@ -581,11 +581,35 @@ async function buildX402PaymentSignature(paymentRequired, soulId) {
 async function tryRedownload(soulId) {
   if (!walletAddress || !signer) return { ok: false, requiresPayment: true };
 
-  const auth = await signRedownloadAuth(soulId);
   const receipt = getStoredReceipt(soulId, walletAddress);
   if (!receipt) return { ok: false, requiresPayment: true };
 
-  const response = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
+  const passive = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
+    method: 'GET',
+    headers: {
+      'X-WALLET-ADDRESS': walletAddress,
+      'X-PURCHASE-RECEIPT': receipt,
+      Accept: 'text/markdown'
+    }
+  });
+
+  if (passive.ok) {
+    const content = await passive.text();
+    const tx = readSettlementTx(passive);
+    const refreshedReceipt = passive.headers.get('X-PURCHASE-RECEIPT');
+    if (refreshedReceipt) storeReceipt(soulId, walletAddress, refreshedReceipt);
+    showPaymentSuccess(content, tx, soulId, true);
+    return { ok: true };
+  }
+
+  if (passive.status !== 401 && passive.status !== 402) {
+    const error = await readError(passive);
+    throw new Error(error || 'Re-download failed');
+  }
+
+  // Fallback: one explicit wallet signature to bootstrap/refresh secure re-download session.
+  const auth = await signRedownloadAuth(soulId);
+  const signed = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
     method: 'GET',
     headers: {
       'X-WALLET-ADDRESS': walletAddress,
@@ -596,20 +620,19 @@ async function tryRedownload(soulId) {
     }
   });
 
-  if (response.ok) {
-    const content = await response.text();
-    const tx = readSettlementTx(response);
-    const refreshedReceipt = response.headers.get('X-PURCHASE-RECEIPT');
+  if (signed.ok) {
+    const content = await signed.text();
+    const tx = readSettlementTx(signed);
+    const refreshedReceipt = signed.headers.get('X-PURCHASE-RECEIPT');
     if (refreshedReceipt) storeReceipt(soulId, walletAddress, refreshedReceipt);
     showPaymentSuccess(content, tx, soulId, true);
     return { ok: true };
   }
 
-  if (response.status === 402 || response.status === 401) {
+  if (signed.status === 401 || signed.status === 402) {
     return { ok: false, requiresPayment: true };
   }
-
-  const error = await readError(response);
+  const error = await readError(signed);
   throw new Error(error || 'Re-download failed');
 }
 
