@@ -37,6 +37,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `GET /api/mcp/tools/list_my_listing_drafts`
 - `GET /api/mcp/tools/get_my_listing_draft?draft_id=<id>`
 - `POST /api/mcp/tools/submit_listing_for_review`
+- `POST /api/mcp/tools/review_listing_submission` (admin only)
 - `GET /api/souls/{id}/download`
 - `GET /api/health/facilitator`
 
@@ -52,6 +53,14 @@ validation/normalization only in this phase; publish/listing activation is inten
 wallet-authenticated private draft save/list/get endpoints are available for builder workflows.
 - Review submission:
 wallet-authenticated submit endpoint transitions draft -> `submitted_for_review` with moderation metadata (`state: pending`).
+- Admin moderation decision:
+`review_listing_submission` applies `approve`/`reject` decisions and records immutable audit entries.
+
+## Marketplace Admin Configuration
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `MARKETPLACE_REVIEW_ADMIN_TOKEN` | for moderation endpoints | Comma-separated admin token(s) accepted by `review_listing_submission` |
 
 ## Environment Variables
 

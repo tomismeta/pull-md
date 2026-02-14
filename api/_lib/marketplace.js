@@ -7,6 +7,7 @@ const SOUL_TYPES = new Set(['synthetic', 'organic', 'hybrid']);
 const MAX_SOUL_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
+const REVIEW_AUDIT_FILE = 'review-audit.jsonl';
 
 function asString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -111,6 +112,12 @@ async function saveWalletDraftFile(walletAddress, payload) {
   };
   await fs.writeFile(filePath, JSON.stringify(next, null, 2), { mode: 0o600 });
   return next;
+}
+
+async function appendReviewAudit(entry) {
+  await ensureDraftStore();
+  const filePath = path.join(getMarketplaceDraftsDir(), REVIEW_AUDIT_FILE);
+  await fs.appendFile(filePath, `${JSON.stringify(entry)}\n`, { mode: 0o600 });
 }
 
 export function getMarketplaceDraftTemplate() {
@@ -340,5 +347,83 @@ export async function submitCreatorDraftForReview({ walletAddress, draftId }) {
   };
   store.drafts[idx] = next;
   await saveWalletDraftFile(wallet, store);
+  await appendReviewAudit({
+    at: now,
+    event: 'submit_for_review',
+    wallet,
+    draft_id: draftId,
+    actor: wallet,
+    status_before: currentStatus,
+    status_after: next.status
+  });
+  return { ok: true, draft: next };
+}
+
+export function verifyReviewAdminToken(token) {
+  const presented = String(token || '').trim();
+  const configured = String(process.env.MARKETPLACE_REVIEW_ADMIN_TOKEN || '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  if (!presented) return { ok: false, error: 'Missing admin token' };
+  if (configured.length === 0) {
+    return { ok: false, error: 'Server configuration error: MARKETPLACE_REVIEW_ADMIN_TOKEN is required' };
+  }
+  if (!configured.includes(presented)) return { ok: false, error: 'Invalid admin token' };
+  return { ok: true };
+}
+
+export async function reviewCreatorDraft({ walletAddress, draftId, decision, reviewer, notes }) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const normalizedDecision = String(decision || '').toLowerCase();
+  if (normalizedDecision !== 'approve' && normalizedDecision !== 'reject') {
+    return { ok: false, error: 'decision must be approve or reject' };
+  }
+
+  const store = await loadWalletDraftFile(wallet);
+  const idx = store.drafts.findIndex((item) => item?.draft_id === draftId);
+  if (idx < 0) return { ok: false, error: 'Draft not found' };
+
+  const existing = store.drafts[idx];
+  const currentStatus = String(existing?.status || 'draft');
+  if (currentStatus !== 'submitted_for_review') {
+    return {
+      ok: false,
+      error: `Draft is not reviewable from status=${currentStatus}`,
+      draft: existing
+    };
+  }
+
+  const now = new Date().toISOString();
+  const nextStatus = normalizedDecision === 'approve' ? 'approved_for_publish' : 'rejected';
+  const next = {
+    ...existing,
+    updated_at: now,
+    status: nextStatus,
+    moderation: {
+      state: normalizedDecision === 'approve' ? 'approved' : 'rejected',
+      submitted_at: existing?.moderation?.submitted_at || now,
+      reviewed_at: now,
+      reviewer: asString(reviewer) || 'admin',
+      notes: asString(notes) || null,
+      decision: normalizedDecision
+    }
+  };
+
+  store.drafts[idx] = next;
+  await saveWalletDraftFile(wallet, store);
+  await appendReviewAudit({
+    at: now,
+    event: 'review_decision',
+    wallet,
+    draft_id: draftId,
+    actor: next.moderation.reviewer,
+    decision: normalizedDecision,
+    status_before: currentStatus,
+    status_after: next.status,
+    notes: next.moderation.notes
+  });
+
   return { ok: true, draft: next };
 }

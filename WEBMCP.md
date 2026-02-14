@@ -59,6 +59,14 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 `{ state: "pending", submitted_at, reviewed_at: null, reviewer: null, notes: null }`
 - Publish is still intentionally disabled in this phase.
 
+11. `POST /api/mcp/tools/review_listing_submission` (admin only)
+- Header: `X-ADMIN-TOKEN`
+- Body:
+`{ wallet_address, draft_id, decision: "approve" | "reject", reviewer?, notes? }`
+- Applies moderation decision and updates status:
+`approved_for_publish` or `rejected`.
+- Writes immutable audit entries to local review audit stream.
+
 ## Download Endpoint
 
 `GET /api/souls/{id}/download`

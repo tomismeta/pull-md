@@ -149,6 +149,22 @@ export default function handler(req, res) {
           draft_id: { type: 'string', required: true, description: 'Draft identifier to submit' }
         },
         returns: { type: 'object', description: 'Draft submission status with moderation state= pending' }
+      },
+      {
+        name: 'review_listing_submission',
+        description: 'Admin-only moderation decision for submitted creator drafts (approve or reject)',
+        endpoint: '/api/mcp/tools/review_listing_submission',
+        method: 'POST',
+        admin_only: true,
+        auth_headers: ['X-ADMIN-TOKEN'],
+        parameters: {
+          wallet_address: { type: 'string', required: true, description: 'Creator wallet address owning the draft' },
+          draft_id: { type: 'string', required: true, description: 'Draft identifier under review' },
+          decision: { type: 'string', required: true, description: 'approve | reject' },
+          reviewer: { type: 'string', required: false, description: 'Optional reviewer id/name for audit trail' },
+          notes: { type: 'string', required: false, description: 'Optional moderation notes' }
+        },
+        returns: { type: 'object', description: 'Updated draft moderation state and resulting status' }
       }
     ],
     download_contract: {
