@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SoulStarter Creator Portal</title>
+  <meta name="description" content="Create, validate, and submit soul listings for moderation.">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://unpkg.com/ethers@6.16.0/dist/ethers.umd.min.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/" class="logo">
+          <span class="logo-icon">🔮</span>
+          <span>SoulStarter</span>
+        </a>
+        <nav class="nav">
+          <a href="/" class="nav-link">Browse</a>
+          <a href="/create.html" class="nav-link">Create</a>
+          <a href="/admin.html" class="nav-link">Moderate</a>
+          <button class="wallet-btn" id="walletBtn">Connect Wallet</button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="creator-main">
+    <section class="creator-section">
+      <div class="container">
+        <div class="agent-api-card creator-header-card">
+          <h1>Creator Portal</h1>
+          <p>Build your soul listing, validate it, save a draft, and submit for review. Wallet signatures are used for creator-authenticated actions.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="creator-section">
+      <div class="container">
+        <div class="agent-api-card">
+          <div class="creator-actions">
+            <h3>Draft Actions</h3>
+            <div class="creator-action-row">
+              <button id="loadTemplateBtn" class="btn btn-ghost">load template</button>
+              <button id="validateBtn" class="btn btn-ghost">validate draft</button>
+              <button id="saveDraftBtn" class="btn btn-primary">save draft</button>
+              <button id="listDraftsBtn" class="btn btn-ghost">list my drafts</button>
+            </div>
+          </div>
+          <p id="draftStatus" class="creator-status">Ready.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="creator-section">
+      <div class="container creator-grid">
+        <div class="agent-api-card">
+          <h3>Listing</h3>
+          <div class="creator-form-grid">
+            <label>soul_id<input id="soulId" class="creator-input" placeholder="my-soul-v1"></label>
+            <label>name<input id="name" class="creator-input" placeholder="My Soul"></label>
+            <label>category<input id="category" class="creator-input" placeholder="starter"></label>
+            <label>soul_type
+              <select id="soulType" class="creator-input">
+                <option value="hybrid">hybrid</option>
+                <option value="synthetic">synthetic</option>
+                <option value="organic">organic</option>
+              </select>
+            </label>
+            <label>icon<input id="icon" class="creator-input" placeholder="spark"></label>
+            <label>price_usdc<input id="priceUsdc" class="creator-input" type="number" step="0.01" min="0.01" placeholder="0.49"></label>
+            <label>seller_address<input id="sellerAddress" class="creator-input" placeholder="0x..."></label>
+            <label>tags (comma-separated)<input id="tags" class="creator-input" placeholder="clear, pragmatic, tool"></label>
+          </div>
+          <label>description<textarea id="description" class="creator-textarea" rows="3"></textarea></label>
+          <label>long_description<textarea id="longDescription" class="creator-textarea" rows="5"></textarea></label>
+          <label>SOUL.md content<textarea id="soulMarkdown" class="creator-textarea" rows="12"></textarea></label>
+          <div class="creator-form-grid">
+            <label>source_url<input id="sourceUrl" class="creator-input" placeholder="https://..."></label>
+            <label>source_label<input id="sourceLabel" class="creator-input" placeholder="Source"></label>
+            <label>creator_royalty_bps<input id="creatorRoyaltyBps" class="creator-input" type="number" min="0" max="10000" placeholder="9900"></label>
+            <label>platform_fee_bps<input id="platformFeeBps" class="creator-input" type="number" min="0" max="10000" placeholder="100"></label>
+          </div>
+        </div>
+
+        <div class="agent-api-card">
+          <h3>Validation Output</h3>
+          <pre id="validationOutput" class="creator-output">No validation run yet.</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="creator-section">
+      <div class="container">
+        <div class="agent-api-card">
+          <div class="creator-actions">
+            <h3>My Drafts</h3>
+            <button id="refreshDraftsBtn" class="btn btn-ghost">refresh</button>
+          </div>
+          <div id="draftList" class="admin-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="js/create.js"></script>
+</body>
+</html>

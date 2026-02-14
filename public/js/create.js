@@ -1,0 +1,333 @@
+const API_BASE = '/api/mcp/tools/creator_marketplace';
+const DEFAULT_SELLER = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
+const STATE = {
+  provider: null,
+  signer: null,
+  wallet: null,
+  lastDraftId: null
+};
+
+function toast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const item = document.createElement('div');
+  item.className = `toast toast-${type}`;
+  item.textContent = message;
+  container.appendChild(item);
+  requestAnimationFrame(() => item.classList.add('show'));
+  setTimeout(() => {
+    item.classList.remove('show');
+    setTimeout(() => item.remove(), 200);
+  }, 2800);
+}
+
+function setStatus(text) {
+  const el = document.getElementById('draftStatus');
+  if (el) el.textContent = text;
+}
+
+function setWalletButton() {
+  const btn = document.getElementById('walletBtn');
+  if (!btn) return;
+  if (STATE.wallet) {
+    btn.textContent = `${STATE.wallet.slice(0, 6)}...${STATE.wallet.slice(-4)}`;
+  } else {
+    btn.textContent = 'Connect Wallet';
+  }
+}
+
+async function connectWallet() {
+  if (!window.ethereum) {
+    toast('No injected wallet found', 'error');
+    return;
+  }
+  STATE.provider = new ethers.BrowserProvider(window.ethereum, 'any');
+  await STATE.provider.send('eth_requestAccounts', []);
+  STATE.signer = await STATE.provider.getSigner();
+  STATE.wallet = (await STATE.signer.getAddress()).toLowerCase();
+  setWalletButton();
+  const seller = document.getElementById('sellerAddress');
+  if (seller && !seller.value.trim()) seller.value = DEFAULT_SELLER;
+  toast('Wallet connected', 'success');
+}
+
+function authMessage(action, timestamp) {
+  return [
+    'SoulStarter Creator Authentication',
+    `address:${STATE.wallet}`,
+    `action:${action}`,
+    `timestamp:${timestamp}`
+  ].join('\n');
+}
+
+async function creatorAuth(action) {
+  if (!STATE.signer || !STATE.wallet) {
+    throw new Error('Connect wallet first');
+  }
+  const authTimestamp = Date.now();
+  const authSignature = await STATE.signer.signMessage(authMessage(action, authTimestamp));
+  return {
+    wallet_address: STATE.wallet,
+    auth_signature: authSignature,
+    auth_timestamp: authTimestamp
+  };
+}
+
+function splitTags(input) {
+  return String(input || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function collectDraft() {
+  return {
+    listing: {
+      soul_id: document.getElementById('soulId').value.trim(),
+      name: document.getElementById('name').value.trim(),
+      description: document.getElementById('description').value.trim(),
+      long_description: document.getElementById('longDescription').value.trim(),
+      category: document.getElementById('category').value.trim(),
+      soul_type: document.getElementById('soulType').value.trim(),
+      icon: document.getElementById('icon').value.trim(),
+      tags: splitTags(document.getElementById('tags').value),
+      price_usdc: Number(document.getElementById('priceUsdc').value),
+      seller_address: document.getElementById('sellerAddress').value.trim() || DEFAULT_SELLER,
+      creator_royalty_bps: Number(document.getElementById('creatorRoyaltyBps').value || 9900),
+      platform_fee_bps: Number(document.getElementById('platformFeeBps').value || 100)
+    },
+    assets: {
+      soul_markdown: document.getElementById('soulMarkdown').value,
+      source_url: document.getElementById('sourceUrl').value.trim(),
+      source_label: document.getElementById('sourceLabel').value.trim()
+    }
+  };
+}
+
+function applyDraft(draft) {
+  const listing = draft?.listing || {};
+  const assets = draft?.assets || {};
+  document.getElementById('soulId').value = listing.soul_id || '';
+  document.getElementById('name').value = listing.name || '';
+  document.getElementById('description').value = listing.description || '';
+  document.getElementById('longDescription').value = listing.long_description || '';
+  document.getElementById('category').value = listing.category || '';
+  document.getElementById('soulType').value = listing.soul_type || 'hybrid';
+  document.getElementById('icon').value = listing.icon || '';
+  document.getElementById('tags').value = Array.isArray(listing.tags) ? listing.tags.join(', ') : '';
+  document.getElementById('priceUsdc').value = listing.price_usdc || '';
+  document.getElementById('sellerAddress').value = listing.seller_address || DEFAULT_SELLER;
+  document.getElementById('creatorRoyaltyBps').value = listing.creator_royalty_bps ?? 9900;
+  document.getElementById('platformFeeBps').value = listing.platform_fee_bps ?? 100;
+  document.getElementById('soulMarkdown').value = assets.soul_markdown || '';
+  document.getElementById('sourceUrl').value = assets.source_url || '';
+  document.getElementById('sourceLabel').value = assets.source_label || '';
+}
+
+async function api(action, { method = 'GET', body, headers = {} } = {}) {
+  const url = `${API_BASE}?action=${encodeURIComponent(action)}`;
+  const response = await fetch(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || payload.auth_message_template || `Request failed (${response.status})`);
+  }
+  return payload;
+}
+
+function setValidationOutput(value) {
+  const output = document.getElementById('validationOutput');
+  if (!output) return;
+  output.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+}
+
+async function loadTemplate() {
+  const data = await api('get_listing_template');
+  applyDraft(data.template);
+  setValidationOutput(data);
+  setStatus('Template loaded.');
+}
+
+async function validateDraft() {
+  const payload = await api('validate_listing_draft', {
+    method: 'POST',
+    body: collectDraft()
+  });
+  STATE.lastDraftId = payload.draft_id || null;
+  setValidationOutput(payload);
+  setStatus(payload.ok ? `Valid draft: ${payload.draft_id}` : 'Validation failed.');
+  toast(payload.ok ? 'Draft validated' : 'Validation has errors', payload.ok ? 'success' : 'warning');
+  return payload;
+}
+
+async function saveDraft() {
+  const auth = await creatorAuth('save_listing_draft');
+  const payload = await api('save_listing_draft', {
+    method: 'POST',
+    body: {
+      ...auth,
+      draft: collectDraft()
+    }
+  });
+  STATE.lastDraftId = payload?.draft?.draft_id || null;
+  setValidationOutput(payload);
+  setStatus(`Draft saved: ${STATE.lastDraftId || 'unknown'}`);
+  toast('Draft saved', 'success');
+  return payload;
+}
+
+function renderDraftList(items) {
+  const container = document.getElementById('draftList');
+  if (!container) return;
+  if (!Array.isArray(items) || items.length === 0) {
+    container.innerHTML = '<p class="admin-empty">No drafts found for this wallet.</p>';
+    return;
+  }
+  container.innerHTML = items
+    .map(
+      (item) => `
+      <article class="admin-card">
+        <div class="admin-card-row">
+          <h4>${item.name || item.draft_id}</h4>
+          <span class="badge badge-hybrid">${item.status || 'draft'}</span>
+        </div>
+        <p class="admin-line">draft_id: <code>${item.draft_id}</code></p>
+        <p class="admin-line">soul_id: <code>${item.soul_id || '-'}</code></p>
+        <p class="admin-line">updated: <code>${item.updated_at || '-'}</code></p>
+        <div class="admin-card-actions">
+          <button class="btn btn-ghost" data-action="load-draft" data-draft="${item.draft_id}">load</button>
+          <button class="btn btn-primary" data-action="submit-review" data-draft="${item.draft_id}">submit for review</button>
+        </div>
+      </article>
+    `
+    )
+    .join('');
+}
+
+async function listDrafts() {
+  const auth = await creatorAuth('list_my_listing_drafts');
+  const payload = await api('list_my_listing_drafts', {
+    method: 'GET',
+    headers: {
+      'X-WALLET-ADDRESS': auth.wallet_address,
+      'X-AUTH-SIGNATURE': auth.auth_signature,
+      'X-AUTH-TIMESTAMP': String(auth.auth_timestamp)
+    }
+  });
+  renderDraftList(payload.drafts || []);
+  setStatus(`Loaded ${payload.count || 0} drafts.`);
+  return payload;
+}
+
+async function loadDraftById(draftId) {
+  const auth = await creatorAuth('get_my_listing_draft');
+  const response = await fetch(
+    `${API_BASE}?action=get_my_listing_draft&draft_id=${encodeURIComponent(draftId)}`,
+    {
+      method: 'GET',
+      headers: {
+        'X-WALLET-ADDRESS': auth.wallet_address,
+        'X-AUTH-SIGNATURE': auth.auth_signature,
+        'X-AUTH-TIMESTAMP': String(auth.auth_timestamp)
+      }
+    }
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Unable to load draft (${response.status})`);
+  }
+  applyDraft(payload?.draft?.normalized || {});
+  setValidationOutput(payload);
+  setStatus(`Draft loaded: ${draftId}`);
+  toast('Draft loaded', 'success');
+}
+
+async function submitForReview(draftId) {
+  const auth = await creatorAuth('submit_listing_for_review');
+  const payload = await api('submit_listing_for_review', {
+    method: 'POST',
+    body: {
+      ...auth,
+      draft_id: draftId
+    }
+  });
+  setValidationOutput(payload);
+  setStatus(`Draft submitted: ${draftId}`);
+  toast('Draft submitted for review', 'success');
+}
+
+function bindEvents() {
+  document.getElementById('walletBtn')?.addEventListener('click', connectWallet);
+  document.getElementById('loadTemplateBtn')?.addEventListener('click', async () => {
+    try {
+      await loadTemplate();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  });
+  document.getElementById('validateBtn')?.addEventListener('click', async () => {
+    try {
+      await validateDraft();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  });
+  document.getElementById('saveDraftBtn')?.addEventListener('click', async () => {
+    try {
+      await saveDraft();
+      await listDrafts();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  });
+  document.getElementById('listDraftsBtn')?.addEventListener('click', async () => {
+    try {
+      await listDrafts();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  });
+  document.getElementById('refreshDraftsBtn')?.addEventListener('click', async () => {
+    try {
+      await listDrafts();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  });
+  document.addEventListener('click', async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const action = target.getAttribute('data-action');
+    const draftId = target.getAttribute('data-draft');
+    if (!action || !draftId) return;
+    target.setAttribute('disabled', 'true');
+    try {
+      if (action === 'load-draft') {
+        await loadDraftById(draftId);
+      } else if (action === 'submit-review') {
+        await submitForReview(draftId);
+        await listDrafts();
+      }
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      target.removeAttribute('disabled');
+    }
+  });
+}
+
+function initDefaults() {
+  document.getElementById('sellerAddress').value = DEFAULT_SELLER;
+  document.getElementById('creatorRoyaltyBps').value = '9900';
+  document.getElementById('platformFeeBps').value = '100';
+  setWalletButton();
+}
+
+bindEvents();
+initDefaults();

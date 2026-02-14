@@ -74,6 +74,8 @@ Audit trail:
 `.marketplace-drafts/review-audit.jsonl`
 - Lightweight moderation UI:
 `/admin.html` (requires manual entry of `MARKETPLACE_REVIEW_ADMIN_TOKEN` in browser session to call admin endpoints).
+- Creator UI:
+`/create.html` (wallet-authenticated draft validate/save/list/load/submit workflow against `creator_marketplace` actions).
 
 ## Environment Variables
 

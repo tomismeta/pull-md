@@ -86,6 +86,8 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 UI companion:
 - `/admin.html` provides a lightweight human moderation console for queue review, approve/reject, and publish actions.
 - It calls the same `creator_marketplace` actions and passes `X-ADMIN-TOKEN` from local browser storage.
+- `/create.html` provides a lightweight creator console for draft template, validate, save, list/load, and submit-for-review flows.
+- Creator auth actions use wallet signatures over `SoulStarter Creator Authentication` messages with action-scoped timestamps.
 
 ## Download Endpoint
 
