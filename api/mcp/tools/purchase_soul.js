@@ -104,7 +104,13 @@ export default async function handler(req, res) {
         standard_wallet:
           'If assetTransferMethod=permit2, sign PermitWitnessTransferFrom and include permit2Authorization + transaction. If eip3009, sign TransferWithAuthorization.',
         bankr_wallet:
-          'Agent orchestrates locally: call /agent/me, sign with /agent/sign, build base64 JSON payload, and send PAYMENT-SIGNATURE. Never send Bankr API key to SoulStarter.'
+          'Agent orchestrates locally: call /agent/me, sign with /agent/sign, build base64 JSON payload, and send PAYMENT-SIGNATURE. Never send Bankr API key to SoulStarter. Current status: Bankr eip3009 is experimental in this deployment.'
+      },
+      wallet_compatibility: {
+        as_of: '2026-02-14',
+        preferred_for_purchase: 'EmblemVault',
+        bankr_known_issue:
+          'Bankr EIP-3009 signatures may fail with FiatTokenV2: invalid signature. Use EmblemVault or another compatible signer for production purchase runs.'
       },
       bankr_self_orchestration: {
         step_1: 'Call Bankr GET /agent/me to resolve signing wallet context.',
@@ -142,6 +148,8 @@ export default async function handler(req, res) {
           'Payload matches multiple schemas because branches were mixed. Send only one method branch (eip3009 or permit2), never both.',
         cdp_permit2_disabled:
           'Facilitator policy disabled permit2. Re-fetch PAYMENT-REQUIRED and submit eip3009 TransferWithAuthorization payload.',
+        usdc_invalid_signature:
+          'If settlement diagnostics show FiatTokenV2: invalid signature, signer output is incompatible for this flow. Retry with EmblemVault-compatible signer.',
         network_mismatch:
           'Use top-level network "eip155:8453" exactly; avoid "base".'
       },

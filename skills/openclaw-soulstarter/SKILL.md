@@ -7,6 +7,12 @@ description: Use this skill when an agent needs to discover SoulStarter via WebM
 
 Use this skill for agent workflows against a deployed SoulStarter instance.
 
+## Wallet Compatibility Status (2026-02-14)
+
+- Preferred purchase signer: `EmblemVault` (verified successful).
+- `Bankr` for EIP-3009 purchase signing is currently experimental in this deployment.
+- Known Bankr failure signature: settlement diagnostics include `FiatTokenV2: invalid signature`.
+
 ## Inputs Required
 
 - `base_url` (canonical: `https://soulstarter.vercel.app`)
@@ -84,6 +90,7 @@ assume `eip3009` unless current `PAYMENT-REQUIRED` says `permit2`.
 Use Bankr Agent API typed-data signing:
 `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then pass final base64 JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
 Never send Bankr API keys/tokens to SoulStarter endpoints.
+For production purchase runs, prefer EmblemVault until Bankr EIP-3009 signer compatibility is fixed.
 
 If you get `No matching payment requirements`:
 - You likely omitted or mutated `accepted`.
@@ -98,6 +105,10 @@ If you get `flow_hint` about header detected but not verified/settled:
 - Confirm method-specific fields are exact for permit2 vs eip3009.
 - Confirm top-level `network` equals `eip155:8453` exactly.
 - SoulStarter will remap facilitator-bound network fields to CDP enum (`base`) internally; do not sign `base` in the agent payload.
+
+If settlement diagnostics show `FiatTokenV2: invalid signature`:
+- Treat this as signer incompatibility for EIP-3009 in this flow.
+- Switch signer (recommended: EmblemVault) and retry with fresh requirements/signature.
 
 If facilitator reports schema errors (`paymentPayload is invalid`, `must match oneOf`):
 - Permit2 payload must include: `payload.from`, `payload.permit2Authorization`, `payload.transaction`, `payload.signature`.

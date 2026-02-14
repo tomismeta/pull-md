@@ -13,6 +13,17 @@ SoulStarter is an agent-focused marketplace for purchasing and re-downloading AI
 preflight checks, multi-endpoint failover, timeout, circuit breaker
 - Agent-discoverable API via WebMCP manifest at `/api/mcp/manifest`
 
+## Wallet Compatibility Status (2026-02-14)
+
+- Confirmed working:
+`EmblemVault` for purchase and re-download auth.
+- Known issue:
+`Bankr` EIP-3009 (`TransferWithAuthorization`) signatures are currently incompatible with Base USDC verification in this flow.
+- Impact:
+Bankr purchase attempts may fail with settlement diagnostics showing `FiatTokenV2: invalid signature`.
+- Recommendation:
+Use EmblemVault (or another compatible signer) for now. Keep Bankr support as experimental until signer compatibility is resolved upstream.
+
 ## API Surface
 
 - `GET /api/mcp/manifest`
@@ -67,6 +78,7 @@ read `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`:
 `eip3009` -> sign `TransferWithAuthorization`.
 - Bankr wallet:
 use Bankr Agent API `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then submit the resulting base64 payload.
+Current status: Bankr EIP-3009 signing is marked experimental due to known signature incompatibility (see Wallet Compatibility Status above).
 - Bankr capability mapping:
 `/agent/me` for wallet discovery, `/agent/sign` for typed-data signing, and no `/agent/submit` call for SoulStarter purchase settlement.
 - Security boundary:
@@ -84,6 +96,9 @@ Critical v2 payload requirement:
 
 If a `402` body contains `auth_message_template`, treat it as optional re-download helper text.
 It does **not** replace the purchase flow.
+
+Re-download auth compatibility note:
+- Server verification accepts canonical variants (`lowercase` or checksummed `address:` line, `LF` or `CRLF` newlines).
 
 ## Agent Troubleshooting Matrix (Explicit)
 

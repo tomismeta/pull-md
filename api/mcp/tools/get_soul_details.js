@@ -49,7 +49,13 @@ export default function handler(req, res) {
     meta: {
       agent_friendly: true,
       purchase_flow: 'x402',
-      documentation: '/api/mcp/manifest'
+      documentation: '/api/mcp/manifest',
+      wallet_compatibility: {
+        as_of: '2026-02-14',
+        preferred_for_purchase: 'EmblemVault',
+        bankr_status: 'experimental',
+        bankr_note: 'Known issue: EIP-3009 signatures can fail with FiatTokenV2: invalid signature in this flow.'
+      }
     }
   });
 }

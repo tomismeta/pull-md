@@ -39,6 +39,13 @@ export default function handler(req, res) {
       agent_key_boundary:
         'Never send Bankr API keys or signer secrets to SoulStarter. SoulStarter accepts only signed x402 payment headers.'
     },
+    wallet_compatibility: {
+      as_of: '2026-02-14',
+      recommended_for_purchase: 'EmblemVault',
+      bankr_status: 'experimental',
+      bankr_note:
+        'Bankr EIP-3009 signatures may fail USDC contract verification in this flow (FiatTokenV2: invalid signature). Prefer EmblemVault until upstream signer compatibility is fixed.'
+    },
     tools: [
       {
         name: 'list_souls',
@@ -96,6 +103,8 @@ export default function handler(req, res) {
         'Submit exactly one payload method branch. eip3009 => authorization+signature only. permit2 => permit2Authorization(+transaction)+signature only.',
       cdp_default:
         'CDP Base mainnet path defaults to eip3009 in this deployment. If permit2 is disabled by facilitator policy, re-sign as eip3009.',
+      wallet_runtime_note:
+        'EmblemVault currently has verified successful purchase + re-download runs. Bankr eip3009 remains experimental.',
       permit2_pitfalls: [
         'Set top-level network to accepted.network (eip155:8453), not "base".',
         'Use payload.permit2Authorization (not payload.permit2).',

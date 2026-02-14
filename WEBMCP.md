@@ -14,6 +14,13 @@ Canonical production host:
 - `https://soulstarter.vercel.app`
 - Do not rely on preview/alias domains for contract verification.
 
+## Wallet Compatibility Status (2026-02-14)
+
+- `EmblemVault`: purchase + re-download verified working.
+- `Bankr`: purchase signing via EIP-3009 currently unreliable/incompatible in this deployment (`FiatTokenV2: invalid signature` in diagnostics).
+- Agent guidance:
+prefer EmblemVault for production purchase runs until Bankr signer compatibility is fixed upstream.
+
 ## Tools
 
 1. `GET /api/mcp/tools/list_souls`
@@ -88,6 +95,7 @@ Read `accepted.extra.assetTransferMethod` and sign accordingly:
 SoulStarter defaults to `eip3009`. Treat this as the primary path unless the latest `PAYMENT-REQUIRED` explicitly sets `permit2`.
 - Bankr wallet:
 Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
+Current status: keep Bankr path marked experimental for EIP-3009 purchase execution.
 - Bankr API capability mapping:
 `/agent/me` for wallet discovery, `/agent/sign` for EIP-712 signature generation, and **do not** use `/agent/submit` for SoulStarter settlement.
 - Bankr key boundary:
@@ -124,6 +132,10 @@ Headers required:
 
 If receipt and wallet auth are valid, response is `200` with soul file.
 
+Auth verifier compatibility:
+- Server accepts message signatures over canonical variants:
+`address:` line in lowercase or checksummed form, and either `LF` or `CRLF` line endings.
+
 ## Common Misread
 
 If you see `auth_message_template` in a `402` body, that does **not** mean purchase is unavailable.
@@ -140,6 +152,9 @@ Refresh `PAYMENT-REQUIRED` and copy `accepts[0]` exactly, unchanged.
 - `flow_hint: Payment header was detected but could not be verified/settled`:
 header parsed but signature/authorization failed verification.
 Re-sign from latest requirements and verify method-specific shape.
+- `FiatTokenV2: invalid signature` in settlement diagnostics:
+wallet signer is not producing a USDC-compatible EIP-3009 signature for this flow.
+Use EmblemVault or another compatible signer.
 - Facilitator schema errors (`paymentPayload is invalid`, `must match oneOf`):
 for permit2 use `payload.from`, `payload.permit2Authorization`, `payload.transaction`, `payload.signature`.
 Do not send `payload.permit2`. Do not include `payload.authorization` in permit2 mode.
