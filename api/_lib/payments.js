@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { ethers } from 'ethers';
 
 const AUTH_STATEMENT = 'Authentication only. No token transfer or approval.';
+const SIWE_STATEMENT = 'Authenticate wallet ownership for SoulStarter. No token transfer or approval.';
 const AUTH_TYPED_DOMAIN = {
   name: 'SoulStarter Authentication',
   version: '1'
@@ -15,6 +16,9 @@ const AUTH_TYPED_TYPES = {
     { name: 'statement', type: 'string' }
   ]
 };
+const SIWE_DOMAIN = String(process.env.SIWE_DOMAIN || 'soulstarter.vercel.app').trim();
+const SIWE_URI = String(process.env.SIWE_URI || `https://${SIWE_DOMAIN}`).trim();
+const SIWE_CHAIN_ID = Number(process.env.SIWE_CHAIN_ID || '8453');
 
 export function setCors(res, origin) {
   const allowedOrigins = [
@@ -74,6 +78,16 @@ export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature 
     return { ok: false, error: 'Authentication message expired' };
   }
 
+  const siweCandidates = buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp: ts });
+  for (const candidate of siweCandidates) {
+    try {
+      const recovered = ethers.verifyMessage(candidate.message, signature);
+      if (typeof recovered === 'string' && recovered.toLowerCase() === wallet.toLowerCase()) {
+        return { ok: true, wallet: wallet.toLowerCase(), auth_format: 'siwe', matched_variant: candidate.variant };
+      }
+    } catch (_) {}
+  }
+
   const typed = buildAuthTypedData({ wallet, soulId, action, timestamp: ts });
   try {
     const recoveredTyped = ethers.verifyTypedData(typed.domain, typed.types, typed.message, signature);
@@ -126,6 +140,49 @@ export function buildAuthTypedData({ wallet, soulId, action, timestamp }) {
       statement: AUTH_STATEMENT
     }
   };
+}
+
+function buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp }) {
+  const rawWallet = String(wallet || '').trim();
+  const walletLower = rawWallet.toLowerCase();
+  const checksummed = safeChecksumAddress(rawWallet);
+  const walletVariants = [walletLower, checksummed].filter(Boolean);
+  const uniqueWallets = [...new Set(walletVariants)];
+  return uniqueWallets.map((walletVariant) => ({
+    variant: walletVariant === walletLower ? 'siwe-lowercase' : 'siwe-checksummed',
+    message: buildSiweAuthMessage({ wallet: walletVariant, soulId, action, timestamp })
+  }));
+}
+
+function buildSiweNonce({ soulId, action, timestamp }) {
+  const seed = `${String(soulId || '*')}|${String(action || '')}|${String(timestamp || '')}`;
+  return crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
+}
+
+export function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
+  const address = String(wallet || '').trim().toLowerCase();
+  const ts = Number(timestamp);
+  const issuedAt = new Date(ts).toISOString();
+  const expiresAt = new Date(ts + 5 * 60 * 1000).toISOString();
+  const nonce = buildSiweNonce({ soulId, action, timestamp: ts });
+  const requestId = `${String(action || 'auth').trim()}:${String(soulId || '*').trim()}`;
+  return [
+    `${SIWE_DOMAIN} wants you to sign in with your Ethereum account:`,
+    address,
+    '',
+    SIWE_STATEMENT,
+    '',
+    `URI: ${SIWE_URI}`,
+    'Version: 1',
+    `Chain ID: ${Number.isFinite(SIWE_CHAIN_ID) ? SIWE_CHAIN_ID : 8453}`,
+    `Nonce: ${nonce}`,
+    `Issued At: ${issuedAt}`,
+    `Expiration Time: ${expiresAt}`,
+    `Request ID: ${requestId}`,
+    'Resources:',
+    `- urn:soulstarter:action:${String(action || '').trim()}`,
+    `- urn:soulstarter:soul:${String(soulId || '*').trim()}`
+  ].join('\n');
 }
 
 function buildAuthMessageCandidates({ wallet, soulId, action, timestamp }) {

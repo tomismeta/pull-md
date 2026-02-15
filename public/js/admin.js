@@ -261,27 +261,31 @@ function moderatorAuthMessage(action, timestamp) {
   return ['SoulStarter Moderator Authentication', `address:${state.wallet}`, `action:${action}`, `timestamp:${timestamp}`].join('\n');
 }
 
-function moderatorAuthTypedData(action, timestamp) {
-  return {
-    domain: {
-      name: 'SoulStarter Moderator Authentication',
-      version: '1'
-    },
-    types: {
-      SoulStarterModeratorAuth: [
-        { name: 'wallet', type: 'address' },
-        { name: 'action', type: 'string' },
-        { name: 'timestamp', type: 'uint256' },
-        { name: 'statement', type: 'string' }
-      ]
-    },
-    message: {
-      wallet: state.wallet,
-      action: String(action || ''),
-      timestamp: Number(timestamp),
-      statement: 'Authentication only. No token transfer or approval.'
-    }
-  };
+function moderatorSiweMessage(action, timestamp) {
+  const ts = Number(timestamp);
+  const nonceSeed = `${String(action || '')}|${String(ts)}`;
+  let hash = 0;
+  for (let i = 0; i < nonceSeed.length; i += 1) {
+    hash = (hash * 31 + nonceSeed.charCodeAt(i)) >>> 0;
+  }
+  const nonce = `ss${String(hash.toString(16)).padStart(8, '0')}`;
+  return [
+    `${window.location.host} wants you to sign in with your Ethereum account:`,
+    String(state.wallet || '').toLowerCase(),
+    '',
+    'Authenticate wallet ownership for SoulStarter. No token transfer or approval.',
+    '',
+    `URI: ${window.location.origin}`,
+    'Version: 1',
+    `Chain ID: ${BASE_CHAIN_DEC}`,
+    `Nonce: ${nonce}`,
+    `Issued At: ${new Date(ts).toISOString()}`,
+    `Expiration Time: ${new Date(ts + 5 * 60 * 1000).toISOString()}`,
+    `Request ID: ${String(action || 'moderator')}:*`,
+    'Resources:',
+    `- urn:soulstarter:action:${String(action || '')}`,
+    '- urn:soulstarter:soul:*'
+  ].join('\n');
 }
 
 async function signModeratorHeaders(action) {
@@ -290,8 +294,7 @@ async function signModeratorHeaders(action) {
   const timestamp = Date.now();
   let signature;
   try {
-    const typed = moderatorAuthTypedData(action, timestamp);
-    signature = await state.signer.signTypedData(typed.domain, typed.types, typed.message);
+    signature = await state.signer.signMessage(moderatorSiweMessage(action, timestamp));
   } catch (_) {
     signature = await state.signer.signMessage(moderatorAuthMessage(action, timestamp));
   }

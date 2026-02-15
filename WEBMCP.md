@@ -78,7 +78,7 @@ UI companion:
 - `/admin.html` provides a lightweight human moderation console for visibility removal only.
 - It requires connected allowlisted moderator wallet and signs `SoulStarter Moderator Authentication` messages per moderation action.
 - `/create.html` provides a lightweight creator console for immediate publish and share-link retrieval.
-- Creator auth actions use wallet signatures over `SoulStarter Creator Authentication` messages with action-scoped timestamps.
+- Creator/moderator auth now prefers SIWE (EIP-4361) message signatures with action-scoped timestamps.
 
 ## Download Endpoint
 
@@ -132,7 +132,7 @@ Important:
 - If `accepted` is missing or altered, server returns `No matching payment requirements`.
 - Keep `scheme` and `network` at top level (not nested under `payload`).
 - For `eip3009`, signature must be `payload.signature` (not `payload.authorization.signature`).
-- Ownership/auth signatures (creator/moderator/session/re-download challenge) use EIP-712 typed data when available and are non-spending (`Authentication only. No token transfer or approval.`).
+- Ownership/auth signatures (creator/moderator/session/re-download challenge) prefer SIWE (EIP-4361) message signing and are non-spending (`Authentication only. No token transfer or approval.`). Legacy typed/text formats remain accepted for compatibility.
 - Before signing, verify `accepted.payTo` matches trusted seller metadata exactly (full address, checksum comparison).
 - Ignore tiny unsolicited transfers and never copy destination addresses from transfer history.
 
@@ -345,7 +345,8 @@ Creator publish tools require wallet-auth headers:
 - `X-AUTH-SIGNATURE`
 - `X-AUTH-TIMESTAMP`
 
-Sign exactly:
+Preferred signing format: SIWE (EIP-4361) message.
+Compatibility fallback (still accepted):
 
 ```text
 SoulStarter Creator Authentication
@@ -365,7 +366,8 @@ Moderation tools require wallet-auth headers:
 - `X-MODERATOR-SIGNATURE`
 - `X-MODERATOR-TIMESTAMP`
 
-Sign exactly:
+Preferred signing format: SIWE (EIP-4361) message.
+Compatibility fallback (still accepted):
 
 ```text
 SoulStarter Moderator Authentication

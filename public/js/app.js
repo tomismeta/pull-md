@@ -653,29 +653,31 @@ function buildAuthMessage({ wallet, soulId, action, timestamp }) {
   ].join('\n');
 }
 
-function buildAuthTypedData({ wallet, soulId, action, timestamp }) {
-  return {
-    domain: {
-      name: 'SoulStarter Authentication',
-      version: '1'
-    },
-    types: {
-      SoulStarterAuth: [
-        { name: 'wallet', type: 'address' },
-        { name: 'soul', type: 'string' },
-        { name: 'action', type: 'string' },
-        { name: 'timestamp', type: 'uint256' },
-        { name: 'statement', type: 'string' }
-      ]
-    },
-    message: {
-      wallet,
-      soul: String(soulId || ''),
-      action: String(action || ''),
-      timestamp: Number(timestamp),
-      statement: 'Authentication only. No token transfer or approval.'
-    }
-  };
+function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
+  const ts = Number(timestamp);
+  const nonceSeed = `${String(soulId || '*')}|${String(action || '')}|${String(ts)}`;
+  let hash = 0;
+  for (let i = 0; i < nonceSeed.length; i += 1) {
+    hash = (hash * 31 + nonceSeed.charCodeAt(i)) >>> 0;
+  }
+  const nonce = `ss${String(hash.toString(16)).padStart(8, '0')}`;
+  return [
+    `${window.location.host} wants you to sign in with your Ethereum account:`,
+    String(wallet || '').toLowerCase(),
+    '',
+    'Authenticate wallet ownership for SoulStarter. No token transfer or approval.',
+    '',
+    `URI: ${window.location.origin}`,
+    'Version: 1',
+    `Chain ID: ${CONFIG.baseChainIdDec}`,
+    `Nonce: ${nonce}`,
+    `Issued At: ${new Date(ts).toISOString()}`,
+    `Expiration Time: ${new Date(ts + 5 * 60 * 1000).toISOString()}`,
+    `Request ID: ${String(action || 'auth')}:${String(soulId || '*')}`,
+    'Resources:',
+    `- urn:soulstarter:action:${String(action || '')}`,
+    `- urn:soulstarter:soul:${String(soulId || '*')}`
+  ].join('\n');
 }
 
 function normalizeAddress(address) {
@@ -723,7 +725,7 @@ async function ensureRedownloadSession() {
   if (existing) return existing;
 
   const timestamp = Date.now();
-  const typed = buildAuthTypedData({
+  const siwe = buildSiweAuthMessage({
     wallet: walletAddress,
     soulId: '*',
     action: 'session',
@@ -731,9 +733,8 @@ async function ensureRedownloadSession() {
   });
   let signature;
   try {
-    signature = await signer.signTypedData(typed.domain, typed.types, typed.message);
+    signature = await signer.signMessage(siwe);
   } catch (_) {
-    // Backward-compatible fallback for wallets that do not expose typed-data signing.
     signature = await signer.signMessage(
       buildAuthMessage({
         wallet: walletAddress,

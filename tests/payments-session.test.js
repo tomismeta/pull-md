@@ -5,6 +5,7 @@ import { ethers } from 'ethers';
 import {
   buildAuthTypedData,
   buildAuthMessage,
+  buildSiweAuthMessage,
   createPurchaseReceipt,
   createRedownloadSessionToken,
   verifyPurchaseReceipt,
@@ -56,6 +57,30 @@ test('wallet session auth typed-data signature verifies with action=session', as
 
   assert.equal(checked.ok, true);
   assert.equal(checked.wallet, wallet.address.toLowerCase());
+});
+
+test('wallet session auth SIWE signature verifies with action=session', async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const timestamp = Date.now();
+  const message = buildSiweAuthMessage({
+    wallet: wallet.address,
+    soulId: '*',
+    action: 'session',
+    timestamp
+  });
+  const signature = await wallet.signMessage(message);
+
+  const checked = verifyWalletAuth({
+    wallet: wallet.address,
+    soulId: '*',
+    action: 'session',
+    timestamp,
+    signature
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.wallet, wallet.address.toLowerCase());
+  assert.equal(checked.auth_format, 'siwe');
 });
 
 test('redownload session token binds to wallet and expires', async () => {

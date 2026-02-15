@@ -10,6 +10,10 @@ const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 const MODERATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 const AUTH_STATEMENT = 'Authentication only. No token transfer or approval.';
+const SIWE_STATEMENT = 'Authenticate wallet ownership for SoulStarter. No token transfer or approval.';
+const SIWE_DOMAIN = String(process.env.SIWE_DOMAIN || 'soulstarter.vercel.app').trim();
+const SIWE_URI = String(process.env.SIWE_URI || `https://${SIWE_DOMAIN}`).trim();
+const SIWE_CHAIN_ID = Number(process.env.SIWE_CHAIN_ID || '8453');
 const REVIEW_AUDIT_FILE = 'review-audit.jsonl';
 const PUBLISHED_CATALOG_FILE = 'published-catalog.json';
 const DEFAULT_MODERATOR_WALLETS = ['0x7F46aCB709cd8DF5879F84915CA431fB740989E4'];
@@ -690,6 +694,69 @@ async function loadAllWalletDraftStores() {
   return stores;
 }
 
+function buildSiweNonce({ scope, action, timestamp }) {
+  const seed = `${String(scope || '*')}|${String(action || '')}|${String(timestamp || '')}`;
+  return crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
+}
+
+function buildSiweAuthMessage({ wallet, action, timestamp, scope }) {
+  const ts = Number(timestamp);
+  const address = String(wallet || '').trim().toLowerCase();
+  const issuedAt = new Date(ts).toISOString();
+  const expiresAt = new Date(ts + 5 * 60 * 1000).toISOString();
+  const nonce = buildSiweNonce({ scope, action, timestamp: ts });
+  const requestId = `${String(action || '').trim()}:${String(scope || '*').trim()}`;
+  return [
+    `${SIWE_DOMAIN} wants you to sign in with your Ethereum account:`,
+    address,
+    '',
+    SIWE_STATEMENT,
+    '',
+    `URI: ${SIWE_URI}`,
+    'Version: 1',
+    `Chain ID: ${Number.isFinite(SIWE_CHAIN_ID) ? SIWE_CHAIN_ID : 8453}`,
+    `Nonce: ${nonce}`,
+    `Issued At: ${issuedAt}`,
+    `Expiration Time: ${expiresAt}`,
+    `Request ID: ${requestId}`,
+    'Resources:',
+    `- urn:soulstarter:action:${String(action || '').trim()}`,
+    `- urn:soulstarter:scope:${String(scope || '*').trim()}`
+  ].join('\n');
+}
+
+function buildCreatorSiweMessageCandidates({ wallet, action, timestamp }) {
+  const raw = asString(wallet);
+  const lower = raw.toLowerCase();
+  const checksummed = safeChecksumAddress(raw);
+  const wallets = [...new Set([lower, checksummed].filter(Boolean))];
+  return wallets.map((walletVariant) => ({
+    variant: walletVariant === lower ? 'siwe-lowercase' : 'siwe-checksummed',
+    message: buildSiweAuthMessage({
+      wallet: walletVariant,
+      action,
+      timestamp,
+      scope: 'creator'
+    })
+  }));
+}
+
+function buildModeratorSiweMessageCandidates({ wallet, action, timestamp }) {
+  const raw = asString(wallet);
+  const lower = raw.toLowerCase();
+  const checksummed = safeChecksumAddress(raw);
+  const wallets = [...new Set([lower, checksummed].filter(Boolean))];
+  return wallets.map((walletVariant) => ({
+    variant: walletVariant === lower ? 'siwe-lowercase' : 'siwe-checksummed',
+    message: buildSiweAuthMessage({
+      wallet: walletVariant,
+      action,
+      timestamp,
+      scope: 'moderator'
+    })
+  }));
+}
+
 export async function listPublishedCatalogEntries() {
   return listPublishedCatalogEntriesFiltered();
 }
@@ -760,9 +827,12 @@ export function getMarketplaceDraftTemplate() {
 }
 
 export function buildCreatorAuthMessage({ wallet, action, timestamp }) {
-  return ['SoulStarter Creator Authentication', `address:${String(wallet || '').toLowerCase()}`, `action:${action}`, `timestamp:${timestamp}`].join(
-    '\n'
-  );
+  return buildSiweAuthMessage({
+    wallet: String(wallet || '').toLowerCase(),
+    action,
+    timestamp,
+    scope: 'creator'
+  });
 }
 
 export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
@@ -781,6 +851,16 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
     return { ok: false, error: 'Authentication message expired' };
   }
 
+  const siweCandidates = buildCreatorSiweMessageCandidates({ wallet, action, timestamp: ts });
+  for (const candidate of siweCandidates) {
+    try {
+      const recovered = ethers.verifyMessage(candidate.message, signature);
+      if (typeof recovered === 'string' && recovered.toLowerCase() === String(wallet).toLowerCase()) {
+        return { ok: true, wallet: String(wallet).toLowerCase(), matched_variant: candidate.variant, auth_format: 'siwe' };
+      }
+    } catch (_) {}
+  }
+
   try {
     const typed = buildTypedAuthPayload({
       domainName: 'SoulStarter Creator Authentication',
@@ -791,7 +871,7 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
     });
     const recoveredTyped = ethers.verifyTypedData(typed.domain, typed.types, typed.message, signature);
     if (typeof recoveredTyped === 'string' && recoveredTyped.toLowerCase() === String(wallet).toLowerCase()) {
-      return { ok: true, wallet: String(wallet).toLowerCase(), matched_variant: 'eip712' };
+      return { ok: true, wallet: String(wallet).toLowerCase(), matched_variant: 'eip712', auth_format: 'eip712' };
     }
   } catch (_) {}
 
@@ -1029,12 +1109,12 @@ function buildModeratorAuthMessageCandidates({ wallet, action, timestamp }) {
 }
 
 export function buildModeratorAuthMessage({ wallet, action, timestamp }) {
-  return [
-    'SoulStarter Moderator Authentication',
-    `address:${String(wallet || '').toLowerCase()}`,
-    `action:${String(action || '').trim()}`,
-    `timestamp:${timestamp}`
-  ].join('\n');
+  return buildSiweAuthMessage({
+    wallet: String(wallet || '').toLowerCase(),
+    action: String(action || '').trim(),
+    timestamp,
+    scope: 'moderator'
+  });
 }
 
 export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
@@ -1062,6 +1142,16 @@ export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
     return { ok: false, error: 'Authentication message expired' };
   }
 
+  const siweCandidates = buildModeratorSiweMessageCandidates({ wallet, action, timestamp: ts });
+  for (const candidate of siweCandidates) {
+    try {
+      const recovered = ethers.verifyMessage(candidate.message, signature);
+      if (typeof recovered === 'string' && recovered.toLowerCase() === normalizedWallet) {
+        return { ok: true, wallet: normalizedWallet, matched_variant: candidate.variant, auth_format: 'siwe' };
+      }
+    } catch (_) {}
+  }
+
   try {
     const typed = buildTypedAuthPayload({
       domainName: 'SoulStarter Moderator Authentication',
@@ -1072,7 +1162,7 @@ export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
     });
     const recoveredTyped = ethers.verifyTypedData(typed.domain, typed.types, typed.message, signature);
     if (typeof recoveredTyped === 'string' && recoveredTyped.toLowerCase() === normalizedWallet) {
-      return { ok: true, wallet: normalizedWallet, matched_variant: 'eip712' };
+      return { ok: true, wallet: normalizedWallet, matched_variant: 'eip712', auth_format: 'eip712' };
     }
   } catch (_) {}
 

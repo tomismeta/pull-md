@@ -13,7 +13,7 @@ SoulStarter is an agent-focused marketplace for purchasing and re-downloading AI
 `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SIGNATURE` + `X-REDOWNLOAD-TIMESTAMP`
 - Strict headless agent mode (API-only):
 set `X-CLIENT-MODE: agent`; re-download requires receipt + wallet signature challenge and never uses browser/session recovery APIs.
-- Ownership auth signatures (creator/moderator/session/re-download challenge) prefer EIP-712 typed data with non-spending statement:
+- Ownership auth signatures (creator/moderator/session/re-download challenge) prefer SIWE (EIP-4361) message signing with non-spending statement:
 `Authentication only. No token transfer or approval.`
 - Human recovery mode (receipt unavailable):
 `X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`)
@@ -161,6 +161,7 @@ Copy-paste guidance on payment errors:
 
 Re-download auth compatibility note:
 - Server verification accepts canonical variants (`lowercase` or checksummed `address:` line, `LF` or `CRLF` newlines).
+- Server verification prefers SIWE (EIP-4361) messages and still accepts legacy/typed signatures for compatibility.
 - If re-download headers are present, server prioritizes entitlement delivery and skips payment processing.
 - Strict agent no-repay path:
 `X-CLIENT-MODE: agent` + `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SIGNATURE` + `X-REDOWNLOAD-TIMESTAMP` (no session bootstrap required).

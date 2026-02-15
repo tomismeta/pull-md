@@ -294,27 +294,31 @@ function creatorAuthMessage(action, timestamp) {
   );
 }
 
-function creatorAuthTypedData(action, timestamp) {
-  return {
-    domain: {
-      name: 'SoulStarter Creator Authentication',
-      version: '1'
-    },
-    types: {
-      SoulStarterCreatorAuth: [
-        { name: 'wallet', type: 'address' },
-        { name: 'action', type: 'string' },
-        { name: 'timestamp', type: 'uint256' },
-        { name: 'statement', type: 'string' }
-      ]
-    },
-    message: {
-      wallet: STATE.wallet,
-      action: String(action || ''),
-      timestamp: Number(timestamp),
-      statement: 'Authentication only. No token transfer or approval.'
-    }
-  };
+function creatorSiweMessage(action, timestamp) {
+  const ts = Number(timestamp);
+  const nonceSeed = `${String(action || '')}|${String(ts)}`;
+  let hash = 0;
+  for (let i = 0; i < nonceSeed.length; i += 1) {
+    hash = (hash * 31 + nonceSeed.charCodeAt(i)) >>> 0;
+  }
+  const nonce = `ss${String(hash.toString(16)).padStart(8, '0')}`;
+  return [
+    `${window.location.host} wants you to sign in with your Ethereum account:`,
+    String(STATE.wallet || '').toLowerCase(),
+    '',
+    'Authenticate wallet ownership for SoulStarter. No token transfer or approval.',
+    '',
+    `URI: ${window.location.origin}`,
+    'Version: 1',
+    `Chain ID: ${BASE_CHAIN_DEC}`,
+    `Nonce: ${nonce}`,
+    `Issued At: ${new Date(ts).toISOString()}`,
+    `Expiration Time: ${new Date(ts + 5 * 60 * 1000).toISOString()}`,
+    `Request ID: ${String(action || 'creator')}:*`,
+    'Resources:',
+    `- urn:soulstarter:action:${String(action || '')}`,
+    '- urn:soulstarter:soul:*'
+  ].join('\n');
 }
 
 async function creatorAuth(action) {
@@ -322,8 +326,7 @@ async function creatorAuth(action) {
   const authTimestamp = Date.now();
   let authSignature;
   try {
-    const typed = creatorAuthTypedData(action, authTimestamp);
-    authSignature = await STATE.signer.signTypedData(typed.domain, typed.types, typed.message);
+    authSignature = await STATE.signer.signMessage(creatorSiweMessage(action, authTimestamp));
   } catch (_) {
     authSignature = await STATE.signer.signMessage(creatorAuthMessage(action, authTimestamp));
   }
