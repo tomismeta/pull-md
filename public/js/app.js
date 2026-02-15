@@ -62,6 +62,7 @@ let walletType = null;
 const providerMetadata = new WeakMap();
 let providerDiscoveryInitialized = false;
 let activeSuccessDownloadUrl = null;
+let latestSoulDownload = null;
 
 function initProviderDiscovery() {
   if (providerDiscoveryInitialized || typeof window === 'undefined') return;
@@ -959,6 +960,52 @@ function triggerMarkdownDownload(content, soulId) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function isLikelyMobileBrowser() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = String(navigator.userAgent || '');
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+}
+
+async function handleSuccessDownloadClick(event) {
+  if (!latestSoulDownload || !isLikelyMobileBrowser()) return;
+
+  const { content, soulId } = latestSoulDownload;
+  const filename = `${soulId}-SOUL.md`;
+  event.preventDefault();
+
+  if (navigator?.share && typeof File !== 'undefined') {
+    try {
+      const file = new File([content], filename, { type: 'text/markdown' });
+      if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: filename,
+          text: 'SoulStarter file',
+          files: [file]
+        });
+        return;
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+    }
+  }
+
+  try {
+    const viewUrl = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
+    const opened = window.open(viewUrl, '_blank', 'noopener,noreferrer');
+    if (!opened) {
+      window.location.href = viewUrl;
+    }
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(viewUrl);
+      } catch (_) {}
+    }, 60 * 1000);
+    showToast('Opened SOUL.md. Use browser Share/Save to keep it locally.', 'info');
+  } catch (_) {
+    showToast('Unable to open SOUL.md. Try again from My Souls.', 'error');
+  }
+}
+
 function revokeActiveSuccessDownloadUrl() {
   if (!activeSuccessDownloadUrl) return;
   try {
@@ -968,6 +1015,7 @@ function revokeActiveSuccessDownloadUrl() {
 }
 
 function showPaymentSuccess(content, txHash, soulId, redownload) {
+  latestSoulDownload = { content, soulId };
   const purchaseCard = document.getElementById('purchaseCard');
   if (purchaseCard) purchaseCard.style.display = 'none';
 
@@ -993,6 +1041,7 @@ function showPaymentSuccess(content, txHash, soulId, redownload) {
     activeSuccessDownloadUrl = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
     downloadLink.href = activeSuccessDownloadUrl;
     downloadLink.download = `${soulId}-SOUL.md`;
+    downloadLink.onclick = handleSuccessDownloadClick;
   }
 
   // Always trigger human download, even outside detail page cards.
