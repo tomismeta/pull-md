@@ -613,9 +613,6 @@ function renderOwnedSouls() {
             }
             <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(sourceLabel)}</span>
           </div>
-          <div>
-            <span class="price">${escapeHtml(isOwned ? 'Accessible' : 'Creator Access')}</span>
-          </div>
         </div>
         <div class="soul-card-actions">
           <a class="btn btn-ghost" href="${escapeHtml(soulListingHref(soul.id))}">View Listing</a>
