@@ -102,7 +102,7 @@ Authoritative purchase flow:
 base64(JSON x402 payload)
 - Response `200` with soul file
 - Header `PAYMENT-RESPONSE` (base64 JSON settlement response)
-- Headers `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SIGNATURE` + `X-REDOWNLOAD-TIMESTAMP` (for strict no-repay agent re-downloads)
+- Header `X-PURCHASE-RECEIPT` (persist and reuse for strict no-repay agent re-downloads)
 
 #### Agent Header Formatting
 
@@ -170,6 +170,52 @@ Only the SoulStarter server needs facilitator credentials.
 5. Build x402 JSON payload, base64-encode it, and send:
    `PAYMENT-SIGNATURE: <base64(JSON payload)>`
 6. Save `X-PURCHASE-RECEIPT` from the `200` response for re-downloads.
+
+### Headless Agent Quickstart (Redacted)
+
+Use placeholders only:
+- `<SOUL_ID>`
+- `<WALLET_ADDRESS>`
+- `<UNIX_MS>`
+- `<PURCHASE_RECEIPT>`
+- `<PAYMENT_SIGNATURE_B64>`
+
+1. Discovery:
+`GET /api/mcp/manifest`
+
+2. Get paywall:
+`GET /api/souls/<SOUL_ID>/download`
+header:
+`X-CLIENT-MODE: agent`
+
+3. Parse `PAYMENT-REQUIRED`, copy `accepts[0]` into top-level `accepted` unchanged.
+
+4. Submit paid retry:
+`GET /api/souls/<SOUL_ID>/download`
+headers:
+- `X-CLIENT-MODE: agent`
+- `PAYMENT-SIGNATURE: <PAYMENT_SIGNATURE_B64>`
+
+5. Persist response header:
+`X-PURCHASE-RECEIPT`
+
+6. Strict no-repay re-download:
+Sign message exactly:
+```text
+SoulStarter Wallet Authentication
+address:<wallet_lowercase>
+soul:<SOUL_ID>
+action:redownload
+timestamp:<UNIX_MS>
+```
+Then call:
+`GET /api/souls/<SOUL_ID>/download`
+headers:
+- `X-CLIENT-MODE: agent`
+- `X-WALLET-ADDRESS: <WALLET_ADDRESS>`
+- `X-PURCHASE-RECEIPT: <PURCHASE_RECEIPT>`
+- `X-REDOWNLOAD-SIGNATURE: 0x<signature_hex>`
+- `X-REDOWNLOAD-TIMESTAMP: <UNIX_MS>`
 
 ### Re-download (no repay)
 
