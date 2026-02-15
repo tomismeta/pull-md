@@ -6,7 +6,9 @@ SoulStarter is an agent-focused marketplace for purchasing and re-downloading AI
 
 - Strict x402 v2 purchase flow on `GET /api/souls/{id}/download`
 - Required x402 headers for payment flow:
-`PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE` (or `PAYMENT` / `X-PAYMENT`), `PAYMENT-RESPONSE`
+`PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE`
+- Deprecated payment headers (hard-deprecated):
+`PAYMENT`, `X-PAYMENT`
 - Re-download flow (no second payment) is now receipt-first:
 `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT`
 - Strict headless agent mode (API-only):
@@ -37,7 +39,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `GET /api/mcp/manifest`
 - `GET /api/mcp/tools/list_souls`
 - `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
-- `POST /api/mcp/tools/purchase_soul`
+- `POST /api/mcp/tools/purchase_soul` (deprecated: returns `410`; use canonical `/api/souls/{id}/download`)
 - `POST /api/mcp/tools/check_entitlements`
 - `GET /api/mcp/tools/creator_marketplace?action=get_listing_template`
 - `POST /api/mcp/tools/creator_marketplace?action=validate_listing_draft`
@@ -119,9 +121,8 @@ Paid retry headers:
 
 - Preferred:
 `PAYMENT-SIGNATURE: <base64(JSON x402 payload)>`
-- Also accepted:
-`PAYMENT: <base64(JSON x402 payload)>`
-`X-PAYMENT: <base64(JSON x402 payload)>`
+- Deprecated and rejected:
+`PAYMENT`, `X-PAYMENT`
 
 Wallet notes:
 
@@ -162,6 +163,7 @@ Re-download auth compatibility note:
 - Strict agent no-repay path:
 `X-CLIENT-MODE: agent` + `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` (no session bootstrap required).
 - In strict agent mode, `X-REDOWNLOAD-SESSION`, `X-AUTH-SIGNATURE`, and `X-AUTH-TIMESTAMP` are rejected.
+- In strict agent mode, `/api/auth/session` is deprecated and returns `410` (`session_api_not_for_agents`).
 - Human UX optimization:
 bootstrap once with `GET /api/auth/session` using wallet signature (`action: session`), then recovery uses
 `X-WALLET-ADDRESS` + `X-REDOWNLOAD-SESSION` when needed (receipt remains primary whenever available).

@@ -31,8 +31,8 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 2. `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
 - Returns detailed metadata and endpoint usage details for one soul.
 
-3. `POST /api/mcp/tools/purchase_soul`
-- Returns a strict x402 `402` response and `PAYMENT-REQUIRED`.
+3. `POST /api/mcp/tools/purchase_soul` (deprecated)
+- Returns `410 Gone` with canonical flow instructions.
 
 4. `POST /api/mcp/tools/check_entitlements`
 - Verifies receipt proof(s) for re-download:
@@ -104,7 +104,7 @@ UI companion:
 Authoritative purchase flow:
 
 - `GET /api/souls/{id}/download` is the canonical x402 entrypoint.
-- `POST /api/mcp/tools/purchase_soul` is a helper tool and should not replace the canonical download flow.
+- `POST /api/mcp/tools/purchase_soul` is hard-deprecated and should not be used at runtime.
 
 ### Purchase (x402 strict)
 
@@ -114,8 +114,8 @@ Authoritative purchase flow:
 
 2. Paid retry:
 - Include `X-CLIENT-MODE: agent` for strict headless behavior
-- Header `PAYMENT-SIGNATURE` (preferred), or `PAYMENT`, or `X-PAYMENT`
-- Value format for all three:
+- Header `PAYMENT-SIGNATURE` only
+- Value format:
 base64(JSON x402 payload)
 - Response `200` with soul file
 - Header `PAYMENT-RESPONSE` (base64 JSON settlement response)
@@ -199,9 +199,11 @@ If re-download headers are present, server prioritizes entitlement delivery over
 
 Strict agent mode rules:
 - `X-CLIENT-MODE: agent` disables browser recovery branches.
+- Do not send `PAYMENT` or `X-PAYMENT`; they are hard-deprecated (`410`).
 - Do not send `X-REDOWNLOAD-SESSION`, `X-AUTH-SIGNATURE`, or `X-AUTH-TIMESTAMP`.
 - Missing/invalid receipt returns `401` (`receipt_required_agent_mode` / `invalid_receipt_agent_mode`).
 - No `/api/auth/session` call is required for headless agents.
+- If `/api/auth/session` is called with `X-CLIENT-MODE: agent`, server returns `410` (`session_api_not_for_agents`).
 
 Human/creator recovery mode (receipt unavailable):
 - `X-WALLET-ADDRESS`

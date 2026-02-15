@@ -23,6 +23,19 @@ export default async function handler(req, res) {
   const wallet = String(req.headers['x-wallet-address'] || '').trim();
   const signature = String(req.headers['x-auth-signature'] || '').trim();
   const timestamp = req.headers['x-auth-timestamp'];
+  const clientMode = String(req.headers['x-client-mode'] || req.query?.client_mode || '')
+    .trim()
+    .toLowerCase();
+
+  if (clientMode === 'agent' || clientMode === 'headless-agent' || clientMode === 'strict-agent') {
+    return res.status(410).json({
+      error: 'Session API is deprecated for strict agent mode',
+      code: 'session_api_not_for_agents',
+      flow_hint:
+        'Headless agents should use strict receipt-based re-download: X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT.',
+      required_headers: ['X-CLIENT-MODE', 'X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT']
+    });
+  }
 
   const auth = verifyWalletAuth({
     wallet,

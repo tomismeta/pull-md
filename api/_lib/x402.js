@@ -797,10 +797,7 @@ class NodeAdapter {
 
   getHeader(name) {
     const target = String(name || '').toLowerCase();
-    let value = this.req?.headers?.[target] ?? this.req?.headers?.[name];
-    if (value == null && target === 'payment-signature') {
-      value = this.req?.headers?.payment ?? this.req?.headers?.PAYMENT ?? this.req?.headers?.['x-payment'];
-    }
+    const value = this.req?.headers?.[target] ?? this.req?.headers?.[name];
     if (Array.isArray(value)) return value[0];
     if (value == null) return undefined;
     return String(value);
@@ -892,7 +889,7 @@ export function createRequestContext(req) {
     adapter,
     path: adapter.getPath(),
     method: adapter.getMethod(),
-    paymentHeader: adapter.getHeader('payment-signature') || adapter.getHeader('x-payment')
+    paymentHeader: adapter.getHeader('payment-signature')
   };
 }
 

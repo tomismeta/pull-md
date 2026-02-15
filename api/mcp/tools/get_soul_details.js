@@ -34,6 +34,7 @@ export default function handler(req, res) {
       payment_protocol: 'x402',
       auth_headers: {
         purchase: ['PAYMENT-SIGNATURE'],
+        deprecated_purchase_headers: ['PAYMENT', 'X-PAYMENT'],
         client_mode: ['X-CLIENT-MODE'],
         strict_agent_purchase: ['X-CLIENT-MODE', 'PAYMENT-SIGNATURE'],
         redownload_primary: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],

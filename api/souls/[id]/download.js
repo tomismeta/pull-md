@@ -65,7 +65,8 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
   const receiptCookie = cookies[purchaseReceiptCookieName(soulId)] || null;
   const receipt = headers['x-purchase-receipt'] || receiptCookie;
   const redownloadSessionToken = headers['x-redownload-session'] || cookies.soulstarter_redownload_session || null;
-  const paymentSignature = headers['payment-signature'] || headers.payment || headers['x-payment'];
+  const paymentSignature = headers['payment-signature'] || headers['PAYMENT-SIGNATURE'];
+  const legacyPaymentHeader = headers.payment || headers['x-payment'] || headers['PAYMENT'] || headers['X-PAYMENT'];
 
   const hasAnyRedownloadHeaders = Boolean(wallet || authSignature || authTimestamp || receipt || redownloadSessionToken);
   const hasReceiptRedownloadHeaders = Boolean(wallet && receipt);
@@ -87,6 +88,8 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
     receipt,
     redownloadSessionToken,
     paymentSignature,
+    legacyPaymentHeader,
+    legacyPaymentHeader,
     hasAnyRedownloadHeaders,
     hasReceiptRedownloadHeaders,
     hasSessionRecoveryHeaders,
@@ -147,6 +150,16 @@ export default async function handler(req, res) {
     cookieHeader: req.headers.cookie,
     soulId
   });
+
+  if (legacyPaymentHeader) {
+    return res.status(410).json({
+      error: 'Deprecated payment header',
+      code: 'deprecated_payment_header',
+      flow_hint:
+        'PAYMENT and X-PAYMENT are no longer supported. Use PAYMENT-SIGNATURE with base64-encoded JSON x402 payload.',
+      required_header: 'PAYMENT-SIGNATURE'
+    });
+  }
 
   if (strictAgentMode) {
     if (hasSessionRecoveryHeaders || hasSignedRecoveryHeaders) {
@@ -421,7 +434,7 @@ export default async function handler(req, res) {
         if (!context.paymentHeader) {
           if (strictAgentMode) {
             result.response.body.flow_hint =
-              'Strict agent mode purchase step: send PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload.';
+              'Strict agent mode purchase step: send PAYMENT-SIGNATURE with base64-encoded x402 payload.';
             result.response.body.client_mode = clientModeRaw || 'agent';
             result.response.body.redownload_contract = {
               required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
@@ -435,7 +448,7 @@ export default async function handler(req, res) {
               timestamp: Date.now()
             });
             result.response.body.flow_hint =
-              'No payment header was detected. Send PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload for purchase.';
+              'No payment header was detected. Send PAYMENT-SIGNATURE with base64-encoded x402 payload for purchase.';
           }
         } else {
           result.response.body.flow_hint =
@@ -932,8 +945,7 @@ function sleep(ms) {
 }
 
 function decodeSubmittedPayment(req) {
-  const raw =
-    req.headers['payment-signature'] || req.headers.payment || req.headers['x-payment'] || req.headers['PAYMENT-SIGNATURE'];
+  const raw = req.headers['payment-signature'] || req.headers['PAYMENT-SIGNATURE'];
   if (!raw) return null;
   try {
     return JSON.parse(Buffer.from(String(raw), 'base64').toString('utf-8'));
@@ -945,13 +957,9 @@ function decodeSubmittedPayment(req) {
 function rewriteIncomingPaymentHeader(req) {
   const headerKey = req.headers['payment-signature']
     ? 'payment-signature'
-    : req.headers.payment
-      ? 'payment'
-      : req.headers['x-payment']
-        ? 'x-payment'
-        : req.headers['PAYMENT-SIGNATURE']
-          ? 'PAYMENT-SIGNATURE'
-          : null;
+    : req.headers['PAYMENT-SIGNATURE']
+      ? 'PAYMENT-SIGNATURE'
+      : null;
   if (!headerKey) return;
 
   const submitted = decodeSubmittedPayment(req);
@@ -1008,11 +1016,7 @@ function buildPaymentDebug(req, paymentRequired) {
 
   const selectedHeader = req.headers['payment-signature']
     ? 'PAYMENT-SIGNATURE'
-    : req.headers.payment
-      ? 'PAYMENT'
-      : req.headers['x-payment']
-        ? 'X-PAYMENT'
-        : 'unknown';
+    : 'unknown';
 
   const info = {
     header_detected: selectedHeader,

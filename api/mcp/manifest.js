@@ -28,13 +28,12 @@ export default function handler(req, res) {
       network: 'eip155:8453',
       currency: 'USDC',
       headers: [
-        'PAYMENT',
-        'X-PAYMENT',
         'PAYMENT-SIGNATURE',
         'PAYMENT-REQUIRED',
         'PAYMENT-RESPONSE',
         'X-CLIENT-MODE'
       ],
+      deprecated_headers: ['PAYMENT', 'X-PAYMENT'],
       client_mode_headers: ['X-CLIENT-MODE'],
       strict_agent_mode_value: 'agent',
       redownload_headers: [
@@ -51,7 +50,7 @@ export default function handler(req, res) {
       },
       redownload_session_endpoint: '/api/auth/session',
       redownload_session_bootstrap_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
-      purchase_header_preference: ['PAYMENT-SIGNATURE', 'PAYMENT', 'X-PAYMENT'],
+      purchase_header_preference: ['PAYMENT-SIGNATURE'],
       agent_key_boundary:
         'Never send Bankr API keys or signer secrets to SoulStarter. SoulStarter accepts only signed x402 payment headers.'
     },
@@ -84,7 +83,8 @@ export default function handler(req, res) {
       {
         name: 'purchase_soul',
         description:
-          'Initiate x402 purchase and receive PAYMENT-REQUIRED requirements. Agent signs externally (e.g. Bankr) and submits PAYMENT-SIGNATURE only.',
+          'Deprecated helper endpoint. Canonical runtime purchase is GET /api/souls/{id}/download with X-CLIENT-MODE: agent.',
+        deprecated: true,
         endpoint: '/api/mcp/tools/purchase_soul',
         method: 'POST',
         parameters: {
@@ -261,7 +261,7 @@ export default function handler(req, res) {
       },
       canonical_purchase_flow: 'GET /api/souls/{id}/download is the authoritative x402 flow for payment requirements and paid retry.',
       first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
-      claim_request: 'Include PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload to claim entitlement and download',
+      claim_request: 'Include PAYMENT-SIGNATURE with base64-encoded x402 payload to claim entitlement and download',
       redownload_request:
         'Headless agents should send X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT only (no session/auth recovery). Human/browser flow can use recovery mode.',
       strict_agent_mode:
