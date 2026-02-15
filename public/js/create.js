@@ -266,7 +266,6 @@ async function restoreWalletSession() {
   try {
     await connectWithProviderInternal(providerCandidate, session.walletType, true);
     if (STATE.wallet !== session.wallet) clearWalletSession();
-    await refreshPublished();
   } catch (_) {
     clearWalletSession();
   }
@@ -495,7 +494,6 @@ async function publishNow() {
   setOutput(payload);
   setStatus(`Published ${payload?.listing?.soul_id || 'listing'} successfully.`);
   toast('Soul published', 'success');
-  await refreshPublished();
 }
 
 async function copyShareUrl(url) {
@@ -592,7 +590,8 @@ window.connectMetaMask = async () => {
   try {
     await connectMetaMask();
     toast('Wallet connected', 'success');
-    await refreshPublished();
+    renderPublishedList([]);
+    setStatus('Wallet connected. Publish now, or click Refresh to load your private listing view.');
   } catch (error) {
     toast(error.message, 'error');
   }
@@ -601,7 +600,8 @@ window.connectRabby = async () => {
   try {
     await connectRabby();
     toast('Wallet connected', 'success');
-    await refreshPublished();
+    renderPublishedList([]);
+    setStatus('Wallet connected. Publish now, or click Refresh to load your private listing view.');
   } catch (error) {
     toast(error.message, 'error');
   }
@@ -610,7 +610,8 @@ window.connectBankr = async () => {
   try {
     await connectBankr();
     toast('Wallet connected', 'success');
-    await refreshPublished();
+    renderPublishedList([]);
+    setStatus('Wallet connected. Publish now, or click Refresh to load your private listing view.');
   } catch (error) {
     toast(error.message, 'error');
   }
