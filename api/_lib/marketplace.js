@@ -14,9 +14,11 @@ const PUBLISHED_CATALOG_FILE = 'published-catalog.json';
 const DEFAULT_MODERATOR_WALLETS = ['0x7F46aCB709cd8DF5879F84915CA431fB740989E4'];
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const DB_CONN_ENV_KEYS = ['MARKETPLACE_DATABASE_URL', 'DATABASE_URL', 'POSTGRES_URL'];
+const DB_FAILURE_COOLDOWN_MS = Number(process.env.MARKETPLACE_DB_FAILURE_COOLDOWN_MS || '60000');
 let dbPool = null;
 let dbSchemaReadyPromise = null;
 let dbSchemaReadyForDsn = null;
+let dbDisabledUntilMs = 0;
 
 function asString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -155,7 +157,13 @@ function getMarketplaceDatabaseUrl() {
 }
 
 function isMarketplaceDbEnabled() {
+  if (Date.now() < dbDisabledUntilMs) return false;
   return Boolean(getMarketplaceDatabaseUrl());
+}
+
+function markDbFailure() {
+  const cooldown = Number.isFinite(DB_FAILURE_COOLDOWN_MS) && DB_FAILURE_COOLDOWN_MS > 0 ? DB_FAILURE_COOLDOWN_MS : 60000;
+  dbDisabledUntilMs = Date.now() + cooldown;
 }
 
 function getMarketplaceDbPool() {
@@ -283,29 +291,33 @@ async function ensureDraftStore() {
 async function loadWalletDraftFile(walletAddress) {
   const wallet = String(walletAddress || '').toLowerCase();
   if (isMarketplaceDbEnabled()) {
-    await ensureMarketplaceDbSchema();
-    const pool = getMarketplaceDbPool();
-    const { rows } = await pool.query(
-      `
-        SELECT draft_id, status, moderation, normalized, created_at, updated_at, published_at
-        FROM soul_marketplace_drafts
-        WHERE wallet_address = $1
-        ORDER BY updated_at DESC
-      `,
-      [wallet]
-    );
-    return {
-      wallet,
-      drafts: rows.map((row) => ({
-        draft_id: row.draft_id,
-        status: row.status || 'draft',
-        moderation: row.moderation || null,
-        normalized: row.normalized || {},
-        created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
-        updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
-        published_at: row.published_at ? new Date(row.published_at).toISOString() : null
-      }))
-    };
+    try {
+      await ensureMarketplaceDbSchema();
+      const pool = getMarketplaceDbPool();
+      const { rows } = await pool.query(
+        `
+          SELECT draft_id, status, moderation, normalized, created_at, updated_at, published_at
+          FROM soul_marketplace_drafts
+          WHERE wallet_address = $1
+          ORDER BY updated_at DESC
+        `,
+        [wallet]
+      );
+      return {
+        wallet,
+        drafts: rows.map((row) => ({
+          draft_id: row.draft_id,
+          status: row.status || 'draft',
+          moderation: row.moderation || null,
+          normalized: row.normalized || {},
+          created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+          updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+          published_at: row.published_at ? new Date(row.published_at).toISOString() : null
+        }))
+      };
+    } catch (_) {
+      markDbFailure();
+    }
   }
 
   await ensureDraftStore();
@@ -326,46 +338,50 @@ async function saveWalletDraftFile(walletAddress, payload) {
   const wallet = String(walletAddress || '').toLowerCase();
   const drafts = Array.isArray(payload?.drafts) ? payload.drafts : [];
   if (isMarketplaceDbEnabled()) {
-    await ensureMarketplaceDbSchema();
-    const pool = getMarketplaceDbPool();
-    const client = await pool.connect();
-    const updatedAtIso = new Date().toISOString();
     try {
-      await client.query('BEGIN');
-      await client.query('DELETE FROM soul_marketplace_drafts WHERE wallet_address = $1', [wallet]);
-      for (const draft of drafts) {
-        const createdAtIso = draft?.created_at ? new Date(draft.created_at).toISOString() : updatedAtIso;
-        const draftUpdatedAtIso = draft?.updated_at ? new Date(draft.updated_at).toISOString() : updatedAtIso;
-        const publishedAtIso = draft?.published_at ? new Date(draft.published_at).toISOString() : null;
-        await client.query(
-          `
-            INSERT INTO soul_marketplace_drafts (
-              wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
-            ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz)
-          `,
-          [
-            wallet,
-            String(draft?.draft_id || ''),
-            String(draft?.status || 'draft'),
-            JSON.stringify(draft?.moderation || null),
-            JSON.stringify(draft?.normalized || {}),
-            createdAtIso,
-            draftUpdatedAtIso,
-            publishedAtIso
-          ]
-        );
+      await ensureMarketplaceDbSchema();
+      const pool = getMarketplaceDbPool();
+      const client = await pool.connect();
+      const updatedAtIso = new Date().toISOString();
+      try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM soul_marketplace_drafts WHERE wallet_address = $1', [wallet]);
+        for (const draft of drafts) {
+          const createdAtIso = draft?.created_at ? new Date(draft.created_at).toISOString() : updatedAtIso;
+          const draftUpdatedAtIso = draft?.updated_at ? new Date(draft.updated_at).toISOString() : updatedAtIso;
+          const publishedAtIso = draft?.published_at ? new Date(draft.published_at).toISOString() : null;
+          await client.query(
+            `
+              INSERT INTO soul_marketplace_drafts (
+                wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
+              ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz)
+            `,
+            [
+              wallet,
+              String(draft?.draft_id || ''),
+              String(draft?.status || 'draft'),
+              JSON.stringify(draft?.moderation || null),
+              JSON.stringify(draft?.normalized || {}),
+              createdAtIso,
+              draftUpdatedAtIso,
+              publishedAtIso
+            ]
+          );
+        }
+        await client.query('COMMIT');
+        return {
+          wallet,
+          updated_at: updatedAtIso,
+          drafts
+        };
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
-      await client.query('COMMIT');
-      return {
-        wallet,
-        updated_at: updatedAtIso,
-        drafts
-      };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    } catch (_) {
+      markDbFailure();
     }
   }
 
@@ -382,28 +398,32 @@ async function saveWalletDraftFile(walletAddress, payload) {
 
 async function appendReviewAudit(entry) {
   if (isMarketplaceDbEnabled()) {
-    await ensureMarketplaceDbSchema();
-    const pool = getMarketplaceDbPool();
-    await pool.query(
-      `
-        INSERT INTO soul_marketplace_audit (
-          at, event, wallet_address, draft_id, actor, decision, status_before, status_after, notes, payload
-        ) VALUES ($1::timestamptz, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
-      `,
-      [
-        entry?.at ? new Date(entry.at).toISOString() : new Date().toISOString(),
-        String(entry?.event || 'unknown'),
-        String(entry?.wallet || '').toLowerCase(),
-        entry?.draft_id ? String(entry.draft_id) : null,
-        entry?.actor ? String(entry.actor) : null,
-        entry?.decision ? String(entry.decision) : null,
-        entry?.status_before ? String(entry.status_before) : null,
-        entry?.status_after ? String(entry.status_after) : null,
-        entry?.notes ? String(entry.notes) : null,
-        JSON.stringify(entry || {})
-      ]
-    );
-    return;
+    try {
+      await ensureMarketplaceDbSchema();
+      const pool = getMarketplaceDbPool();
+      await pool.query(
+        `
+          INSERT INTO soul_marketplace_audit (
+            at, event, wallet_address, draft_id, actor, decision, status_before, status_after, notes, payload
+          ) VALUES ($1::timestamptz, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+        `,
+        [
+          entry?.at ? new Date(entry.at).toISOString() : new Date().toISOString(),
+          String(entry?.event || 'unknown'),
+          String(entry?.wallet || '').toLowerCase(),
+          entry?.draft_id ? String(entry.draft_id) : null,
+          entry?.actor ? String(entry.actor) : null,
+          entry?.decision ? String(entry.decision) : null,
+          entry?.status_before ? String(entry.status_before) : null,
+          entry?.status_after ? String(entry.status_after) : null,
+          entry?.notes ? String(entry.notes) : null,
+          JSON.stringify(entry || {})
+        ]
+      );
+      return;
+    } catch (_) {
+      markDbFailure();
+    }
   }
 
   await ensureDraftStore();
@@ -430,19 +450,23 @@ function normalizeVisibility(value) {
 
 async function loadPublishedCatalog() {
   if (isMarketplaceDbEnabled()) {
-    await ensureMarketplaceDbSchema();
-    const pool = getMarketplaceDbPool();
-    const { rows } = await pool.query(
-      `
-        SELECT entry
-        FROM soul_catalog_entries
-        ORDER BY updated_at DESC, id ASC
-      `
-    );
-    const entries = rows
-      .map((row) => row.entry)
-      .filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string');
-    return { schema_version: 'published-catalog-v1', entries };
+    try {
+      await ensureMarketplaceDbSchema();
+      const pool = getMarketplaceDbPool();
+      const { rows } = await pool.query(
+        `
+          SELECT entry
+          FROM soul_catalog_entries
+          ORDER BY updated_at DESC, id ASC
+        `
+      );
+      const entries = rows
+        .map((row) => row.entry)
+        .filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string');
+      return { schema_version: 'published-catalog-v1', entries };
+    } catch (_) {
+      markDbFailure();
+    }
   }
 
   await ensureDraftStore();
@@ -462,33 +486,37 @@ async function loadPublishedCatalog() {
 async function savePublishedCatalog(payload) {
   const entries = Array.isArray(payload?.entries) ? payload.entries : [];
   if (isMarketplaceDbEnabled()) {
-    await ensureMarketplaceDbSchema();
-    const pool = getMarketplaceDbPool();
-    const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-      await client.query('DELETE FROM soul_catalog_entries');
-      for (const entry of entries) {
-        if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string') continue;
-        await client.query(
-          `
-            INSERT INTO soul_catalog_entries (id, entry, updated_at)
-            VALUES ($1, $2::jsonb, NOW())
-          `,
-          [entry.id, JSON.stringify(entry)]
-        );
+      await ensureMarketplaceDbSchema();
+      const pool = getMarketplaceDbPool();
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM soul_catalog_entries');
+        for (const entry of entries) {
+          if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string') continue;
+          await client.query(
+            `
+              INSERT INTO soul_catalog_entries (id, entry, updated_at)
+              VALUES ($1, $2::jsonb, NOW())
+            `,
+            [entry.id, JSON.stringify(entry)]
+          );
+        }
+        await client.query('COMMIT');
+        return {
+          schema_version: 'published-catalog-v1',
+          updated_at: new Date().toISOString(),
+          entries
+        };
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
-      await client.query('COMMIT');
-      return {
-        schema_version: 'published-catalog-v1',
-        updated_at: new Date().toISOString(),
-        entries
-      };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    } catch (_) {
+      markDbFailure();
     }
   }
 
@@ -543,18 +571,22 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
   };
 
   if (isMarketplaceDbEnabled()) {
-    await ensureMarketplaceDbSchema();
-    const pool = getMarketplaceDbPool();
-    await pool.query(
-      `
-        INSERT INTO soul_catalog_entries (id, entry, updated_at)
-        VALUES ($1, $2::jsonb, NOW())
-        ON CONFLICT (id)
-        DO UPDATE SET entry = EXCLUDED.entry, updated_at = NOW()
-      `,
-      [id, JSON.stringify(nextEntry)]
-    );
-    return;
+    try {
+      await ensureMarketplaceDbSchema();
+      const pool = getMarketplaceDbPool();
+      await pool.query(
+        `
+          INSERT INTO soul_catalog_entries (id, entry, updated_at)
+          VALUES ($1, $2::jsonb, NOW())
+          ON CONFLICT (id)
+          DO UPDATE SET entry = EXCLUDED.entry, updated_at = NOW()
+        `,
+        [id, JSON.stringify(nextEntry)]
+      );
+      return;
+    } catch (_) {
+      markDbFailure();
+    }
   }
 
   const idx = catalog.entries.findIndex((entry) => entry?.id === id);
@@ -565,30 +597,34 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
 
 async function loadAllWalletDraftStores() {
   if (isMarketplaceDbEnabled()) {
-    await ensureMarketplaceDbSchema();
-    const pool = getMarketplaceDbPool();
-    const { rows } = await pool.query(`
-      SELECT wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
-      FROM soul_marketplace_drafts
-      ORDER BY wallet_address ASC, updated_at DESC
-    `);
-    const storesByWallet = new Map();
-    for (const row of rows) {
-      const wallet = String(row.wallet_address || '').toLowerCase();
-      if (!storesByWallet.has(wallet)) {
-        storesByWallet.set(wallet, { wallet, drafts: [] });
+    try {
+      await ensureMarketplaceDbSchema();
+      const pool = getMarketplaceDbPool();
+      const { rows } = await pool.query(`
+        SELECT wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
+        FROM soul_marketplace_drafts
+        ORDER BY wallet_address ASC, updated_at DESC
+      `);
+      const storesByWallet = new Map();
+      for (const row of rows) {
+        const wallet = String(row.wallet_address || '').toLowerCase();
+        if (!storesByWallet.has(wallet)) {
+          storesByWallet.set(wallet, { wallet, drafts: [] });
+        }
+        storesByWallet.get(wallet).drafts.push({
+          draft_id: row.draft_id,
+          status: row.status || 'draft',
+          moderation: row.moderation || null,
+          normalized: row.normalized || {},
+          created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+          updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+          published_at: row.published_at ? new Date(row.published_at).toISOString() : null
+        });
       }
-      storesByWallet.get(wallet).drafts.push({
-        draft_id: row.draft_id,
-        status: row.status || 'draft',
-        moderation: row.moderation || null,
-        normalized: row.normalized || {},
-        created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
-        updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
-        published_at: row.published_at ? new Date(row.published_at).toISOString() : null
-      });
+      return [...storesByWallet.values()];
+    } catch (_) {
+      markDbFailure();
     }
-    return [...storesByWallet.values()];
   }
 
   await ensureDraftStore();
@@ -647,7 +683,8 @@ export function getMarketplaceDraftTemplate() {
     name: 'Example Soul',
     description: 'Short summary buyers see before purchase.',
     price_usdc: 0.49,
-    soul_markdown: '# SOUL\\n\\nYour soul content goes here.',
+    soul_markdown:
+      '# SOUL\\n\\n## Core Principles\\n- Define your non-negotiable values and decision rules.\\n\\n## Operating Pattern\\n- Describe how this soul plans, executes, and iterates.\\n\\n## Boundaries\\n- Clarify what this soul should not do and when to refuse.\\n\\n## Communication\\n- Specify tone, brevity, formatting, and interaction style.\\n\\n## Continuity\\n- Define memory expectations, handoff behavior, and long-term consistency rules.',
     notes: {
       auto_fields: [
         'soul_id (derived from name)',
