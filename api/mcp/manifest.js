@@ -39,12 +39,14 @@ export default function handler(req, res) {
       redownload_headers: [
         'X-WALLET-ADDRESS',
         'X-PURCHASE-RECEIPT',
+        'X-REDOWNLOAD-SIGNATURE',
+        'X-REDOWNLOAD-TIMESTAMP',
         'X-REDOWNLOAD-SESSION',
         'X-AUTH-SIGNATURE',
         'X-AUTH-TIMESTAMP'
       ],
       redownload_modes: {
-        agent_primary: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+        agent_primary: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP'],
         human_session_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
         human_signed_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       },
@@ -195,7 +197,7 @@ export default function handler(req, res) {
           purchase:
             'GET /api/souls/{id}/download with X-CLIENT-MODE: agent -> 402 + PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE',
           redownload:
-            'GET /api/souls/{id}/download with X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT (strict receipt-only)'
+            'GET /api/souls/{id}/download with X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP'
         },
         human_browser: {
           purchase: 'Connect wallet in UI and submit x402 payment',
@@ -215,9 +217,9 @@ export default function handler(req, res) {
         ]
       },
       redownload_request:
-        'Headless agents should send X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT only (no session/auth recovery). Human/browser flow can use recovery mode.',
+        'Headless agents should send X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP. Human/browser flow can use recovery mode.',
       strict_agent_mode:
-        'When X-CLIENT-MODE=agent is set, re-download is receipt-only and session/auth recovery headers are rejected.',
+        'When X-CLIENT-MODE=agent is set, re-download requires receipt plus wallet signature challenge headers. Session/auth recovery headers are rejected.',
       redownload_session_bootstrap:
         'Bootstrap session at GET /api/auth/session with X-WALLET-ADDRESS + X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP to obtain X-REDOWNLOAD-SESSION.',
       anti_poisoning_rule:

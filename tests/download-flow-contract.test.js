@@ -17,6 +17,19 @@ test('classifyRedownloadHeaders supports receipt-first primary mode', () => {
   assert.equal(result.hasReceiptRedownloadHeaders, true);
 });
 
+test('classifyRedownloadHeaders detects strict agent challenge headers', () => {
+  const result = classifyRedownloadHeaders({
+    headers: {
+      'x-wallet-address': WALLET,
+      'x-purchase-receipt': 'receipt-token',
+      'x-redownload-signature': '0xsignature',
+      'x-redownload-timestamp': String(Date.now())
+    }
+  });
+  assert.equal(result.mode, 'agent_primary_receipt');
+  assert.equal(result.hasAgentRedownloadChallengeHeaders, true);
+});
+
 test('classifyRedownloadHeaders accepts receipt cookie fallback for browser redownloads', () => {
   const result = classifyRedownloadHeaders({
     headers: {

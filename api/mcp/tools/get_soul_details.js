@@ -38,7 +38,13 @@ export default async function handler(req, res) {
         client_mode: ['X-CLIENT-MODE'],
         strict_agent_purchase: ['X-CLIENT-MODE', 'PAYMENT-SIGNATURE'],
         redownload_primary: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
-        strict_agent_redownload: ['X-CLIENT-MODE', 'X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+        strict_agent_redownload: [
+          'X-CLIENT-MODE',
+          'X-WALLET-ADDRESS',
+          'X-PURCHASE-RECEIPT',
+          'X-REDOWNLOAD-SIGNATURE',
+          'X-REDOWNLOAD-TIMESTAMP'
+        ],
         redownload_session_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
         redownload_signed_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
         redownload_session_bootstrap: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
@@ -47,7 +53,7 @@ export default async function handler(req, res) {
       strict_agent_mode: {
         header: 'X-CLIENT-MODE',
         value: 'agent',
-        note: 'Strict headless mode is receipt-only for re-download. Session/auth recovery headers are not used.'
+        note: 'Strict headless mode requires receipt + wallet signature challenge for re-download. Session/auth recovery headers are not used.'
       },
       payment_payload_contract: {
         top_level_required: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],

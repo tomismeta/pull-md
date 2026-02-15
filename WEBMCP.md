@@ -102,7 +102,7 @@ Authoritative purchase flow:
 base64(JSON x402 payload)
 - Response `200` with soul file
 - Header `PAYMENT-RESPONSE` (base64 JSON settlement response)
-- Header `X-PURCHASE-RECEIPT` (for no-repay re-downloads)
+- Headers `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SIGNATURE` + `X-REDOWNLOAD-TIMESTAMP` (for strict no-repay agent re-downloads)
 
 #### Agent Header Formatting
 
@@ -178,8 +178,10 @@ Required base headers:
 - `X-CLIENT-MODE: agent` (strict headless mode)
 - `X-WALLET-ADDRESS`
 - `X-PURCHASE-RECEIPT`
+- `X-REDOWNLOAD-SIGNATURE`
+- `X-REDOWNLOAD-TIMESTAMP`
 
-This receipt-first trio is the strict canonical flow for headless agents.
+This receipt + signature challenge set is the strict canonical flow for headless agents.
 If receipt is valid for wallet+soul, response is `200` with soul file.
 If re-download headers are present, server prioritizes entitlement delivery over purchase processing, even if a payment header is also present.
 
@@ -187,7 +189,9 @@ Strict agent mode rules:
 - `X-CLIENT-MODE: agent` disables browser recovery branches.
 - Do not send `PAYMENT` or `X-PAYMENT`; they are hard-deprecated (`410`).
 - Do not send `X-REDOWNLOAD-SESSION`, `X-AUTH-SIGNATURE`, or `X-AUTH-TIMESTAMP`.
+- Re-download requires a live wallet signature challenge on each call.
 - Missing/invalid receipt returns `401` (`receipt_required_agent_mode` / `invalid_receipt_agent_mode`).
+- Missing/invalid challenge signature returns `401` (`agent_redownload_signature_required` / `invalid_agent_redownload_signature`).
 - No `/api/auth/session` call is required for headless agents.
 - If `/api/auth/session` is called with `X-CLIENT-MODE: agent`, server returns `410` (`session_api_not_for_agents`).
 
@@ -241,7 +245,7 @@ use `accepted_copy_paste` exactly as top-level `accepted`, then fill `copy_paste
 - `Incomplete re-download header set`:
 you sent partial entitlement headers, so server blocked purchase fallback to prevent accidental repay.
 Re-download requires:
-`X-CLIENT-MODE: agent` + `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` for strict headless agents.
+`X-CLIENT-MODE: agent` + `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SIGNATURE` + `X-REDOWNLOAD-TIMESTAMP` for strict headless agents.
 Recovery (receipt unavailable):
 `X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
 - `flow_hint: Payment header was detected but could not be verified/settled`:
@@ -269,6 +273,13 @@ agent-signed payload remains CAIP-2 (`eip155:8453`).
 SoulStarter remaps facilitator-bound network fields to CDP enum (`base`) internally.
 
 ## Re-download Auth Message
+
+Strict headless agent re-download headers:
+- `X-CLIENT-MODE: agent`
+- `X-WALLET-ADDRESS`
+- `X-PURCHASE-RECEIPT`
+- `X-REDOWNLOAD-SIGNATURE`
+- `X-REDOWNLOAD-TIMESTAMP`
 
 Clients sign exactly:
 

@@ -62,6 +62,8 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
   const wallet = headers['x-wallet-address'];
   const authSignature = headers['x-auth-signature'];
   const authTimestamp = headers['x-auth-timestamp'];
+  const redownloadSignature = headers['x-redownload-signature'];
+  const redownloadTimestamp = headers['x-redownload-timestamp'];
   const receiptCookie = cookies[purchaseReceiptCookieName(soulId)] || null;
   const receipt = headers['x-purchase-receipt'] || receiptCookie;
   const redownloadSessionToken = headers['x-redownload-session'] || cookies.soulstarter_redownload_session || null;
@@ -80,6 +82,7 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
   const hasReceiptRedownloadHeaders = Boolean(wallet && receipt);
   const hasSessionRecoveryHeaders = Boolean(wallet && !receipt && redownloadSessionToken && !authSignature && !authTimestamp);
   const hasSignedRecoveryHeaders = Boolean(wallet && !receipt && authSignature && authTimestamp);
+  const hasAgentRedownloadChallengeHeaders = Boolean(wallet && redownloadSignature && redownloadTimestamp);
   const hasAnyValidEntitlementHeaders =
     hasReceiptRedownloadHeaders || hasSessionRecoveryHeaders || hasSignedRecoveryHeaders;
 
@@ -93,6 +96,8 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
     wallet,
     authSignature,
     authTimestamp,
+    redownloadSignature,
+    redownloadTimestamp,
     receipt,
     redownloadSessionToken,
     paymentSignature,
@@ -102,6 +107,7 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
     hasReceiptRedownloadHeaders,
     hasSessionRecoveryHeaders,
     hasSignedRecoveryHeaders,
+    hasAgentRedownloadChallengeHeaders,
     hasAnyValidEntitlementHeaders,
     mode
   };
@@ -145,6 +151,8 @@ export default async function handler(req, res) {
     wallet,
     authSignature,
     authTimestamp,
+    redownloadSignature,
+    redownloadTimestamp,
     receipt,
     redownloadSessionToken,
     paymentSignature,
@@ -153,6 +161,7 @@ export default async function handler(req, res) {
     hasReceiptRedownloadHeaders,
     hasSessionRecoveryHeaders,
     hasSignedRecoveryHeaders,
+    hasAgentRedownloadChallengeHeaders,
     hasAnyValidEntitlementHeaders
   } = classifyRedownloadHeaders({
     headers: req.headers,
@@ -177,10 +186,50 @@ export default async function handler(req, res) {
         code: 'agent_mode_disallows_session_auth',
         client_mode: clientModeRaw || 'agent',
         flow_hint:
-          'Strict agent mode supports only receipt-based redownload. Use X-WALLET-ADDRESS + X-PURCHASE-RECEIPT for redownload.',
-        required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+          'Strict agent mode requires receipt + wallet signature challenge for redownload.',
+        required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP'],
         disallowed_headers: ['X-REDOWNLOAD-SESSION', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       });
+    }
+    if (hasReceiptRedownloadHeaders && !hasAgentRedownloadChallengeHeaders) {
+      return res.status(401).json({
+        error: 'Wallet signature required for strict agent redownload',
+        code: 'agent_redownload_signature_required',
+        client_mode: clientModeRaw || 'agent',
+        flow_hint:
+          'Strict agent redownload now requires proof-of-wallet-control: send X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP with X-WALLET-ADDRESS + X-PURCHASE-RECEIPT.',
+        required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP'],
+        auth_message_template: buildAuthMessage({
+          wallet: wallet || '0x<your-wallet>',
+          soulId,
+          action: 'redownload',
+          timestamp: Date.now()
+        })
+      });
+    }
+    if (hasReceiptRedownloadHeaders && hasAgentRedownloadChallengeHeaders) {
+      const verify = verifyWalletAuth({
+        wallet,
+        soulId,
+        action: 'redownload',
+        timestamp: redownloadTimestamp,
+        signature: redownloadSignature
+      });
+      if (!verify.ok) {
+        return res.status(401).json({
+          error: 'Invalid strict agent redownload signature',
+          code: 'invalid_agent_redownload_signature',
+          flow_hint: 'Re-sign the redownload auth message with the same wallet and retry.',
+          required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP'],
+          auth_message_template: buildAuthMessage({
+            wallet: wallet || '0x<your-wallet>',
+            soulId,
+            action: 'redownload',
+            timestamp: Date.now()
+          }),
+          ...(verify.auth_debug ? { auth_debug: verify.auth_debug } : {})
+        });
+      }
     }
     if (hasAnyRedownloadHeaders && !hasReceiptRedownloadHeaders && !paymentSignature) {
       return res.status(401).json({
@@ -188,8 +237,8 @@ export default async function handler(req, res) {
         code: 'receipt_required_agent_mode',
         client_mode: clientModeRaw || 'agent',
         flow_hint:
-          'Strict agent mode does not use session/auth recovery. Persist X-PURCHASE-RECEIPT from successful purchase and resend it with X-WALLET-ADDRESS.',
-        required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT']
+          'Strict agent mode does not use session/auth recovery. Persist X-PURCHASE-RECEIPT and provide X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP with X-WALLET-ADDRESS.',
+        required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP']
       });
     }
   }
@@ -254,7 +303,7 @@ export default async function handler(req, res) {
             client_mode: clientModeRaw || 'agent',
             flow_hint:
               'Strict agent redownload requires a valid receipt. Reuse the original X-PURCHASE-RECEIPT from purchase success.',
-            required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT']
+            required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP']
           });
         }
         const onchainEntitlement = await resolveOnchainEntitlement({
@@ -446,7 +495,7 @@ export default async function handler(req, res) {
               'Strict agent mode purchase step: send PAYMENT-SIGNATURE with base64-encoded x402 payload.';
             result.response.body.client_mode = clientModeRaw || 'agent';
             result.response.body.redownload_contract = {
-              required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+              required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP'],
               disallowed_headers: ['X-REDOWNLOAD-SESSION', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
             };
           } else {

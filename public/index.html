@@ -148,7 +148,7 @@ GET /api/souls/{id}/download + X-CLIENT-MODE: agent
 
 Re-download (no repay)
 GET /api/souls/{id}/download
-headers: X-CLIENT-MODE: agent, X-WALLET-ADDRESS, X-PURCHASE-RECEIPT
+headers: X-CLIENT-MODE: agent, X-WALLET-ADDRESS, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP
 
 Publish listing
 POST /api/mcp/tools/creator_marketplace?action=publish_listing

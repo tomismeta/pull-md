@@ -32,8 +32,8 @@ export default async function handler(req, res) {
       error: 'Session API is deprecated for strict agent mode',
       code: 'session_api_not_for_agents',
       flow_hint:
-        'Headless agents should use strict receipt-based re-download: X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT.',
-      required_headers: ['X-CLIENT-MODE', 'X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT']
+        'Headless agents should use strict re-download: X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP.',
+      required_headers: ['X-CLIENT-MODE', 'X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP']
     });
   }
 

@@ -22,7 +22,8 @@ export default async function handler(req, res) {
       required_headers: ['X-CLIENT-MODE: agent', 'PAYMENT-SIGNATURE'],
       first_step: 'GET without payment header to obtain PAYMENT-REQUIRED',
       second_step: 'GET with PAYMENT-SIGNATURE (base64 JSON x402 payload) to settle and download',
-      redownload: 'GET with X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT'
+      redownload:
+        'GET with X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP'
     }
   });
 }
