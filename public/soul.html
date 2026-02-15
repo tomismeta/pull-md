@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Meta Starter Soul — SoulStarter</title>
-  <meta name="description" content="A practical OpenClaw starter identity focused on clarity, reliability, and useful execution.">
+  <title>Soul — SoulStarter</title>
+  <meta name="description" content="SoulStarter listing details and x402 purchase access.">
   <meta name="mcp:version" content="1.0">
   <meta name="mcp:endpoint" content="/api/mcp/manifest">
   <meta name="mcp:tool:list_souls" content="/api/mcp/tools/list_souls">
@@ -52,24 +52,19 @@
     </div>
   </header>
 
-  <main class="soul-detail">
+  <main class="soul-detail" id="soulDetailPage">
     <div class="container">
       <div class="soul-hero">
-        <div class="soul-icon-large">MS</div>
+        <div class="soul-icon-large" id="soulDetailGlyph">SS</div>
         <div class="soul-header-content">
           <div class="soul-lineage">
-            <span class="badge badge-organic">Organic</span>
-            <span class="lineage-text">Raised for OpenClaw usage</span>
+            <span class="badge badge-hybrid" id="soulDetailType">Hybrid</span>
+            <span class="lineage-text" id="soulDetailLineage">Creator listing</span>
           </div>
-          <h1 class="soul-title">Meta Starter Soul</h1>
-          <p class="soul-description">
-            A neutral OpenClaw starter identity optimized for clear communication, reliable execution,
-            and configurable behavior over time.
-          </p>
-          <div class="soul-tags">
-            <span class="tag">starter</span>
-            <span class="tag">reliable</span>
-            <span class="tag">adaptive</span>
+          <h1 class="soul-title" id="soulDetailName">Loading soul...</h1>
+          <p class="soul-description" id="soulDetailDescription">Fetching listing details.</p>
+          <div class="soul-tags" id="soulDetailTags">
+            <span class="tag">loading</span>
           </div>
         </div>
       </div>
@@ -81,36 +76,32 @@
             <div class="file-item">
               <span class="file-icon">MD</span>
               <div class="file-info">
-                <span class="file-name">SOUL.md</span>
-                <span class="file-desc">Identity, values, and behavior baseline</span>
+              <span class="file-name">SOUL.md</span>
+                <span class="file-desc">Delivered only after successful payment or entitlement verification</span>
               </div>
             </div>
           </div>
 
           <div class="preview-section">
             <h4>Preview</h4>
-            <blockquote class="preview-quote">
-              Prefer concrete progress over performative language. Be clear, practical, and accountable for outcomes.
-            </blockquote>
+            <blockquote class="preview-quote" id="soulDetailPreview">Preview unavailable.</blockquote>
           </div>
         </div>
 
         <div class="soul-purchase">
           <div class="purchase-card" id="purchaseCard">
             <div class="price-display">
-              <span class="price">$0.50</span>
+              <span class="price" id="soulDetailPrice">$0.00</span>
               <span class="currency">USDC</span>
             </div>
             <div class="network-badge">
               <span class="dot dot-blue"></span>
               <span>Base Network</span>
             </div>
-            <button class="btn btn-primary btn-lg btn-full" id="buyBtn" onclick="purchaseSoul('meta-starter-v1')">
-              Purchase Soul
+            <button class="btn btn-primary btn-lg btn-full" id="buyBtn" data-soul-id="">
+              Purchase SOUL.md
             </button>
-            <p class="purchase-note">
-              Delivered instantly through x402 settlement.
-            </p>
+            <p class="purchase-note" id="soulDetailPurchaseNote">Delivered instantly through x402 settlement.</p>
           </div>
 
           <div class="purchase-card success-card" id="successCard" style="display: none;">

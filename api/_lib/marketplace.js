@@ -161,12 +161,18 @@ function getMarketplaceDatabaseUrl() {
   return '';
 }
 
+function isStrictDatabaseMode() {
+  return Boolean(process.env.VERCEL) && Boolean(getMarketplaceDatabaseUrl());
+}
+
 function isMarketplaceDbEnabled() {
+  if (isStrictDatabaseMode()) return true;
   if (Date.now() < dbDisabledUntilMs) return false;
   return Boolean(getMarketplaceDatabaseUrl());
 }
 
 function markDbFailure() {
+  if (isStrictDatabaseMode()) return;
   const cooldown = Number.isFinite(DB_FAILURE_COOLDOWN_MS) && DB_FAILURE_COOLDOWN_MS > 0 ? DB_FAILURE_COOLDOWN_MS : 60000;
   dbDisabledUntilMs = Date.now() + cooldown;
 }
@@ -426,7 +432,12 @@ async function appendReviewAudit(entry) {
         ]
       );
       return;
-    } catch (_) {
+    } catch (error) {
+      // Audit logging should never downgrade primary catalog reads/writes to non-durable fallback in production.
+      if (isStrictDatabaseMode()) {
+        console.error('appendReviewAudit db write failed:', error);
+        return;
+      }
       markDbFailure();
     }
   }
@@ -469,7 +480,8 @@ async function loadPublishedCatalog() {
         .map((row) => row.entry)
         .filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string');
       return { schema_version: 'published-catalog-v1', entries };
-    } catch (_) {
+    } catch (error) {
+      if (isStrictDatabaseMode()) throw error;
       markDbFailure();
     }
   }
@@ -520,7 +532,8 @@ async function savePublishedCatalog(payload) {
       } finally {
         client.release();
       }
-    } catch (_) {
+    } catch (error) {
+      if (isStrictDatabaseMode()) throw error;
       markDbFailure();
     }
   }
@@ -589,7 +602,8 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
         [id, JSON.stringify(nextEntry)]
       );
       return;
-    } catch (_) {
+    } catch (error) {
+      if (isStrictDatabaseMode()) throw error;
       markDbFailure();
     }
   }
@@ -688,8 +702,22 @@ export function getMarketplaceDraftTemplate() {
     name: 'Example Soul',
     description: 'Short summary buyers see before purchase.',
     price_usdc: 0.49,
-    soul_markdown:
-      '# SOUL\\n\\n## Core Principles\\n- Define your non-negotiable values and decision rules.\\n\\n## Operating Pattern\\n- Describe how this soul plans, executes, and iterates.\\n\\n## Boundaries\\n- Clarify what this soul should not do and when to refuse.\\n\\n## Communication\\n- Specify tone, brevity, formatting, and interaction style.\\n\\n## Continuity\\n- Define memory expectations, handoff behavior, and long-term consistency rules.',
+    soul_markdown: `# SOUL
+
+## Core Principles
+- Define your non-negotiable values and decision rules.
+
+## Operating Pattern
+- Describe how this soul plans, executes, and iterates.
+
+## Boundaries
+- Clarify what this soul should not do and when to refuse.
+
+## Communication
+- Specify tone, brevity, formatting, and interaction style.
+
+## Continuity
+- Define memory expectations, handoff behavior, and long-term consistency rules.`,
     notes: {
       auto_fields: [
         'soul_id (derived from name)',
@@ -1156,11 +1184,23 @@ function summarizePublishedListing(entry) {
 }
 
 export async function publishCreatorListingDirect({ walletAddress, payload }) {
+  if (process.env.VERCEL && !getMarketplaceDatabaseUrl()) {
+    return {
+      ok: false,
+      code: 'marketplace_persistence_unconfigured',
+      errors: [
+        'Marketplace publish is unavailable: persistent database is not configured on Vercel. Set MARKETPLACE_DATABASE_URL (or DATABASE_URL/POSTGRES_URL).'
+      ],
+      warnings: []
+    };
+  }
+
   const wallet = String(walletAddress || '').toLowerCase();
   const result = validateMarketplaceDraft(payload, { walletAddress: wallet });
   if (!result.ok) {
     return {
       ok: false,
+      code: 'validation_failed',
       errors: result.errors,
       warnings: result.warnings,
       draft_id: result.draft_id

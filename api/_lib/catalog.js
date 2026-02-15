@@ -99,7 +99,33 @@ export const SOUL_CATALOG = {
   }
 };
 
-const PUBLISHED_CATALOG_PATH = path.join(process.cwd(), '.marketplace-drafts', 'published-catalog.json');
+function includeBundledSouls() {
+  return String(process.env.ENABLE_BUNDLED_SOULS || '').trim() === '1';
+}
+
+function bundledCatalogValues() {
+  return includeBundledSouls() ? Object.values(SOUL_CATALOG) : [];
+}
+
+function getMarketplaceDraftsDir() {
+  const configured = String(process.env.MARKETPLACE_DRAFTS_DIR || '').trim();
+  if (configured) return configured;
+  if (process.env.VERCEL) {
+    return '/tmp/soulstarter-marketplace-drafts';
+  }
+  return path.join(process.cwd(), '.marketplace-drafts');
+}
+
+function hasMarketplaceDatabaseConfigured() {
+  const keys = ['MARKETPLACE_DATABASE_URL', 'DATABASE_URL', 'POSTGRES_URL'];
+  return keys.some((key) => Boolean(String(process.env[key] || '').trim()));
+}
+
+function isStrictPublishedCatalogMode() {
+  return Boolean(process.env.VERCEL) && hasMarketplaceDatabaseConfigured();
+}
+
+const PUBLISHED_CATALOG_PATH = path.join(getMarketplaceDraftsDir(), 'published-catalog.json');
 
 function loadPublishedCatalogSync() {
   try {
@@ -116,7 +142,7 @@ function loadPublishedCatalogSync() {
 }
 
 function mergedCatalogValues() {
-  const byId = new Map(Object.values(SOUL_CATALOG).map((item) => [item.id, item]));
+  const byId = new Map(bundledCatalogValues().map((item) => [item.id, item]));
   for (const entry of loadPublishedCatalogSync()) {
     byId.set(entry.id, entry);
   }
@@ -124,11 +150,12 @@ function mergedCatalogValues() {
 }
 
 async function mergedCatalogValuesAsync() {
-  const byId = new Map(Object.values(SOUL_CATALOG).map((item) => [item.id, item]));
+  const byId = new Map(bundledCatalogValues().map((item) => [item.id, item]));
   let published = [];
   try {
     published = await listPublishedCatalogEntries();
-  } catch (_) {
+  } catch (error) {
+    if (isStrictPublishedCatalogMode()) throw error;
     published = loadPublishedCatalogSync();
   }
   for (const entry of Array.isArray(published) ? published : []) {
@@ -170,7 +197,7 @@ export function listSouls() {
 }
 
 export function getSoul(id) {
-  if (SOUL_CATALOG[id]) return SOUL_CATALOG[id];
+  if (includeBundledSouls() && SOUL_CATALOG[id]) return SOUL_CATALOG[id];
   const published = loadPublishedCatalogSync().find((entry) => entry.id === id);
   return published || null;
 }
@@ -185,7 +212,7 @@ export async function listSoulsResolved() {
 }
 
 export async function getSoulResolved(id) {
-  if (SOUL_CATALOG[id]) return SOUL_CATALOG[id];
+  if (includeBundledSouls() && SOUL_CATALOG[id]) return SOUL_CATALOG[id];
   const published = await mergedCatalogValuesAsync();
   return published.find((entry) => entry.id === id) || null;
 }

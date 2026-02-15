@@ -62,7 +62,8 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - Published listings are immediately discoverable in:
 `GET /api/mcp/tools/list_souls` and purchasable through `GET /api/souls/{id}/download`.
 - Catalog persistence:
-when `MARKETPLACE_DATABASE_URL` (or `DATABASE_URL`/`POSTGRES_URL`) is configured, published catalog and moderation audit data are stored in Postgres JSONB tables for Vercel-safe durability. Without DB config, the local JSON store is used as fallback.
+when `MARKETPLACE_DATABASE_URL` (or `DATABASE_URL`/`POSTGRES_URL`) is configured, published catalog and moderation audit data are stored in Postgres JSONB tables for Vercel-safe durability.
+On Vercel, creator publish requires one of these DB vars. Without DB config, publish now returns `503 marketplace_persistence_unconfigured` to prevent non-durable ghost listings.
 
 ## Marketplace Moderation Configuration
 
@@ -99,9 +100,10 @@ remove listing visibility only (`remove_listing_visibility`). No approval/publis
 | `FACILITATOR_PREFLIGHT_TTL_MS` | optional | Cached preflight TTL (default `120000`) |
 | `X402_ASSET_TRANSFER_METHOD` | optional | `eip3009` (default) or `permit2`; use `eip3009` for CDP Base mainnet compatibility |
 | `SOUL_META_STARTER_V1` | optional | Env fallback content for `meta-starter-v1` |
-| `MARKETPLACE_DATABASE_URL` | optional | Preferred Postgres connection string for creator publish/moderation/published catalog |
-| `DATABASE_URL` | optional | Fallback Postgres connection string (used if `MARKETPLACE_DATABASE_URL` is unset) |
-| `POSTGRES_URL` | optional | Alternate Postgres connection string fallback |
+| `MARKETPLACE_DATABASE_URL` | optional (required on Vercel for creator publish) | Preferred Postgres connection string for creator publish/moderation/published catalog |
+| `DATABASE_URL` | optional (required on Vercel for creator publish if `MARKETPLACE_DATABASE_URL` unset) | Fallback Postgres connection string |
+| `POSTGRES_URL` | optional (required on Vercel for creator publish if both above unset) | Alternate Postgres connection string fallback |
+| `ENABLE_BUNDLED_SOULS` | optional | Set to `1` to include bundled static catalog souls. Default is off (DB/published listings only). |
 | `MARKETPLACE_DB_SSL` | optional | Force SSL for Postgres (`true`/`false`) when provider requires TLS |
 
 ## Facilitator Health Checks

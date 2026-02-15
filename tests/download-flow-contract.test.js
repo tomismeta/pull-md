@@ -66,6 +66,25 @@ test('classifyRedownloadHeaders rejects incomplete redownload headers', () => {
   assert.equal(result.hasAnyValidEntitlementHeaders, false);
 });
 
+test('classifyRedownloadHeaders ignores cookie-only session token without wallet header', () => {
+  const result = classifyRedownloadHeaders({
+    headers: {},
+    cookieHeader: 'soulstarter_redownload_session=session-token'
+  });
+  assert.equal(result.mode, 'none');
+  assert.equal(result.hasAnyRedownloadHeaders, false);
+});
+
+test('classifyRedownloadHeaders ignores cookie-only receipt without wallet header', () => {
+  const result = classifyRedownloadHeaders({
+    headers: {},
+    soulId: 'the-rock-v1',
+    cookieHeader: 'soulstarter_receipt_the-rock-v1=receipt-cookie-token'
+  });
+  assert.equal(result.mode, 'none');
+  assert.equal(result.hasAnyRedownloadHeaders, false);
+});
+
 test('classifyClientMode enables strict agent mode via X-CLIENT-MODE', () => {
   const result = classifyClientMode({
     headers: {

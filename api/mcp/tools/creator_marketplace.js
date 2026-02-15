@@ -74,6 +74,16 @@ function resolveBaseUrl(req) {
   return `${proto}://${host}`;
 }
 
+function marketplaceStorageWarning() {
+  const hasDb = ['MARKETPLACE_DATABASE_URL', 'DATABASE_URL', 'POSTGRES_URL'].some((key) =>
+    Boolean(String(process.env[key] || '').trim())
+  );
+  if (process.env.VERCEL && !hasDb) {
+    return 'Persistent creator catalog is not configured. Set MARKETPLACE_DATABASE_URL (or DATABASE_URL/POSTGRES_URL) to enable durable publish/list/download for creator listings.';
+  }
+  return null;
+}
+
 function withShareUrl(baseUrl, listing) {
   const item = listing && typeof listing === 'object' ? listing : {};
   const sharePath = String(item.share_path || '').trim();
@@ -161,7 +171,9 @@ export default async function handler(req, res) {
         payload: listingPayload
       });
       if (!result.ok) {
-        return res.status(400).json({
+        const statusCode = result.code === 'marketplace_persistence_unconfigured' ? 503 : 400;
+        return res.status(statusCode).json({
+          code: result.code || 'publish_failed',
           ok: false,
           errors: result.errors,
           warnings: result.warnings,
@@ -176,7 +188,8 @@ export default async function handler(req, res) {
         listing,
         share_url: listing.share_url,
         purchase_endpoint: `/api/souls/${listing.soul_id}/download`,
-        warnings: result.warnings || []
+        warnings: result.warnings || [],
+        storage_warning: marketplaceStorageWarning()
       });
     }
 
@@ -187,7 +200,8 @@ export default async function handler(req, res) {
       return res.status(200).json({
         wallet_address: auth.wallet,
         count: listings.length,
-        listings: listings.map((item) => withShareUrl(baseUrl, item))
+        listings: listings.map((item) => withShareUrl(baseUrl, item)),
+        storage_warning: marketplaceStorageWarning()
       });
     }
 
@@ -195,7 +209,8 @@ export default async function handler(req, res) {
       const listings = await listPublishedListingSummaries({ includeHidden: false });
       return res.status(200).json({
         count: listings.length,
-        listings: listings.map((item) => withShareUrl(baseUrl, item))
+        listings: listings.map((item) => withShareUrl(baseUrl, item)),
+        storage_warning: marketplaceStorageWarning()
       });
     }
 

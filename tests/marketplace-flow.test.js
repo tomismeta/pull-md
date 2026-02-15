@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { ethers } from 'ethers';
 
 import {
@@ -149,6 +149,85 @@ test('immediate publish + visibility removal flow', async () => {
     else process.env.DATABASE_URL = originalDatabaseUrl;
     if (originalPostgresUrl === undefined) delete process.env.POSTGRES_URL;
     else process.env.POSTGRES_URL = originalPostgresUrl;
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('catalog fallback reads Vercel draft directory when MARKETPLACE_DRAFTS_DIR is unset', async () => {
+  const originalCwd = process.cwd();
+  const originalDraftDir = process.env.MARKETPLACE_DRAFTS_DIR;
+  const originalVercel = process.env.VERCEL;
+  const originalMarketplaceDbUrl = process.env.MARKETPLACE_DATABASE_URL;
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalPostgresUrl = process.env.POSTGRES_URL;
+
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'soulstarter-vercel-catalog-test-'));
+  process.chdir(tempDir);
+  delete process.env.MARKETPLACE_DRAFTS_DIR;
+  process.env.VERCEL = '1';
+  delete process.env.MARKETPLACE_DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  delete process.env.POSTGRES_URL;
+  const vercelCatalogPath = '/tmp/soulstarter-marketplace-drafts/published-catalog.json';
+  let existingVercelCatalog = null;
+
+  try {
+    await mkdir('/tmp/soulstarter-marketplace-drafts', { recursive: true });
+    try {
+      existingVercelCatalog = await readFile(vercelCatalogPath, 'utf8');
+    } catch (_) {}
+    const catalogPayload = {
+      schema_version: 'published-catalog-v1',
+      entries: [
+        {
+          id: 'vercel-catalog-soul-v1',
+          name: 'Vercel Catalog Soul',
+          description: 'Visible listing from Vercel fallback dir.',
+          longDescription: 'Visible listing from Vercel fallback dir.',
+          icon: 'VC',
+          category: 'creator',
+          tags: ['creator'],
+          priceMicroUsdc: '120000',
+          priceDisplay: '$0.12',
+          provenance: { type: 'hybrid', raised_by: 'Creator', days_nurtured: 0 },
+          compatibility: { runtimes: ['OpenClaw'], min_memory: '8MB', min_context: 4000 },
+          preview: 'Visible listing from Vercel fallback dir.',
+          contentInline: '# SOUL\n\nVercel fallback content.',
+          sellerAddress: '0x7f46acb709cd8df5879f84915ca431fb740989e4',
+          publishedBy: '0x7f46acb709cd8df5879f84915ca431fb740989e4',
+          publishedAt: new Date().toISOString(),
+          draftId: 'pub_test',
+          sharePath: '/soul.html?id=vercel-catalog-soul-v1',
+          visibility: 'public'
+        }
+      ]
+    };
+    await writeFile(vercelCatalogPath, JSON.stringify(catalogPayload, null, 2), 'utf8');
+
+    const { listSoulsResolved, getSoulResolved, loadSoulContent } = await import(`../api/_lib/catalog.js?test=${Date.now()}`);
+    const listed = (await listSoulsResolved()).find((item) => item.id === 'vercel-catalog-soul-v1');
+    assert.ok(listed);
+    const soul = await getSoulResolved('vercel-catalog-soul-v1');
+    assert.ok(soul);
+    const content = await loadSoulContent('vercel-catalog-soul-v1', { soul });
+    assert.equal(content, '# SOUL\n\nVercel fallback content.');
+  } finally {
+    process.chdir(originalCwd);
+    if (originalDraftDir === undefined) delete process.env.MARKETPLACE_DRAFTS_DIR;
+    else process.env.MARKETPLACE_DRAFTS_DIR = originalDraftDir;
+    if (originalVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = originalVercel;
+    if (originalMarketplaceDbUrl === undefined) delete process.env.MARKETPLACE_DATABASE_URL;
+    else process.env.MARKETPLACE_DATABASE_URL = originalMarketplaceDbUrl;
+    if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = originalDatabaseUrl;
+    if (originalPostgresUrl === undefined) delete process.env.POSTGRES_URL;
+    else process.env.POSTGRES_URL = originalPostgresUrl;
+    if (existingVercelCatalog !== null) {
+      await writeFile(vercelCatalogPath, existingVercelCatalog, 'utf8');
+    } else {
+      await rm(vercelCatalogPath, { force: true });
+    }
     await rm(tempDir, { recursive: true, force: true });
   }
 });

@@ -27,7 +27,8 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 
 1. `GET /api/mcp/tools/list_souls`
 - Lists available souls and pricing metadata.
-- Includes built-in catalog souls plus moderator-published creator listings.
+- Returns DB-backed published listings by default.
+- Bundled static souls are returned only when `ENABLE_BUNDLED_SOULS=1`.
 
 2. `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
 - Returns detailed metadata and endpoint usage details for one soul.
@@ -54,7 +55,9 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 
 8. `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
 - Public list of visible listings only.
-- Backed by Postgres JSONB when configured (`MARKETPLACE_DATABASE_URL`/`DATABASE_URL`/`POSTGRES_URL`), with local file fallback for development.
+- Backed by Postgres JSONB when configured (`MARKETPLACE_DATABASE_URL`/`DATABASE_URL`/`POSTGRES_URL`).
+- On Vercel, creator publish requires one of these DB vars; otherwise `publish_listing` returns `503 marketplace_persistence_unconfigured` to avoid non-durable listings.
+- Response may include `storage_warning` when persistence configuration is incomplete.
 
 9. `GET /api/mcp/tools/creator_marketplace?action=list_moderators`
 - Lists allowlisted moderator wallet addresses.

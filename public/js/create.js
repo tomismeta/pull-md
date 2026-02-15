@@ -323,7 +323,13 @@ function applyTemplate(template) {
   document.getElementById('name').value = payload.name || '';
   document.getElementById('description').value = payload.description || '';
   document.getElementById('priceUsdc').value = payload.price_usdc || '';
-  document.getElementById('soulMarkdown').value = payload.soul_markdown || '';
+  document.getElementById('soulMarkdown').value = normalizeTemplateMarkdown(payload.soul_markdown || '');
+}
+
+function normalizeTemplateMarkdown(value) {
+  const text = String(value || '');
+  // Guard against escaped JSON newline sequences from older template payloads.
+  return text.includes('\\n') ? text.replace(/\\n/g, '\n') : text;
 }
 
 async function api(action, { method = 'GET', body, headers = {} } = {}) {
@@ -359,20 +365,31 @@ function renderPublishedList(items) {
     .map((item) => {
       const visibility = String(item.visibility || 'public');
       const shareUrl = String(item.share_url || '');
+      const soulId = String(item.soul_id || '').trim();
+      const type = 'hybrid';
+      const creator = shortenAddress(item.wallet_address || STATE.wallet || '');
+      const description = String(item.description || 'Published soul listing.');
       return `
-        <article class="admin-card">
-          <div class="admin-card-row">
-            <h4>${escapeHtml(item.name || item.soul_id)}</h4>
-            <span class="badge ${visibility === 'hidden' ? 'badge-hybrid' : 'badge-organic'}">${escapeHtml(visibility)}</span>
+        <article class="soul-card">
+          <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(item))}</div>
+          <h3>${escapeHtml(item.name || soulId)}</h3>
+          <p>${escapeHtml(description)}</p>
+          <div class="soul-card-meta">
+            <div class="soul-lineage">
+              <span class="badge badge-${escapeHtml(type)}">${escapeHtml(type)}</span>
+              <span class="lineage-mini">Creator ${escapeHtml(creator)}</span>
+            </div>
+            <div>
+              <span class="price">${escapeHtml(item.price_display || '$0.00')}</span>
+              <span class="currency">USDC</span>
+            </div>
           </div>
-          <p class="admin-line">soul_id: <code>${escapeHtml(item.soul_id || '-')}</code></p>
-          <p class="admin-line">price: <code>${escapeHtml(item.price_display || '')}</code></p>
-          <p class="admin-line">published: <code>${escapeHtml(item.published_at || '-')}</code></p>
+          <p class="soul-format-label">id: ${escapeHtml(soulId || '-')} · ${escapeHtml(visibility)}</p>
           ${
             shareUrl
-              ? `<div class="admin-card-actions">
-                  <a class="btn btn-ghost" href="${escapeHtml(shareUrl)}" target="_blank" rel="noopener noreferrer">open share link</a>
-                  <button class="btn btn-primary" data-action="copy-share" data-url="${escapeHtml(shareUrl)}">copy link</button>
+              ? `<div class="creator-published-actions">
+                  <a class="btn btn-ghost" href="${escapeHtml(shareUrl)}" target="_blank" rel="noopener noreferrer">Open</a>
+                  <button class="btn btn-primary" data-action="copy-share" data-url="${escapeHtml(shareUrl)}">Copy Link</button>
                 </div>`
               : ''
           }
@@ -380,6 +397,22 @@ function renderPublishedList(items) {
       `;
     })
     .join('');
+}
+
+function getSoulGlyph(item) {
+  const name = String(item?.name || item?.soul_id || 'Soul').trim();
+  const clean = name.replace(/[^a-zA-Z0-9 ]/g, '');
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+  if (parts.length === 1 && parts[0].length === 1) return `${parts[0].toUpperCase()}S`;
+  return 'SS';
+}
+
+function shortenAddress(value) {
+  const raw = String(value || '').trim();
+  if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) return raw || '-';
+  return `${raw.slice(0, 6)}...${raw.slice(-4)}`;
 }
 
 function escapeHtml(value) {

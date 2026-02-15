@@ -68,7 +68,15 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
   const paymentSignature = headers['payment-signature'] || headers['PAYMENT-SIGNATURE'];
   const legacyPaymentHeader = headers.payment || headers['x-payment'] || headers['PAYMENT'] || headers['X-PAYMENT'];
 
-  const hasAnyRedownloadHeaders = Boolean(wallet || authSignature || authTimestamp || receipt || redownloadSessionToken);
+  // Session token alone (from cookie) is not enough to enter re-download flow.
+  // It must be bound to an explicit wallet header, otherwise fresh purchase requests get blocked.
+  const hasAnyRedownloadHeaders = Boolean(
+    wallet ||
+      authSignature ||
+      authTimestamp ||
+      (wallet && receipt) ||
+      (wallet && redownloadSessionToken)
+  );
   const hasReceiptRedownloadHeaders = Boolean(wallet && receipt);
   const hasSessionRecoveryHeaders = Boolean(wallet && !receipt && redownloadSessionToken && !authSignature && !authTimestamp);
   const hasSignedRecoveryHeaders = Boolean(wallet && !receipt && authSignature && authTimestamp);

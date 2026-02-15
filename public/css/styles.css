@@ -355,10 +355,24 @@ main {
   margin-bottom: 12px;
 }
 
+.soul-card-meta > div:last-child {
+  text-align: right;
+}
+
 .soul-lineage {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 0;
+}
+
+.lineage-mini {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 190px;
 }
 
 .badge {
@@ -399,7 +413,7 @@ main {
 }
 
 .btn {
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid transparent;
   text-decoration: none;
   display: inline-flex;
@@ -407,12 +421,18 @@ main {
   justify-content: center;
   cursor: pointer;
   font-family: 'Manrope', sans-serif;
-  font-size: 0.8rem;
-  transition: transform 0.16s ease, filter 0.16s ease, border-color 0.16s ease;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  min-height: 40px;
+  padding: 0 14px;
+  transition: transform 0.16s ease, filter 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .btn:hover {
   transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary {
@@ -426,7 +446,7 @@ main {
 
 .btn-ghost {
   border-color: var(--line-strong);
-  background: #ffffff;
+  background: #f7fbff;
   color: var(--text-soft);
 }
 
@@ -436,13 +456,14 @@ main {
 }
 
 .btn-lg {
-  padding: 12px 18px;
-  font-size: 0.83rem;
+  min-height: 46px;
+  padding: 0 18px;
+  font-size: 0.86rem;
 }
 
 .btn-full {
   width: 100%;
-  padding: 10px 14px;
+  min-height: 44px;
 }
 
 .btn:disabled {
@@ -518,6 +539,7 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
 }
 
 .admin-input,
@@ -627,6 +649,19 @@ main {
   padding: 12px;
   font-family: 'Manrope', sans-serif;
   font-size: 0.74rem;
+}
+
+.creator-published-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.creator-action-row .btn,
+.creator-published-actions .btn,
+.admin-card-actions .btn {
+  min-width: 108px;
 }
 
 .soul-detail {

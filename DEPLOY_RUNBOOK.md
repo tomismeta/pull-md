@@ -1,0 +1,65 @@
+# SoulStarter Deploy Runbook
+
+## Production Deploy Command
+
+```bash
+npx vercel --prod --yes --token <VERCEL_TOKEN>
+```
+
+## Important Vercel Team Policy
+
+This project enforces a **Git author access check** at deploy time.
+
+If deploy fails with:
+
+`Git author <email> must have access to the team ... projects on Vercel`
+
+then Vercel is validating the commit author email from `HEAD`.
+
+## Working Fix (Used Successfully)
+
+1. Check token owner email:
+
+```bash
+npx vercel api /v2/user --token <VERCEL_TOKEN>
+```
+
+2. Set repo-local git author to that email:
+
+```bash
+git config user.name "openmetaloom"
+git config user.email "openmetaloom@gmail.com"
+```
+
+3. Create a new commit so `HEAD` has an allowed author:
+
+```bash
+git add -A
+git commit -m "feat: simplify creator publish flow and hide-only moderation"
+```
+
+4. Deploy again:
+
+```bash
+npx vercel --prod --yes --token <VERCEL_TOKEN>
+```
+
+## Verify Production Alias
+
+```bash
+npx vercel inspect soulstarter.vercel.app --token <VERCEL_TOKEN> --scope open-meta-looms-projects
+```
+
+Look for:
+- `status: Ready`
+- `url: https://soulstarter-<deployment>.vercel.app`
+- alias includes `https://soulstarter.vercel.app`
+
+## Rollback (No Rebuild)
+
+Use if needed:
+
+```bash
+npx vercel ls soulstarter --token <VERCEL_TOKEN> --scope open-meta-looms-projects
+npx vercel promote <deployment-url> --token <VERCEL_TOKEN> --scope open-meta-looms-projects
+```

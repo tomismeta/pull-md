@@ -68,6 +68,7 @@ let activeSuccessDownloadUrl = null;
 let latestSoulDownload = null;
 let baseRpcProvider = null;
 let settlementVerificationSequence = 0;
+let currentSoulDetailId = null;
 
 function initProviderDiscovery() {
   if (providerDiscoveryInitialized || typeof window === 'undefined') return;
@@ -434,12 +435,136 @@ async function refreshCreatedSoulsForWallet(wallet) {
 function updateSoulPagePurchaseState() {
   const btn = document.getElementById('buyBtn');
   if (!btn) return;
-  const onclick = String(btn.getAttribute('onclick') || '');
-  const match = onclick.match(/purchaseSoul\(['"]([^'"]+)['"]\)/);
-  const soulId = match?.[1];
-  if (!soulId) return;
-  const owned = isSoulAccessible(soulId);
+  const soulId = String(btn.dataset.soulId || '').trim();
+  if (!soulId) {
+    const onclick = String(btn.getAttribute('onclick') || '');
+    const match = onclick.match(/purchaseSoul\(['"]([^'"]+)['"]\)/);
+    if (!match?.[1]) return;
+    btn.dataset.soulId = match[1];
+  }
+  const resolvedSoulId = String(btn.dataset.soulId || '').trim();
+  if (!resolvedSoulId) return;
+  btn.onclick = () => purchaseSoul(resolvedSoulId);
+  btn.removeAttribute('onclick');
+  const owned = isSoulAccessible(resolvedSoulId);
   btn.textContent = owned ? 'Download SOUL.md' : 'Purchase SOUL.md';
+}
+
+function formatCreatorLabel(raw) {
+  const text = String(raw || '').trim();
+  const match = text.match(/^Creator\s+(0x[a-fA-F0-9]{40})$/);
+  if (match) {
+    return `Creator ${shortenAddress(match[1])}`;
+  }
+  if (/^0x[a-fA-F0-9]{40}$/.test(text)) {
+    return `Creator ${shortenAddress(text)}`;
+  }
+  return text || 'Creator';
+}
+
+function soulIdFromLocation() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return String(params.get('id') || '').trim();
+  } catch (_) {
+    return '';
+  }
+}
+
+function updateSoulDetailMetadata(soul) {
+  if (!soul || typeof soul !== 'object') return;
+  const glyph = document.getElementById('soulDetailGlyph');
+  if (glyph) glyph.textContent = getSoulGlyph(soul);
+
+  const name = document.getElementById('soulDetailName');
+  if (name) name.textContent = String(soul.name || soul.id || 'Soul');
+
+  const description = document.getElementById('soulDetailDescription');
+  if (description) description.textContent = String(soul.description || 'No description available.');
+
+  const preview = document.getElementById('soulDetailPreview');
+  if (preview) preview.textContent = String(soul.preview?.excerpt || soul.description || 'No preview available.');
+
+  const type = String(soul.provenance?.type || 'hybrid').toLowerCase();
+  const typeBadge = document.getElementById('soulDetailType');
+  if (typeBadge) {
+    typeBadge.textContent = type;
+    typeBadge.className = `badge badge-${escapeHtml(type)}`;
+  }
+
+  const lineage = document.getElementById('soulDetailLineage');
+  if (lineage) lineage.textContent = formatCreatorLabel(soul.provenance?.raised_by || '');
+
+  const tagsWrap = document.getElementById('soulDetailTags');
+  if (tagsWrap) {
+    const tags = Array.isArray(soul.tags) ? soul.tags.filter(Boolean).slice(0, 6) : [];
+    tagsWrap.innerHTML = tags.length
+      ? tags.map((tag) => `<span class="tag">${escapeHtml(String(tag))}</span>`).join('')
+      : '<span class="tag">untagged</span>';
+  }
+
+  const price = document.getElementById('soulDetailPrice');
+  if (price) {
+    const display = String(soul.price?.display || '').replace(/\s*USDC$/i, '');
+    price.textContent = display || '$0.00';
+  }
+
+  const note = document.getElementById('soulDetailPurchaseNote');
+  if (note) {
+    const seller = soul.seller_address ? shortenAddress(soul.seller_address) : 'seller wallet';
+    note.textContent = `Paid access via x402. Settlement recipient: ${seller}.`;
+  }
+
+  if (soul?.id) {
+    currentSoulDetailId = String(soul.id);
+    const btn = document.getElementById('buyBtn');
+    if (btn) btn.dataset.soulId = currentSoulDetailId;
+    document.title = `${String(soul.name || soul.id)} — SoulStarter`;
+    const descMeta = document.querySelector('meta[name="description"]');
+    if (descMeta) descMeta.setAttribute('content', String(soul.description || 'SoulStarter listing details.'));
+  }
+}
+
+async function hydrateSoulDetailPage() {
+  const pageRoot = document.getElementById('soulDetailPage');
+  if (!pageRoot) return;
+  const soulId = soulIdFromLocation();
+  const btn = document.getElementById('buyBtn');
+  if (btn) {
+    btn.textContent = 'Loading...';
+    btn.disabled = true;
+  }
+  if (!soulId) {
+    showToast('Missing soul id in URL', 'error');
+    if (btn) {
+      btn.textContent = 'Unavailable';
+    }
+    return;
+  }
+
+  try {
+    const response = await fetchWithTimeout(`${CONFIG.apiBase}/mcp/tools/get_soul_details?id=${encodeURIComponent(soulId)}`);
+    if (!response.ok) throw new Error('Soul not found');
+    const payload = await response.json();
+    const soul = payload?.soul || null;
+    if (!soul) throw new Error('Soul metadata unavailable');
+    soulCatalogCache = [soul, ...(Array.isArray(soulCatalogCache) ? soulCatalogCache.filter((item) => item.id !== soul.id) : [])];
+    updateSoulDetailMetadata(soul);
+    updateSoulPagePurchaseState();
+  } catch (error) {
+    showToast(error?.message || 'Unable to load soul details', 'error');
+    const name = document.getElementById('soulDetailName');
+    if (name) name.textContent = 'Soul unavailable';
+    const description = document.getElementById('soulDetailDescription');
+    if (description) description.textContent = 'This listing could not be loaded.';
+    if (btn) {
+      btn.textContent = 'Unavailable';
+      btn.disabled = true;
+    }
+    return;
+  }
+
+  if (btn) btn.disabled = false;
 }
 
 function renderOwnedSouls() {
@@ -1325,6 +1450,8 @@ async function loadSouls() {
         (soul) => {
           const owned = isSoulAccessible(soul.id);
           const cta = owned ? 'Download SOUL.md' : 'Purchase SOUL.md';
+          const lineageLabel = formatCreatorLabel(soul.provenance?.raised_by || '');
+          const type = String((soul.provenance?.type || 'hybrid')).toLowerCase();
           return `
       <article class="soul-card ${soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : ''}" data-soul-id="${escapeHtml(soul.id)}">
         <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
@@ -1339,8 +1466,8 @@ async function loadSouls() {
         }
         <div class="soul-card-meta">
           <div class="soul-lineage">
-            <span class="badge badge-${escapeHtml((soul.provenance?.type || 'hybrid').toLowerCase())}">${escapeHtml(soul.provenance?.type || 'Hybrid')}</span>
-            <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(soul.provenance?.raised_by || 'Unknown lineage')}</span>
+            <span class="badge badge-${escapeHtml(type)}">${escapeHtml(type)}</span>
+            <span class="lineage-mini">${escapeHtml(lineageLabel || 'Unknown lineage')}</span>
           </div>
           <div>
             <span class="price">${escapeHtml(soul.price?.display || '$0.00 USDC')}</span>
@@ -1476,6 +1603,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await restoreWalletSession();
   await refreshEntitlementsForWallet(walletAddress);
   await refreshCreatedSoulsForWallet(walletAddress);
+  await hydrateSoulDetailPage();
   loadSouls();
   updateSoulPagePurchaseState();
 });
