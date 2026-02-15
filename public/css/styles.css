@@ -280,7 +280,6 @@ main {
 }
 
 .soul-card {
-  position: relative;
   padding: 18px;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
@@ -294,96 +293,6 @@ main {
 .soul-card-featured {
   border-color: #b8ceff;
   background: linear-gradient(160deg, #ffffff, #f1f6ff);
-}
-
-.soul-card-state {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 0.64rem;
-  font-family: 'Manrope', sans-serif;
-  letter-spacing: 0.02em;
-}
-
-.soul-card-state-owned {
-  border: 1px solid rgba(193, 224, 255, 0.45);
-  color: #deeeff;
-  background: rgba(20, 34, 60, 0.45);
-}
-
-.soul-card-owned {
-  border-color: #1d355e;
-  background: linear-gradient(160deg, #173257, #0f2341);
-}
-
-.soul-card-owned:hover {
-  border-color: #4a6ea3;
-}
-
-.soul-card-owned h3 {
-  color: #f4f8ff;
-}
-
-.soul-card-owned p {
-  color: #ccdaef;
-}
-
-.soul-card-owned .price {
-  color: #f4f8ff;
-}
-
-.soul-card-owned .currency {
-  color: #cad7ea;
-}
-
-.soul-card-owned .soul-card-glyph {
-  color: #f4f8ff;
-  background: rgba(145, 180, 228, 0.18);
-  border-color: rgba(145, 180, 228, 0.4);
-}
-
-.soul-card-owned .soul-source-link {
-  color: #b6d4ff;
-}
-
-.soul-card-owned .soul-source-link:hover {
-  color: #d8e8ff;
-}
-
-.soul-card-owned .badge {
-  border-color: rgba(255, 255, 255, 0.24);
-}
-
-.soul-card-owned .soul-lineage-note {
-  color: #b8c9df;
-}
-
-.soul-card-owned .badge-organic {
-  color: #8ff2b3;
-  background: rgba(40, 123, 75, 0.25);
-}
-
-.soul-card-owned .badge-hybrid {
-  color: #ffe79f;
-  background: rgba(155, 109, 34, 0.25);
-}
-
-.soul-card-owned .badge-synthetic {
-  color: #a8ccff;
-  background: rgba(47, 90, 157, 0.32);
-}
-
-.soul-card-owned .btn-primary {
-  background: #e9f2ff;
-  color: #102744;
-  border-color: #d5e5ff;
-}
-
-.soul-card-owned .btn-primary:hover {
-  background: #ffffff;
-  border-color: #ffffff;
 }
 
 .soul-card-glyph,
@@ -442,11 +351,6 @@ main {
   display: flex;
   flex-direction: column;
   gap: 5px;
-}
-
-.soul-lineage-note {
-  font-size: 0.75rem;
-  color: var(--text-muted);
 }
 
 .badge {
