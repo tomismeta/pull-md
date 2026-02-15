@@ -333,6 +333,16 @@ main {
   letter-spacing: 0.02em;
 }
 
+.soul-card-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.soul-card-actions .btn {
+  width: 100%;
+}
+
 .soul-source-link {
   display: inline-flex;
   align-items: center;
@@ -1151,7 +1161,8 @@ main {
   .workflow-grid,
   .creator-form-grid,
   .creator-grid,
-  .souls-grid {
+  .souls-grid,
+  .soul-card-actions {
     grid-template-columns: 1fr;
   }
 

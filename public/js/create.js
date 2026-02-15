@@ -384,11 +384,11 @@ function renderPublishedList(items) {
               <span class="currency">USDC</span>
             </div>
           </div>
-          <p class="soul-format-label">id: ${escapeHtml(soulId || '-')} · ${escapeHtml(visibility)}</p>
+          <p class="soul-format-label">File: SOUL.md · ${escapeHtml(visibility)}</p>
           ${
             shareUrl
-              ? `<div class="creator-published-actions">
-                  <a class="btn btn-ghost" href="${escapeHtml(shareUrl)}" target="_blank" rel="noopener noreferrer">Open</a>
+              ? `<div class="soul-card-actions">
+                  <a class="btn btn-ghost" href="${escapeHtml(shareUrl)}" target="_blank" rel="noopener noreferrer">View Listing</a>
                   <button class="btn btn-primary" data-action="copy-share" data-url="${escapeHtml(shareUrl)}">Copy Link</button>
                 </div>`
               : ''
