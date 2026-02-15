@@ -17,6 +17,19 @@ test('classifyRedownloadHeaders supports receipt-first primary mode', () => {
   assert.equal(result.hasReceiptRedownloadHeaders, true);
 });
 
+test('classifyRedownloadHeaders accepts receipt cookie fallback for browser redownloads', () => {
+  const result = classifyRedownloadHeaders({
+    headers: {
+      'x-wallet-address': WALLET
+    },
+    soulId: 'sassy-starter-v1',
+    cookieHeader: 'soulstarter_receipt_sassy-starter-v1=receipt-cookie-token'
+  });
+  assert.equal(result.mode, 'agent_primary_receipt');
+  assert.equal(result.hasAnyValidEntitlementHeaders, true);
+  assert.equal(result.receipt, 'receipt-cookie-token');
+});
+
 test('classifyRedownloadHeaders supports session recovery mode', () => {
   const result = classifyRedownloadHeaders({
     headers: {

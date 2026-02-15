@@ -1,12 +1,14 @@
 import { getSoul, loadSoulContent, soulIds } from '../../_lib/catalog.js';
 import { ethers } from 'ethers';
 import {
+  buildPurchaseReceiptSetCookie,
   buildRedownloadSessionSetCookie,
   buildAuthMessage,
   createRedownloadSessionToken,
   createPurchaseReceipt,
   getSellerAddress,
   parseCookieHeader,
+  purchaseReceiptCookieName,
   setCors,
   verifyPurchaseReceipt,
   verifyRedownloadSessionToken,
@@ -37,15 +39,31 @@ const ONCHAIN_ENTITLEMENT_NEGATIVE_TTL_MS = Number(
 );
 const ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK = Number(process.env.ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK || '0');
 const ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE = Number(process.env.ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE || '2000000');
+const ONCHAIN_ENTITLEMENT_UNAVAILABLE_TTL_MS = Number(process.env.ONCHAIN_ENTITLEMENT_UNAVAILABLE_TTL_MS || '30000');
 const BASE_MAINNET_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const ERC20_TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
 
-export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '' } = {}) {
+function appendSetCookieHeader(res, cookieValue) {
+  if (!cookieValue) return;
+  const existing = res.getHeader('Set-Cookie');
+  if (!existing) {
+    res.setHeader('Set-Cookie', cookieValue);
+    return;
+  }
+  if (Array.isArray(existing)) {
+    res.setHeader('Set-Cookie', [...existing, cookieValue]);
+    return;
+  }
+  res.setHeader('Set-Cookie', [existing, cookieValue]);
+}
+
+export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', soulId = '' } = {}) {
   const cookies = parseCookieHeader(cookieHeader);
   const wallet = headers['x-wallet-address'];
   const authSignature = headers['x-auth-signature'];
   const authTimestamp = headers['x-auth-timestamp'];
-  const receipt = headers['x-purchase-receipt'];
+  const receiptCookie = cookies[purchaseReceiptCookieName(soulId)] || null;
+  const receipt = headers['x-purchase-receipt'] || receiptCookie;
   const redownloadSessionToken = headers['x-redownload-session'] || cookies.soulstarter_redownload_session || null;
   const paymentSignature = headers['payment-signature'] || headers.payment || headers['x-payment'];
 
@@ -115,7 +133,8 @@ export default async function handler(req, res) {
     hasAnyValidEntitlementHeaders
   } = classifyRedownloadHeaders({
     headers: req.headers,
-    cookieHeader: req.headers.cookie
+    cookieHeader: req.headers.cookie,
+    soulId
   });
 
   // Guardrail: partial re-download header sets should never fall through into purchase flow.
@@ -178,6 +197,19 @@ export default async function handler(req, res) {
           sellerAddress
         });
         if (!onchainEntitlement.ok) {
+          if (isOnchainServiceUnavailableReason(onchainEntitlement.reason)) {
+            return res.status(503).json({
+              error: 'On-chain entitlement verification temporarily unavailable',
+              flow_hint:
+                'Receipt verification failed and on-chain verifier is temporarily unavailable. Retry shortly or provide a valid X-PURCHASE-RECEIPT.',
+              onchain_entitlement: {
+                checked: true,
+                entitled: false,
+                unavailable: true,
+                reason: onchainEntitlement.reason || null
+              }
+            });
+          }
           return res.status(401).json({
             error: receiptCheck.error,
             flow_hint:
@@ -232,6 +264,19 @@ export default async function handler(req, res) {
           sellerAddress
         });
         if (!onchainEntitlement.ok) {
+          if (isOnchainServiceUnavailableReason(onchainEntitlement.reason)) {
+            return res.status(503).json({
+              error: 'On-chain entitlement verification temporarily unavailable',
+              flow_hint:
+                'Session/signed recovery requires on-chain entitlement when no receipt is provided. Verifier is temporarily unavailable; retry shortly.',
+              onchain_entitlement: {
+                checked: true,
+                entitled: false,
+                unavailable: true,
+                reason: onchainEntitlement.reason || null
+              }
+            });
+          }
           return res.status(401).json({
             error: 'No receipt provided and wallet has no prior entitlement for this soul',
             flow_hint:
@@ -273,7 +318,10 @@ export default async function handler(req, res) {
     if (usedSignedAuth) {
       try {
         const sessionToken = createRedownloadSessionToken({ wallet: authWallet });
-        res.setHeader('Set-Cookie', buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host }));
+        appendSetCookieHeader(
+          res,
+          buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host })
+        );
       } catch (_) {}
     }
     if (entitlementSource !== 'receipt') {
@@ -284,6 +332,10 @@ export default async function handler(req, res) {
           transaction: entitlementTransaction
         });
         res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
+        appendSetCookieHeader(
+          res,
+          buildPurchaseReceiptSetCookie({ soulId, receipt: receiptToken, reqHost: req.headers.host })
+        );
       } catch (_) {}
     }
 
@@ -369,6 +421,10 @@ export default async function handler(req, res) {
         transaction: cachedEntitlement.transaction || 'prior-entitlement'
       });
       res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
+      appendSetCookieHeader(
+        res,
+        buildPurchaseReceiptSetCookie({ soulId, receipt: receiptToken, reqHost: req.headers.host })
+      );
       res.setHeader(
         'PAYMENT-RESPONSE',
         Buffer.from(
@@ -469,11 +525,18 @@ export default async function handler(req, res) {
 
     if (receiptToken) {
       res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
+      appendSetCookieHeader(
+        res,
+        buildPurchaseReceiptSetCookie({ soulId, receipt: receiptToken, reqHost: req.headers.host })
+      );
     }
     if (settlement.success && settlement.payer) {
       try {
         const sessionToken = createRedownloadSessionToken({ wallet: settlement.payer });
-        res.setHeader('Set-Cookie', buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host }));
+        appendSetCookieHeader(
+          res,
+          buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host })
+        );
       } catch (_) {}
     }
 
@@ -569,12 +632,33 @@ function getCachedOnchainEntitlement(wallet, soulId, sellerAddress) {
 
 function cacheOnchainEntitlement({ wallet, soulId, sellerAddress, ok, transaction, reason }) {
   if (!wallet || !soulId || !sellerAddress) return;
+  const reasonText = String(reason || '');
+  let ttlMs = ok ? ONCHAIN_ENTITLEMENT_POSITIVE_TTL_MS : ONCHAIN_ENTITLEMENT_NEGATIVE_TTL_MS;
+  if (!ok && isOnchainServiceUnavailableReason(reasonText)) {
+    ttlMs = Number.isFinite(ONCHAIN_ENTITLEMENT_UNAVAILABLE_TTL_MS) && ONCHAIN_ENTITLEMENT_UNAVAILABLE_TTL_MS > 0
+      ? ONCHAIN_ENTITLEMENT_UNAVAILABLE_TTL_MS
+      : 30000;
+  }
   onchainEntitlementCache.set(onchainEntitlementKey(wallet, soulId, sellerAddress), {
     ok: Boolean(ok),
     transaction: transaction || null,
-    reason: reason || null,
-    expiresAt: Date.now() + (ok ? ONCHAIN_ENTITLEMENT_POSITIVE_TTL_MS : ONCHAIN_ENTITLEMENT_NEGATIVE_TTL_MS)
+    reason: reasonText || null,
+    expiresAt: Date.now() + ttlMs
   });
+}
+
+function isOnchainServiceUnavailableReason(reason) {
+  const text = String(reason || '').toLowerCase();
+  if (!text) return false;
+  return (
+    text.startsWith('onchain_providers_unavailable') ||
+    text.includes('currently healthy') ||
+    text.includes('temporarily unavailable') ||
+    text.includes('timeout') ||
+    text.includes('429') ||
+    text.includes('503') ||
+    text.includes('network error')
+  );
 }
 
 function isAddress(value) {
@@ -607,76 +691,90 @@ async function resolveOnchainEntitlement({ wallet, soulId, soul, sellerAddress }
     return { ok: false, reason };
   }
 
-  const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
-  const provider = new ethers.JsonRpcProvider(rpcUrl, 8453);
+  const rpcUrls = [
+    ...String(process.env.BASE_RPC_URLS || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+    String(process.env.BASE_RPC_URL || '').trim(),
+    'https://mainnet.base.org',
+    'https://base-rpc.publicnode.com'
+  ].filter(Boolean);
+  const uniqueRpcUrls = [...new Set(rpcUrls)];
   const transferIface = new ethers.Interface(['event Transfer(address indexed from, address indexed to, uint256 value)']);
+  const providerErrors = [];
+  const startBlock = Number.isFinite(ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK) && ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK >= 0
+    ? ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK
+    : 0;
+  const chunkSize = Number.isFinite(ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE) && ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE > 0
+    ? Math.floor(ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE)
+    : 2_000_000;
+  const fromTopic = ethers.zeroPadValue(normalizedWallet, 32);
+  const toTopic = ethers.zeroPadValue(normalizedSeller, 32);
 
-  try {
-    const latest = await provider.getBlockNumber();
-    const startBlock = Number.isFinite(ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK) && ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK >= 0
-      ? ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK
-      : 0;
-    const chunkSize = Number.isFinite(ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE) && ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE > 0
-      ? Math.floor(ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE)
-      : 2_000_000;
-    const fromTopic = ethers.zeroPadValue(normalizedWallet, 32);
-    const toTopic = ethers.zeroPadValue(normalizedSeller, 32);
+  for (const rpcUrl of uniqueRpcUrls) {
+    const provider = new ethers.JsonRpcProvider(rpcUrl, 8453);
+    try {
+      const latest = await provider.getBlockNumber();
+      for (let fromBlock = startBlock; fromBlock <= latest; fromBlock += chunkSize) {
+        const toBlock = Math.min(latest, fromBlock + chunkSize - 1);
+        const logs = await provider.getLogs({
+          address: BASE_MAINNET_USDC,
+          fromBlock,
+          toBlock,
+          topics: [ERC20_TRANSFER_TOPIC, fromTopic, toTopic]
+        });
 
-    for (let fromBlock = startBlock; fromBlock <= latest; fromBlock += chunkSize) {
-      const toBlock = Math.min(latest, fromBlock + chunkSize - 1);
-      const logs = await provider.getLogs({
-        address: BASE_MAINNET_USDC,
-        fromBlock,
-        toBlock,
-        topics: [ERC20_TRANSFER_TOPIC, fromTopic, toTopic]
-      });
-
-      for (const log of logs) {
-        let value = 0n;
-        try {
-          const parsed = transferIface.parseLog({ topics: log.topics, data: log.data });
-          value = BigInt(String(parsed?.args?.value ?? '0'));
-        } catch (_) {
+        for (const log of logs) {
+          let value = 0n;
           try {
-            value = BigInt(String(log?.data || '0x0'));
-          } catch {
-            value = 0n;
+            const parsed = transferIface.parseLog({ topics: log.topics, data: log.data });
+            value = BigInt(String(parsed?.args?.value ?? '0'));
+          } catch (_) {
+            try {
+              value = BigInt(String(log?.data || '0x0'));
+            } catch {
+              value = 0n;
+            }
+          }
+          if (value >= requiredAmount) {
+            const transaction = log.transactionHash || null;
+            cacheOnchainEntitlement({
+              wallet: normalizedWallet,
+              soulId,
+              sellerAddress: normalizedSeller,
+              ok: true,
+              transaction
+            });
+            return { ok: true, transaction, reason: null, cached: false };
           }
         }
-        if (value >= requiredAmount) {
-          const transaction = log.transactionHash || null;
-          cacheOnchainEntitlement({
-            wallet: normalizedWallet,
-            soulId,
-            sellerAddress: normalizedSeller,
-            ok: true,
-            transaction
-          });
-          return { ok: true, transaction, reason: null, cached: false };
-        }
       }
-    }
 
-    const reason = 'no_matching_payment_transfer_found';
-    cacheOnchainEntitlement({
-      wallet: normalizedWallet,
-      soulId,
-      sellerAddress: normalizedSeller,
-      ok: false,
-      reason
-    });
-    return { ok: false, reason, cached: false };
-  } catch (error) {
-    const reason = `onchain_query_failed:${error instanceof Error ? error.message : String(error)}`;
-    cacheOnchainEntitlement({
-      wallet: normalizedWallet,
-      soulId,
-      sellerAddress: normalizedSeller,
-      ok: false,
-      reason
-    });
-    return { ok: false, reason, cached: false };
+      const reason = 'no_matching_payment_transfer_found';
+      cacheOnchainEntitlement({
+        wallet: normalizedWallet,
+        soulId,
+        sellerAddress: normalizedSeller,
+        ok: false,
+        reason
+      });
+      return { ok: false, reason, cached: false };
+    } catch (error) {
+      providerErrors.push(`${rpcUrl}:${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
   }
+
+  const reason = `onchain_providers_unavailable:${providerErrors[0] || 'unknown'}`;
+  cacheOnchainEntitlement({
+    wallet: normalizedWallet,
+    soulId,
+    sellerAddress: normalizedSeller,
+    ok: false,
+    reason
+  });
+  return { ok: false, reason, cached: false };
 }
 
 function isCreatorWalletForSoul({ wallet, soul }) {

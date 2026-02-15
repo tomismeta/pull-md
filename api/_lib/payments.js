@@ -173,6 +173,11 @@ function redownloadSessionTtlSeconds() {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 43200;
 }
 
+function purchaseReceiptTtlSeconds() {
+  const parsed = Number(process.env.PURCHASE_RECEIPT_COOKIE_TTL_SECONDS || '31536000');
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 31536000;
+}
+
 export function createPurchaseReceipt({ wallet, soulId, transaction }) {
   const secret = receiptSecret();
   if (!secret) {
@@ -300,4 +305,20 @@ export function buildRedownloadSessionSetCookie({ token, reqHost }) {
   const host = String(reqHost || '').toLowerCase();
   const secure = host.includes('localhost') ? '' : '; Secure';
   return `soulstarter_redownload_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttl}${secure}`;
+}
+
+export function purchaseReceiptCookieName(soulId) {
+  const safeSoulId = String(soulId || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
+  return `soulstarter_receipt_${safeSoulId || 'unknown'}`;
+}
+
+export function buildPurchaseReceiptSetCookie({ soulId, receipt, reqHost }) {
+  const ttl = purchaseReceiptTtlSeconds();
+  const host = String(reqHost || '').toLowerCase();
+  const secure = host.includes('localhost') ? '' : '; Secure';
+  const name = purchaseReceiptCookieName(soulId);
+  return `${name}=${encodeURIComponent(String(receipt || ''))}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttl}${secure}`;
 }
