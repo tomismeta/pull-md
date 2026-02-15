@@ -384,7 +384,7 @@ function renderPublishedList(items) {
               <span class="currency">USDC</span>
             </div>
           </div>
-          <p class="soul-format-label">File: SOUL.md · ${escapeHtml(visibility)}</p>
+          <p class="soul-format-label">${escapeHtml(visibility)}</p>
           ${
             shareUrl
               ? `<div class="soul-card-actions">

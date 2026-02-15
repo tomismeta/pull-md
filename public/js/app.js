@@ -617,7 +617,6 @@ function renderOwnedSouls() {
             <span class="price">${escapeHtml(isOwned ? 'Accessible' : 'Creator Access')}</span>
           </div>
         </div>
-        <p class="soul-format-label">File: SOUL.md</p>
         <div class="soul-card-actions">
           <a class="btn btn-ghost" href="${escapeHtml(soulListingHref(soul.id))}">View Listing</a>
           <button class="btn btn-primary" onclick="downloadOwnedSoul('${escapeHtml(soul.id)}')">Download SOUL.md</button>
@@ -1481,7 +1480,6 @@ async function loadSouls() {
             <span class="currency">USDC</span>
           </div>
         </div>
-        <p class="soul-format-label">File: SOUL.md</p>
         <div class="soul-card-actions">
           <a class="btn btn-ghost" href="${escapeHtml(soulListingHref(soul.id))}">View Listing</a>
           <button class="btn btn-primary" onclick="${owned ? `downloadOwnedSoul('${escapeHtml(soul.id)}')` : `purchaseSoul('${escapeHtml(soul.id)}')`}">${escapeHtml(cta)}</button>
