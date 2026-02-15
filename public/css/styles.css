@@ -325,6 +325,14 @@ main {
   font-size: 0.89rem;
 }
 
+.soul-format-label {
+  margin: 0 0 10px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.02em;
+}
+
 .soul-source-link {
   display: inline-flex;
   align-items: center;

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ethers } from 'ethers';
+import { Pool } from 'pg';
 
 const SOUL_TYPES = new Set(['synthetic', 'organic', 'hybrid']);
 const MAX_SOUL_MD_BYTES = 64 * 1024;
@@ -12,6 +13,10 @@ const REVIEW_AUDIT_FILE = 'review-audit.jsonl';
 const PUBLISHED_CATALOG_FILE = 'published-catalog.json';
 const DEFAULT_MODERATOR_WALLETS = ['0x7F46aCB709cd8DF5879F84915CA431fB740989E4'];
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const DB_CONN_ENV_KEYS = ['MARKETPLACE_DATABASE_URL', 'DATABASE_URL', 'POSTGRES_URL'];
+let dbPool = null;
+let dbSchemaReadyPromise = null;
+let dbSchemaReadyForDsn = null;
 
 function asString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -141,6 +146,98 @@ function getMarketplaceDraftsDir() {
   return process.env.MARKETPLACE_DRAFTS_DIR || path.join(process.cwd(), '.marketplace-drafts');
 }
 
+function getMarketplaceDatabaseUrl() {
+  for (const key of DB_CONN_ENV_KEYS) {
+    const value = String(process.env[key] || '').trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+function isMarketplaceDbEnabled() {
+  return Boolean(getMarketplaceDatabaseUrl());
+}
+
+function getMarketplaceDbPool() {
+  const connectionString = getMarketplaceDatabaseUrl();
+  if (!connectionString) return null;
+  if (dbPool) return dbPool;
+
+  const sslHint = String(process.env.MARKETPLACE_DB_SSL || '').trim().toLowerCase();
+  const needsSsl =
+    sslHint === '1' ||
+    sslHint === 'true' ||
+    /sslmode=require/i.test(connectionString) ||
+    /render\.com|neon\.tech|supabase\.co|railway\.app/i.test(connectionString);
+
+  dbPool = new Pool({
+    connectionString,
+    ssl: needsSsl ? { rejectUnauthorized: false } : undefined
+  });
+  return dbPool;
+}
+
+async function ensureMarketplaceDbSchema() {
+  const pool = getMarketplaceDbPool();
+  if (!pool) return false;
+  const dsn = getMarketplaceDatabaseUrl();
+  if (dbSchemaReadyPromise && dbSchemaReadyForDsn === dsn) {
+    await dbSchemaReadyPromise;
+    return true;
+  }
+
+  dbSchemaReadyForDsn = dsn;
+  dbSchemaReadyPromise = (async () => {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS soul_marketplace_drafts (
+        wallet_address TEXT NOT NULL,
+        draft_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        moderation JSONB,
+        normalized JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        published_at TIMESTAMPTZ,
+        PRIMARY KEY (wallet_address, draft_id)
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_soul_marketplace_drafts_status_updated
+      ON soul_marketplace_drafts (status, updated_at DESC);
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS soul_marketplace_audit (
+        id BIGSERIAL PRIMARY KEY,
+        at TIMESTAMPTZ NOT NULL,
+        event TEXT NOT NULL,
+        wallet_address TEXT NOT NULL,
+        draft_id TEXT,
+        actor TEXT,
+        decision TEXT,
+        status_before TEXT,
+        status_after TEXT,
+        notes TEXT,
+        payload JSONB
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS soul_catalog_entries (
+        id TEXT PRIMARY KEY,
+        entry JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+  })();
+
+  try {
+    await dbSchemaReadyPromise;
+    return true;
+  } catch (error) {
+    dbSchemaReadyPromise = null;
+    throw error;
+  }
+}
+
 function walletFilePath(walletAddress) {
   const wallet = String(walletAddress || '').toLowerCase();
   return path.join(getMarketplaceDraftsDir(), `${wallet}.json`);
@@ -179,37 +276,136 @@ function buildCreatorAuthMessageCandidates({ wallet, action, timestamp }) {
 }
 
 async function ensureDraftStore() {
+  if (isMarketplaceDbEnabled()) return;
   await fs.mkdir(getMarketplaceDraftsDir(), { recursive: true });
 }
 
 async function loadWalletDraftFile(walletAddress) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  if (isMarketplaceDbEnabled()) {
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    const { rows } = await pool.query(
+      `
+        SELECT draft_id, status, moderation, normalized, created_at, updated_at, published_at
+        FROM soul_marketplace_drafts
+        WHERE wallet_address = $1
+        ORDER BY updated_at DESC
+      `,
+      [wallet]
+    );
+    return {
+      wallet,
+      drafts: rows.map((row) => ({
+        draft_id: row.draft_id,
+        status: row.status || 'draft',
+        moderation: row.moderation || null,
+        normalized: row.normalized || {},
+        created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+        updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+        published_at: row.published_at ? new Date(row.published_at).toISOString() : null
+      }))
+    };
+  }
+
   await ensureDraftStore();
   const filePath = walletFilePath(walletAddress);
   try {
     const raw = await fs.readFile(filePath, 'utf8');
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.drafts)) {
-      return { wallet: String(walletAddress).toLowerCase(), drafts: [] };
+      return { wallet, drafts: [] };
     }
     return parsed;
   } catch (_) {
-    return { wallet: String(walletAddress).toLowerCase(), drafts: [] };
+    return { wallet, drafts: [] };
   }
 }
 
 async function saveWalletDraftFile(walletAddress, payload) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const drafts = Array.isArray(payload?.drafts) ? payload.drafts : [];
+  if (isMarketplaceDbEnabled()) {
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    const client = await pool.connect();
+    const updatedAtIso = new Date().toISOString();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM soul_marketplace_drafts WHERE wallet_address = $1', [wallet]);
+      for (const draft of drafts) {
+        const createdAtIso = draft?.created_at ? new Date(draft.created_at).toISOString() : updatedAtIso;
+        const draftUpdatedAtIso = draft?.updated_at ? new Date(draft.updated_at).toISOString() : updatedAtIso;
+        const publishedAtIso = draft?.published_at ? new Date(draft.published_at).toISOString() : null;
+        await client.query(
+          `
+            INSERT INTO soul_marketplace_drafts (
+              wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
+            ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz)
+          `,
+          [
+            wallet,
+            String(draft?.draft_id || ''),
+            String(draft?.status || 'draft'),
+            JSON.stringify(draft?.moderation || null),
+            JSON.stringify(draft?.normalized || {}),
+            createdAtIso,
+            draftUpdatedAtIso,
+            publishedAtIso
+          ]
+        );
+      }
+      await client.query('COMMIT');
+      return {
+        wallet,
+        updated_at: updatedAtIso,
+        drafts
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   await ensureDraftStore();
   const filePath = walletFilePath(walletAddress);
   const next = {
-    wallet: String(walletAddress).toLowerCase(),
+    wallet,
     updated_at: new Date().toISOString(),
-    drafts: Array.isArray(payload?.drafts) ? payload.drafts : []
+    drafts
   };
   await fs.writeFile(filePath, JSON.stringify(next, null, 2), { mode: 0o600 });
   return next;
 }
 
 async function appendReviewAudit(entry) {
+  if (isMarketplaceDbEnabled()) {
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    await pool.query(
+      `
+        INSERT INTO soul_marketplace_audit (
+          at, event, wallet_address, draft_id, actor, decision, status_before, status_after, notes, payload
+        ) VALUES ($1::timestamptz, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+      `,
+      [
+        entry?.at ? new Date(entry.at).toISOString() : new Date().toISOString(),
+        String(entry?.event || 'unknown'),
+        String(entry?.wallet || '').toLowerCase(),
+        entry?.draft_id ? String(entry.draft_id) : null,
+        entry?.actor ? String(entry.actor) : null,
+        entry?.decision ? String(entry.decision) : null,
+        entry?.status_before ? String(entry.status_before) : null,
+        entry?.status_after ? String(entry.status_after) : null,
+        entry?.notes ? String(entry.notes) : null,
+        JSON.stringify(entry || {})
+      ]
+    );
+    return;
+  }
+
   await ensureDraftStore();
   const filePath = path.join(getMarketplaceDraftsDir(), REVIEW_AUDIT_FILE);
   await fs.appendFile(filePath, `${JSON.stringify(entry)}\n`, { mode: 0o600 });
@@ -223,7 +419,32 @@ function derivePreview(markdown) {
   return clean || 'Published creator soul.';
 }
 
+function sharePathForSoul(soulId) {
+  return `/soul.html?id=${encodeURIComponent(String(soulId || ''))}`;
+}
+
+function normalizeVisibility(value) {
+  const mode = String(value || '').trim().toLowerCase();
+  return mode === 'hidden' ? 'hidden' : 'public';
+}
+
 async function loadPublishedCatalog() {
+  if (isMarketplaceDbEnabled()) {
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    const { rows } = await pool.query(
+      `
+        SELECT entry
+        FROM soul_catalog_entries
+        ORDER BY updated_at DESC, id ASC
+      `
+    );
+    const entries = rows
+      .map((row) => row.entry)
+      .filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string');
+    return { schema_version: 'published-catalog-v1', entries };
+  }
+
   await ensureDraftStore();
   const filePath = path.join(getMarketplaceDraftsDir(), PUBLISHED_CATALOG_FILE);
   try {
@@ -239,12 +460,44 @@ async function loadPublishedCatalog() {
 }
 
 async function savePublishedCatalog(payload) {
+  const entries = Array.isArray(payload?.entries) ? payload.entries : [];
+  if (isMarketplaceDbEnabled()) {
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM soul_catalog_entries');
+      for (const entry of entries) {
+        if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string') continue;
+        await client.query(
+          `
+            INSERT INTO soul_catalog_entries (id, entry, updated_at)
+            VALUES ($1, $2::jsonb, NOW())
+          `,
+          [entry.id, JSON.stringify(entry)]
+        );
+      }
+      await client.query('COMMIT');
+      return {
+        schema_version: 'published-catalog-v1',
+        updated_at: new Date().toISOString(),
+        entries
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   await ensureDraftStore();
   const filePath = path.join(getMarketplaceDraftsDir(), PUBLISHED_CATALOG_FILE);
   const normalized = {
     schema_version: 'published-catalog-v1',
     updated_at: new Date().toISOString(),
-    entries: Array.isArray(payload?.entries) ? payload.entries : []
+    entries
   };
   await fs.writeFile(filePath, JSON.stringify(normalized, null, 2), { mode: 0o600 });
   return normalized;
@@ -257,6 +510,7 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
   if (!id) return;
 
   const catalog = await loadPublishedCatalog();
+  const existingEntry = catalog.entries.find((entry) => entry?.id === id) || null;
   const nextEntry = {
     id,
     name: asString(listing.name),
@@ -280,8 +534,28 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
     sellerAddress: asString(listing.seller_address).toLowerCase(),
     publishedBy: String(walletAddress || '').toLowerCase(),
     publishedAt: draft?.published_at || new Date().toISOString(),
-    draftId: draft?.draft_id
+    draftId: draft?.draft_id,
+    sharePath: sharePathForSoul(id),
+    visibility: normalizeVisibility(existingEntry?.visibility),
+    hiddenAt: existingEntry?.hiddenAt || null,
+    hiddenBy: existingEntry?.hiddenBy || null,
+    hiddenReason: existingEntry?.hiddenReason || null
   };
+
+  if (isMarketplaceDbEnabled()) {
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    await pool.query(
+      `
+        INSERT INTO soul_catalog_entries (id, entry, updated_at)
+        VALUES ($1, $2::jsonb, NOW())
+        ON CONFLICT (id)
+        DO UPDATE SET entry = EXCLUDED.entry, updated_at = NOW()
+      `,
+      [id, JSON.stringify(nextEntry)]
+    );
+    return;
+  }
 
   const idx = catalog.entries.findIndex((entry) => entry?.id === id);
   if (idx >= 0) catalog.entries[idx] = nextEntry;
@@ -290,6 +564,33 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
 }
 
 async function loadAllWalletDraftStores() {
+  if (isMarketplaceDbEnabled()) {
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    const { rows } = await pool.query(`
+      SELECT wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
+      FROM soul_marketplace_drafts
+      ORDER BY wallet_address ASC, updated_at DESC
+    `);
+    const storesByWallet = new Map();
+    for (const row of rows) {
+      const wallet = String(row.wallet_address || '').toLowerCase();
+      if (!storesByWallet.has(wallet)) {
+        storesByWallet.set(wallet, { wallet, drafts: [] });
+      }
+      storesByWallet.get(wallet).drafts.push({
+        draft_id: row.draft_id,
+        status: row.status || 'draft',
+        moderation: row.moderation || null,
+        normalized: row.normalized || {},
+        created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+        updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+        published_at: row.published_at ? new Date(row.published_at).toISOString() : null
+      });
+    }
+    return [...storesByWallet.values()];
+  }
+
   await ensureDraftStore();
   const dir = getMarketplaceDraftsDir();
   const entries = await fs.readdir(dir);
@@ -307,20 +608,55 @@ async function loadAllWalletDraftStores() {
   return stores;
 }
 
+export async function listPublishedCatalogEntries() {
+  return listPublishedCatalogEntriesFiltered();
+}
+
+async function listPublishedCatalogEntriesFiltered({ includeHidden = false, publishedBy = null } = {}) {
+  const catalog = await loadPublishedCatalog();
+  const rows = Array.isArray(catalog?.entries) ? catalog.entries : [];
+  const creator = publishedBy ? String(publishedBy).toLowerCase() : '';
+  return rows.filter((entry) => {
+    if (!entry || typeof entry !== 'object') return false;
+    if (typeof entry.id !== 'string' || !entry.id) return false;
+    const visibility = normalizeVisibility(entry.visibility);
+    if (!includeHidden && visibility === 'hidden') return false;
+    if (creator && String(entry.publishedBy || '').toLowerCase() !== creator) return false;
+    return true;
+  });
+}
+
+export async function listPublishedCatalogEntriesPublic() {
+  return listPublishedCatalogEntriesFiltered({ includeHidden: false });
+}
+
+export async function listPublishedCatalogEntriesByCreator(walletAddress) {
+  return listPublishedCatalogEntriesFiltered({
+    includeHidden: true,
+    publishedBy: String(walletAddress || '').toLowerCase()
+  });
+}
+
+export async function listPublishedCatalogEntriesForModeration() {
+  return listPublishedCatalogEntriesFiltered({ includeHidden: true });
+}
+
 export function getMarketplaceDraftTemplate() {
   return {
-    schema_version: 'marketplace-draft-v1',
+    schema_version: 'marketplace-publish-v1',
     name: 'Example Soul',
-    description: 'One-sentence summary for buyers.',
+    description: 'Short summary buyers see before purchase.',
     price_usdc: 0.49,
     soul_markdown: '# SOUL\\n\\nYour soul content goes here.',
     notes: {
       auto_fields: [
         'soul_id (derived from name)',
-        'seller_address (set to connected creator wallet on save)',
+        'seller_address (set to connected creator wallet)',
         'category, soul_type, icon, tags',
-        'creator_royalty_bps + platform_fee_bps'
+        'creator_royalty_bps + platform_fee_bps',
+        'share_path'
       ],
+      publish_mode: 'immediate',
       platform_fee_bps: normalizePlatformFeeBps()
     }
   };
@@ -393,8 +729,8 @@ export function validateMarketplaceDraft(input, options = {}) {
   if (name.length < 3 || name.length > 80) errors.push('listing.name must be between 3 and 80 characters.');
   if (description.length < 12 || description.length > 240)
     errors.push('listing.description must be between 12 and 240 characters.');
-  if (longDescription.length < 24 || longDescription.length > 2000)
-    errors.push('listing.long_description must be between 24 and 2000 characters.');
+  if (longDescription.length < 12 || longDescription.length > 2000)
+    errors.push('listing.long_description must be between 12 and 2000 characters.');
   if (!category) errors.push('listing.category is required.');
   if (!SOUL_TYPES.has(soulType)) errors.push('listing.soul_type must be synthetic, organic, or hybrid.');
   if (!validateEthAddress(sellerAddress)) errors.push('listing.seller_address must be a valid EVM address.');
@@ -754,4 +1090,115 @@ export async function publishCreatorDraft({ walletAddress, draftId, reviewer, no
   });
 
   return { ok: true, draft: next };
+}
+
+function summarizePublishedListing(entry) {
+  const listing = entry && typeof entry === 'object' ? entry : {};
+  const id = asString(listing.id);
+  const sharePath = asString(listing.sharePath || sharePathForSoul(id));
+  return {
+    soul_id: id,
+    name: asString(listing.name),
+    description: asString(listing.description),
+    price_micro_usdc: asString(listing.priceMicroUsdc),
+    price_display: asString(listing.priceDisplay),
+    seller_address: asString(listing.sellerAddress).toLowerCase(),
+    wallet_address: asString(listing.publishedBy).toLowerCase(),
+    visibility: normalizeVisibility(listing.visibility),
+    hidden_at: listing.hiddenAt || null,
+    hidden_by: listing.hiddenBy || null,
+    hidden_reason: listing.hiddenReason || null,
+    published_at: listing.publishedAt || null,
+    share_path: sharePath
+  };
+}
+
+export async function publishCreatorListingDirect({ walletAddress, payload }) {
+  const wallet = String(walletAddress || '').toLowerCase();
+  const result = validateMarketplaceDraft(payload, { walletAddress: wallet });
+  if (!result.ok) {
+    return {
+      ok: false,
+      errors: result.errors,
+      warnings: result.warnings,
+      draft_id: result.draft_id
+    };
+  }
+
+  const now = new Date().toISOString();
+  const publishedDraft = {
+    draft_id: `pub_${result.draft_id.replace(/^draft_/, '')}`,
+    normalized: result.normalized,
+    published_at: now
+  };
+  await upsertPublishedCatalogEntry({ walletAddress: wallet, draft: publishedDraft });
+  await appendReviewAudit({
+    at: now,
+    event: 'publish_direct',
+    wallet,
+    draft_id: publishedDraft.draft_id,
+    actor: wallet,
+    status_before: 'none',
+    status_after: 'published',
+    notes: 'Immediate publish flow'
+  });
+
+  const entries = await listPublishedCatalogEntriesFiltered({
+    includeHidden: true,
+    publishedBy: wallet
+  });
+  const entry = entries.find((row) => row?.id === result.normalized.listing.soul_id) || null;
+  return {
+    ok: true,
+    warnings: result.warnings,
+    listing: summarizePublishedListing(entry || {}),
+    normalized: result.normalized
+  };
+}
+
+export async function setListingVisibility({ soulId, visibility, moderator, reason }) {
+  const id = asString(soulId);
+  if (!id) return { ok: false, error: 'Missing soul_id' };
+  const mode = normalizeVisibility(visibility);
+  if (mode !== 'hidden' && mode !== 'public') {
+    return { ok: false, error: 'visibility must be hidden or public' };
+  }
+
+  const catalog = await loadPublishedCatalog();
+  const idx = catalog.entries.findIndex((entry) => entry?.id === id);
+  if (idx < 0) return { ok: false, error: 'Listing not found' };
+
+  const now = new Date().toISOString();
+  const actor = asString(moderator).toLowerCase() || 'moderator';
+  const previousVisibility = normalizeVisibility(catalog.entries[idx]?.visibility);
+  const updated = {
+    ...catalog.entries[idx],
+    visibility: mode,
+    hiddenAt: mode === 'hidden' ? now : null,
+    hiddenBy: mode === 'hidden' ? actor : null,
+    hiddenReason: mode === 'hidden' ? asString(reason) || null : null
+  };
+  catalog.entries[idx] = updated;
+  await savePublishedCatalog(catalog);
+  await appendReviewAudit({
+    at: now,
+    event: mode === 'hidden' ? 'visibility_hidden' : 'visibility_public',
+    wallet: String(updated.publishedBy || '').toLowerCase(),
+    draft_id: String(updated.draftId || ''),
+    actor,
+    status_before: previousVisibility,
+    status_after: mode,
+    notes: updated.hiddenReason || null,
+    soul_id: id
+  });
+
+  return {
+    ok: true,
+    listing: summarizePublishedListing(updated)
+  };
+}
+
+export async function listPublishedListingSummaries({ includeHidden = false, publishedBy = null } = {}) {
+  const entries = await listPublishedCatalogEntriesFiltered({ includeHidden, publishedBy });
+  return entries.map((entry) => summarizePublishedListing(entry));
 }

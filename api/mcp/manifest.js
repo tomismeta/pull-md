@@ -106,76 +106,48 @@ export default function handler(req, res) {
       },
       {
         name: 'get_listing_template',
-        description: 'Get marketplace creator draft template for user-uploaded soul listings',
+        description: 'Get immediate publish payload template for creator soul listings',
         endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'GET',
         parameters: {
           action: { type: 'string', required: true, description: 'Set action=get_listing_template' }
         },
-        returns: { type: 'object', description: 'Template payload for creator listing draft contracts' }
+        returns: { type: 'object', description: 'Template payload for immediate creator publish contract' }
       },
       {
-        name: 'validate_listing_draft',
-        description: 'Validate and normalize a creator-provided marketplace listing draft',
+        name: 'publish_listing',
+        description: 'Creator-auth immediate publish. Returns shareable soul URL and purchase endpoint.',
         endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'POST',
         parameters: {
-          action: { type: 'string', required: true, description: 'Set action=validate_listing_draft' },
-          listing: { type: 'object', required: true, description: 'Listing metadata and fee split fields' },
-          assets: { type: 'object', required: true, description: 'Soul markdown and optional source attribution fields' }
-        },
-        returns: { type: 'object', description: 'Validation outcome, normalized draft, and deterministic draft_id' }
-      },
-      {
-        name: 'save_listing_draft',
-        description: 'Save a validated creator listing draft under wallet-scoped private storage',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'POST',
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=save_listing_draft' },
+          action: { type: 'string', required: true, description: 'Set action=publish_listing' },
           wallet_address: { type: 'string', required: true, description: 'Creator wallet address' },
           auth_signature: { type: 'string', required: true, description: 'Wallet signature over creator auth message' },
           auth_timestamp: { type: 'number', required: true, description: 'Unix ms timestamp used in auth message' },
-          draft: { type: 'object', required: true, description: 'Draft payload to validate and persist' }
+          listing: { type: 'object', required: true, description: 'Minimal publish payload: name, price_usdc, description, soul_markdown' }
         },
-        returns: { type: 'object', description: 'Saved draft metadata and deterministic draft_id' }
+        returns: { type: 'object', description: 'Published listing summary + share_url + purchase endpoint' }
       },
       {
-        name: 'list_my_listing_drafts',
-        description: 'List creator-owned saved listing drafts (wallet-authenticated)',
+        name: 'list_my_published_listings',
+        description: 'List creator-owned published listings (including hidden listings)',
         endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'GET',
         parameters: {
-          action: { type: 'string', required: true, description: 'Set action=list_my_listing_drafts' }
+          action: { type: 'string', required: true, description: 'Set action=list_my_published_listings' }
         },
         auth_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
-        returns: { type: 'object', description: 'Wallet-scoped list of draft summaries' }
+        returns: { type: 'object', description: 'Wallet-scoped list of published listing summaries' }
       },
       {
-        name: 'get_my_listing_draft',
-        description: 'Get full creator-owned draft payload by draft_id (wallet-authenticated)',
+        name: 'list_published_listings',
+        description: 'Public list of currently visible published listings',
         endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'GET',
         parameters: {
-          action: { type: 'string', required: true, description: 'Set action=get_my_listing_draft' },
-          draft_id: { type: 'string', required: true, description: 'Draft identifier from save/validate response' }
+          action: { type: 'string', required: true, description: 'Set action=list_published_listings' }
         },
-        auth_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
-        returns: { type: 'object', description: 'Full wallet-scoped draft record' }
-      },
-      {
-        name: 'submit_listing_for_review',
-        description: 'Move a creator draft from draft state to submitted_for_review with moderation metadata',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'POST',
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=submit_listing_for_review' },
-          wallet_address: { type: 'string', required: true, description: 'Creator wallet address' },
-          auth_signature: { type: 'string', required: true, description: 'Wallet signature over creator auth message' },
-          auth_timestamp: { type: 'number', required: true, description: 'Unix ms timestamp used in auth message' },
-          draft_id: { type: 'string', required: true, description: 'Draft identifier to submit' }
-        },
-        returns: { type: 'object', description: 'Draft submission status with moderation state= pending' }
+        returns: { type: 'object', description: 'Public listing summaries for discoverability and purchase' }
       },
       {
         name: 'list_moderators',
@@ -188,59 +160,30 @@ export default function handler(req, res) {
         returns: { type: 'object', description: 'Allowlisted moderator wallet addresses' }
       },
       {
-        name: 'review_listing_submission',
-        description: 'Moderator-only moderation decision for submitted creator drafts (approve or reject)',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'POST',
-        admin_only: true,
-        auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=review_listing_submission' },
-          wallet_address: { type: 'string', required: true, description: 'Creator wallet address owning the draft' },
-          draft_id: { type: 'string', required: true, description: 'Draft identifier under review' },
-          decision: { type: 'string', required: true, description: 'approve | reject' },
-          reviewer: { type: 'string', required: false, description: 'Optional reviewer id/name for audit trail' },
-          notes: { type: 'string', required: false, description: 'Optional moderation notes' }
-        },
-        returns: { type: 'object', description: 'Updated draft moderation state and resulting status' }
-      },
-      {
-        name: 'list_review_queue',
-        description: 'Moderator-only list of drafts waiting moderation review',
+        name: 'list_moderation_listings',
+        description: 'Moderator-only list of visible and hidden listings',
         endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'GET',
         admin_only: true,
         auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
         parameters: {
-          action: { type: 'string', required: true, description: 'Set action=list_review_queue' }
+          action: { type: 'string', required: true, description: 'Set action=list_moderation_listings' }
         },
-        returns: { type: 'object', description: 'Submitted-for-review draft queue' }
+        returns: { type: 'object', description: 'Listing partitions for moderation visibility actions' }
       },
       {
-        name: 'publish_listing',
-        description: 'Moderator-only transition of approved draft to published',
+        name: 'remove_listing_visibility',
+        description: 'Moderator-only action to remove a listing from public visibility',
         endpoint: '/api/mcp/tools/creator_marketplace',
         method: 'POST',
         admin_only: true,
         auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
         parameters: {
-          action: { type: 'string', required: true, description: 'Set action=publish_listing' },
-          wallet_address: { type: 'string', required: true, description: 'Creator wallet address owning the draft' },
-          draft_id: { type: 'string', required: true, description: 'Draft identifier to publish' },
-          reviewer: { type: 'string', required: false, description: 'Optional reviewer id/name for audit trail' },
-          notes: { type: 'string', required: false, description: 'Optional publication notes' }
+          action: { type: 'string', required: true, description: 'Set action=remove_listing_visibility' },
+          soul_id: { type: 'string', required: true, description: 'Published soul identifier to hide' },
+          reason: { type: 'string', required: false, description: 'Optional moderation reason for audit trail' }
         },
-        returns: { type: 'object', description: 'Published draft status payload' }
-      },
-      {
-        name: 'list_published_listings',
-        description: 'List all published creator listings from marketplace draft store',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'GET',
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=list_published_listings' }
-        },
-        returns: { type: 'object', description: 'Published marketplace listing summaries' }
+        returns: { type: 'object', description: 'Updated listing visibility state' }
       }
     ],
     download_contract: {

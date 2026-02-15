@@ -10,63 +10,94 @@ import {
   buildCreatorAuthMessage,
   getMarketplaceDraftTemplate,
   listModeratorWallets,
-  publishCreatorDraft,
-  reviewCreatorDraft,
-  submitCreatorDraftForReview,
-  upsertCreatorDraft,
-  validateMarketplaceDraft,
+  listPublishedListingSummaries,
+  publishCreatorListingDirect,
+  setListingVisibility,
   verifyCreatorAuth,
   verifyModeratorAuth
 } from '../api/_lib/marketplace.js';
 
-test('marketplace draft validation, moderation, and publish promotion flow', async () => {
+test('immediate publish + visibility removal flow', async () => {
   const originalCwd = process.cwd();
   const originalDraftDir = process.env.MARKETPLACE_DRAFTS_DIR;
   const originalModerators = process.env.MODERATOR_WALLETS;
+  const originalMarketplaceDbUrl = process.env.MARKETPLACE_DATABASE_URL;
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalPostgresUrl = process.env.POSTGRES_URL;
 
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'soulstarter-marketplace-test-'));
   process.chdir(tempDir);
   process.env.MARKETPLACE_DRAFTS_DIR = path.join(tempDir, '.marketplace-drafts');
   process.env.MODERATOR_WALLETS = '0x1111111111111111111111111111111111111111';
+  delete process.env.MARKETPLACE_DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  delete process.env.POSTGRES_URL;
 
   try {
-    const { getSoul, listSouls } = await import(`../api/_lib/catalog.js?test=${Date.now()}`);
+    const { getSoul, getSoulResolved, listSouls, listSoulsResolved, loadSoulContent } = await import(
+      `../api/_lib/catalog.js?test=${Date.now()}`
+    );
 
-    const wallet = ethers.Wallet.createRandom();
+    const creatorWallet = ethers.Wallet.createRandom();
     const template = getMarketplaceDraftTemplate();
     template.name = 'Creator Alpha';
     template.description = 'Focused assistant for product launch execution.';
     template.price_usdc = 0.31;
     template.soul_markdown = '# SOUL\n\nAct decisively.\nShip clearly.';
 
-    const validated = validateMarketplaceDraft(template, { walletAddress: wallet.address });
-    assert.equal(validated.ok, true);
-    assert.ok(validated.draft_id.startsWith('draft_'));
-    assert.equal(validated.normalized.listing.price_micro_usdc, '310000');
-    assert.equal(validated.normalized.listing.seller_address, wallet.address.toLowerCase());
+    const creatorTs = Date.now();
+    const creatorMsg = buildCreatorAuthMessage({
+      wallet: creatorWallet.address,
+      action: 'publish_listing',
+      timestamp: creatorTs
+    });
+    const creatorSig = await creatorWallet.signMessage(creatorMsg);
+    const creatorAuth = verifyCreatorAuth({
+      wallet: creatorWallet.address,
+      timestamp: creatorTs,
+      signature: creatorSig,
+      action: 'publish_listing'
+    });
+    assert.equal(creatorAuth.ok, true);
+    assert.equal(creatorAuth.wallet, creatorWallet.address.toLowerCase());
 
-    const ts = Date.now();
-    const authMsg = buildCreatorAuthMessage({
-      wallet: wallet.address,
-      action: 'save_listing_draft',
-      timestamp: ts
+    const publish = await publishCreatorListingDirect({
+      walletAddress: creatorAuth.wallet,
+      payload: template
     });
-    const signature = await wallet.signMessage(authMsg);
-    const auth = verifyCreatorAuth({
-      wallet: wallet.address,
-      timestamp: ts,
-      signature,
-      action: 'save_listing_draft'
+    assert.equal(publish.ok, true);
+    assert.equal(publish.listing.soul_id, 'creator-alpha-v1');
+    assert.equal(publish.listing.visibility, 'public');
+    assert.equal(publish.listing.price_micro_usdc, '310000');
+    assert.ok(String(publish.listing.share_path).startsWith('/soul.html?id='));
+
+    const publishedPublic = await listPublishedListingSummaries({ includeHidden: false });
+    assert.equal(publishedPublic.some((item) => item.soul_id === 'creator-alpha-v1'), true);
+    const publishedByCreator = await listPublishedListingSummaries({
+      includeHidden: true,
+      publishedBy: creatorAuth.wallet
     });
-    assert.equal(auth.ok, true);
-    assert.equal(auth.wallet, wallet.address.toLowerCase());
+    assert.equal(publishedByCreator.length, 1);
+
+    const promoted = getSoul('creator-alpha-v1');
+    assert.ok(promoted);
+    const resolvedSoul = await getSoulResolved('creator-alpha-v1');
+    assert.ok(resolvedSoul);
+    const listed = listSouls().find((item) => item.id === 'creator-alpha-v1');
+    assert.ok(listed);
+    assert.equal(listed.price.amount, '0.31');
+    assert.equal(listed.payment_protocol, 'x402');
+    const resolvedListed = (await listSoulsResolved()).find((item) => item.id === 'creator-alpha-v1');
+    assert.ok(resolvedListed);
+    const resolvedContent = await loadSoulContent('creator-alpha-v1');
+    assert.equal(resolvedContent, '# SOUL\n\nAct decisively.\nShip clearly.');
 
     const moderatorWallet = ethers.Wallet.createRandom();
     process.env.MODERATOR_WALLETS = moderatorWallet.address;
     const moderatorTs = Date.now();
     const moderatorMsg = buildModeratorAuthMessage({
       wallet: moderatorWallet.address,
-      action: 'list_review_queue',
+      action: 'remove_listing_visibility',
       timestamp: moderatorTs
     });
     const moderatorSig = await moderatorWallet.signMessage(moderatorMsg);
@@ -74,67 +105,50 @@ test('marketplace draft validation, moderation, and publish promotion flow', asy
       wallet: moderatorWallet.address,
       timestamp: moderatorTs,
       signature: moderatorSig,
-      action: 'list_review_queue'
+      action: 'remove_listing_visibility'
     });
     assert.equal(moderatorAuth.ok, true);
     assert.equal(moderatorAuth.wallet, moderatorWallet.address.toLowerCase());
     assert.deepEqual(listModeratorWallets(), [moderatorWallet.address.toLowerCase()]);
 
-    const saved = await upsertCreatorDraft({
-      walletAddress: auth.wallet,
-      normalizedDraft: validated.normalized,
-      draftId: validated.draft_id
+    const hidden = await setListingVisibility({
+      soulId: 'creator-alpha-v1',
+      visibility: 'hidden',
+      moderator: moderatorAuth.wallet,
+      reason: 'policy violation test'
     });
-    assert.equal(saved.status, 'draft');
+    assert.equal(hidden.ok, true);
+    assert.equal(hidden.listing.visibility, 'hidden');
 
-    const submitted = await submitCreatorDraftForReview({
-      walletAddress: auth.wallet,
-      draftId: validated.draft_id
+    const afterHidePublic = await listPublishedListingSummaries({ includeHidden: false });
+    assert.equal(afterHidePublic.some((item) => item.soul_id === 'creator-alpha-v1'), false);
+
+    const afterHideCreator = await listPublishedListingSummaries({
+      includeHidden: true,
+      publishedBy: creatorAuth.wallet
     });
-    assert.equal(submitted.ok, true);
-    assert.equal(submitted.draft.status, 'submitted_for_review');
-    assert.equal(submitted.draft.moderation.state, 'pending');
+    assert.equal(afterHideCreator.length, 1);
+    assert.equal(afterHideCreator[0].visibility, 'hidden');
 
-    const reviewed = await reviewCreatorDraft({
-      walletAddress: auth.wallet,
-      draftId: validated.draft_id,
-      decision: 'approve',
-      reviewer: 'qa-admin',
-      notes: 'Looks good'
-    });
-    assert.equal(reviewed.ok, true);
-    assert.equal(reviewed.draft.status, 'approved_for_publish');
-    assert.equal(reviewed.draft.moderation.state, 'approved');
-
-    const published = await publishCreatorDraft({
-      walletAddress: auth.wallet,
-      draftId: validated.draft_id,
-      reviewer: 'qa-admin',
-      notes: 'Published for test'
-    });
-    assert.equal(published.ok, true);
-    assert.equal(published.draft.status, 'published');
-
-    const promoted = getSoul('creator-alpha-v1');
-    assert.ok(promoted);
-    assert.equal(promoted.sellerAddress, wallet.address.toLowerCase());
-    const listed = listSouls().find((item) => item.id === 'creator-alpha-v1');
-    assert.ok(listed);
-    assert.equal(listed.price.amount, '0.31');
-    assert.equal(listed.payment_protocol, 'x402');
+    const nowMissing = await getSoulResolved('creator-alpha-v1');
+    assert.equal(nowMissing, null);
 
     const auditPath = path.join(tempDir, '.marketplace-drafts', 'review-audit.jsonl');
     const auditRaw = await readFile(auditPath, 'utf8');
-    assert.ok(auditRaw.includes('"event":"submit_for_review"'));
-    assert.ok(auditRaw.includes('"event":"review_decision"'));
-    assert.ok(auditRaw.includes('"event":"publish"'));
-
+    assert.ok(auditRaw.includes('"event":"publish_direct"'));
+    assert.ok(auditRaw.includes('"event":"visibility_hidden"'));
   } finally {
     process.chdir(originalCwd);
     if (originalDraftDir === undefined) delete process.env.MARKETPLACE_DRAFTS_DIR;
     else process.env.MARKETPLACE_DRAFTS_DIR = originalDraftDir;
     if (originalModerators === undefined) delete process.env.MODERATOR_WALLETS;
     else process.env.MODERATOR_WALLETS = originalModerators;
+    if (originalMarketplaceDbUrl === undefined) delete process.env.MARKETPLACE_DATABASE_URL;
+    else process.env.MARKETPLACE_DATABASE_URL = originalMarketplaceDbUrl;
+    if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = originalDatabaseUrl;
+    if (originalPostgresUrl === undefined) delete process.env.POSTGRES_URL;
+    else process.env.POSTGRES_URL = originalPostgresUrl;
     await rm(tempDir, { recursive: true, force: true });
   }
 });

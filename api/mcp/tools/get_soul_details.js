@@ -1,7 +1,7 @@
-import { getSoul, listSouls, soulIds } from '../../_lib/catalog.js';
+import { getSoulResolved, listSoulsResolved, soulIdsResolved } from '../../_lib/catalog.js';
 import { buildAuthMessage, getSellerAddress, setCors } from '../../_lib/payments.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   setCors(res, req.headers.origin);
 
   if (req.method === 'OPTIONS') {
@@ -17,12 +17,12 @@ export default function handler(req, res) {
     return res.status(400).json({ error: 'Missing required parameter: id' });
   }
 
-  const soul = getSoul(id);
+  const soul = await getSoulResolved(id);
   if (!soul) {
-    return res.status(404).json({ error: 'Soul not found', available_souls: soulIds() });
+    return res.status(404).json({ error: 'Soul not found', available_souls: await soulIdsResolved() });
   }
 
-  const summary = listSouls().find((item) => item.id === id);
+  const summary = (await listSoulsResolved()).find((item) => item.id === id);
   const sellerAddress = soul.sellerAddress || getSellerAddress();
 
   return res.status(200).json({

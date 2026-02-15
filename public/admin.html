@@ -31,6 +31,7 @@
         </button>
         <nav class="nav" id="topNav">
           <a href="/" class="nav-link">Discover</a>
+          <a href="/create.html" class="nav-link">Create</a>
           <a href="/admin.html" class="nav-link">Moderate</a>
         </nav>
       </div>
@@ -41,8 +42,8 @@
     <section class="admin-section">
       <div class="container">
         <div class="agent-api-card admin-header-card">
-          <h1>Marketplace Moderation</h1>
-          <p>Allowlisted human moderators can review creator submissions and publish approved OpenClaw souls.</p>
+          <h1>Moderation</h1>
+          <p>Only allowlisted moderators can remove listings from public visibility.</p>
         </div>
       </div>
     </section>
@@ -65,10 +66,10 @@
       <div class="container">
         <div class="agent-api-card">
           <div class="admin-actions">
-            <h3>Review Queue</h3>
-            <button id="refreshQueueBtn" class="btn btn-ghost">Refresh Queue</button>
+            <h3>Visible Listings</h3>
+            <button id="refreshListingsBtn" class="btn btn-ghost">Refresh</button>
           </div>
-          <div id="queueContainer" class="admin-list"></div>
+          <div id="visibleContainer" class="admin-list"></div>
         </div>
       </div>
     </section>
@@ -77,10 +78,10 @@
       <div class="container">
         <div class="agent-api-card">
           <div class="admin-actions">
-            <h3>Published Listings</h3>
-            <button id="refreshPublishedBtn" class="btn btn-ghost">Refresh Published</button>
+            <h3>Hidden Listings</h3>
+            <button id="refreshHiddenBtn" class="btn btn-ghost">Refresh</button>
           </div>
-          <div id="publishedContainer" class="admin-list"></div>
+          <div id="hiddenContainer" class="admin-list"></div>
         </div>
       </div>
     </section>

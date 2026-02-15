@@ -1,7 +1,7 @@
-import { listSouls } from '../../_lib/catalog.js';
+import { listSoulsResolved } from '../../_lib/catalog.js';
 import { setCors } from '../../_lib/payments.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   setCors(res, req.headers.origin);
 
   if (req.method === 'OPTIONS') {
@@ -13,7 +13,7 @@ export default function handler(req, res) {
   }
 
   const { category } = req.query;
-  const souls = listSouls();
+  const souls = await listSoulsResolved();
   const filtered = category ? souls.filter((soul) => soul.category === category) : souls;
 
   return res.status(200).json({

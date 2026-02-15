@@ -1,4 +1,4 @@
-import { getSoul, loadSoulContent, soulIds } from '../../_lib/catalog.js';
+import { getSoulResolved, loadSoulContent, soulIdsResolved } from '../../_lib/catalog.js';
 import { ethers } from 'ethers';
 import {
   buildPurchaseReceiptSetCookie,
@@ -121,9 +121,9 @@ export default async function handler(req, res) {
   }
 
   const soulId = req.query.id;
-  const soul = getSoul(soulId);
+  const soul = await getSoulResolved(soulId);
   if (!soul) {
-    return res.status(404).json({ error: 'Soul not found', available_souls: soulIds() });
+    return res.status(404).json({ error: 'Soul not found', available_souls: await soulIdsResolved() });
   }
 
   const sellerAddress = soul.sellerAddress || getSellerAddress();
@@ -365,7 +365,7 @@ export default async function handler(req, res) {
         });
       }
 
-    const content = await loadSoulContent(soulId);
+    const content = await loadSoulContent(soulId, { soul });
     if (!content) {
       return res.status(500).json({ error: 'Soul unavailable' });
     }
@@ -480,7 +480,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Unexpected x402 processing state' });
     }
 
-    const content = await loadSoulContent(soulId);
+    const content = await loadSoulContent(soulId, { soul });
     if (!content) {
       return res.status(500).json({ error: 'Soul unavailable' });
     }

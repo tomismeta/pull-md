@@ -42,38 +42,27 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `POST /api/mcp/tools/purchase_soul` (deprecated: returns `410`; use canonical `/api/souls/{id}/download`)
 - `POST /api/mcp/tools/check_entitlements`
 - `GET /api/mcp/tools/creator_marketplace?action=get_listing_template`
-- `POST /api/mcp/tools/creator_marketplace?action=validate_listing_draft`
-- `POST /api/mcp/tools/creator_marketplace?action=save_listing_draft`
-- `GET /api/mcp/tools/creator_marketplace?action=list_my_listing_drafts`
-- `GET /api/mcp/tools/creator_marketplace?action=get_my_listing_draft&draft_id=<id>`
-- `POST /api/mcp/tools/creator_marketplace?action=submit_listing_for_review`
+- `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (creator wallet auth, immediate publish)
+- `GET /api/mcp/tools/creator_marketplace?action=list_my_published_listings` (creator wallet auth)
 - `GET /api/mcp/tools/creator_marketplace?action=list_moderators`
-- `POST /api/mcp/tools/creator_marketplace?action=review_listing_submission` (moderator wallet auth)
-- `GET /api/mcp/tools/creator_marketplace?action=list_review_queue` (moderator wallet auth)
-- `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (moderator wallet auth)
+- `GET /api/mcp/tools/creator_marketplace?action=list_moderation_listings` (moderator wallet auth)
+- `POST /api/mcp/tools/creator_marketplace?action=remove_listing_visibility` (moderator wallet auth)
 - `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
 - `GET /api/souls/{id}/download`
 - `GET /api/auth/session`
 - `GET /api/health/facilitator`
 
-## Marketplace Foundations (Phase 1)
+## Creator Publish Model
 
-- `GET /api/mcp/tools/creator_marketplace?action=get_listing_template`:
-returns creator draft contract template for user-submitted soul listings.
-- `POST /api/mcp/tools/creator_marketplace?action=validate_listing_draft`:
-validates and normalizes listing + soul content payload and returns deterministic `draft_id`.
-- Scope:
-validation/normalization only in this phase; publish/listing activation is intentionally not enabled yet.
-- Creator draft storage:
-wallet-authenticated private draft save/list/get endpoints are available for builder workflows.
-- Review submission:
-wallet-authenticated submit endpoint transitions draft -> `submitted_for_review` with moderation metadata (`state: pending`).
-- Moderator moderation decision:
-`review_listing_submission` applies `approve`/`reject` decisions and records immutable audit entries.
-- Review queue + publish:
-allowlisted moderators can list pending queue and transition approved drafts to `published`.
-- Active catalog behavior:
-once a draft is `published`, it is promoted into the live catalog and becomes purchasable via `GET /api/souls/{id}/download`.
+- Immediate publish only:
+`POST /api/mcp/tools/creator_marketplace?action=publish_listing` publishes directly with creator wallet auth.
+- No drafts, no approval queue, no intermediate states.
+- Successful publish response includes:
+`soul_id`, `share_url`, and `purchase_endpoint`.
+- Published listings are immediately discoverable in:
+`GET /api/mcp/tools/list_souls` and purchasable through `GET /api/souls/{id}/download`.
+- Catalog persistence:
+when `MARKETPLACE_DATABASE_URL` (or `DATABASE_URL`/`POSTGRES_URL`) is configured, published catalog and moderation audit data are stored in Postgres JSONB tables for Vercel-safe durability. Without DB config, the local JSON store is used as fallback.
 
 ## Marketplace Moderation Configuration
 
@@ -85,10 +74,13 @@ once a draft is `published`, it is promoted into the live catalog and becomes pu
 Audit trail:
 - Marketplace moderation actions append immutable JSONL entries at:
 `.marketplace-drafts/review-audit.jsonl`
+- If Postgres is configured, moderation audit events are stored in `soul_marketplace_audit` and published catalog entries are stored in `soul_catalog_entries`.
 - Lightweight moderation UI:
 `/admin.html` (requires connected wallet in moderator allowlist; action requests are signed per call).
+- Moderation scope:
+remove listing visibility only (`remove_listing_visibility`). No approval/publish queue workflow.
 - Creator UI:
-`/create.html` (wallet-authenticated draft validate/save/list/load/submit workflow against `creator_marketplace` actions).
+`/create.html` (wallet-authenticated immediate publish with share-link output + list of creator-owned published souls).
 
 ## Environment Variables
 
@@ -107,6 +99,10 @@ Audit trail:
 | `FACILITATOR_PREFLIGHT_TTL_MS` | optional | Cached preflight TTL (default `120000`) |
 | `X402_ASSET_TRANSFER_METHOD` | optional | `eip3009` (default) or `permit2`; use `eip3009` for CDP Base mainnet compatibility |
 | `SOUL_META_STARTER_V1` | optional | Env fallback content for `meta-starter-v1` |
+| `MARKETPLACE_DATABASE_URL` | optional | Preferred Postgres connection string for creator publish/moderation/published catalog |
+| `DATABASE_URL` | optional | Fallback Postgres connection string (used if `MARKETPLACE_DATABASE_URL` is unset) |
+| `POSTGRES_URL` | optional | Alternate Postgres connection string fallback |
+| `MARKETPLACE_DB_SSL` | optional | Force SSL for Postgres (`true`/`false`) when provider requires TLS |
 
 ## Facilitator Health Checks
 

@@ -2,6 +2,7 @@ import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { listPublishedCatalogEntries } from './marketplace.js';
 
 export const SOUL_CATALOG = {
   'meta-starter-v1': {
@@ -105,7 +106,10 @@ function loadPublishedCatalogSync() {
     const raw = fs.readFileSync(PUBLISHED_CATALOG_PATH, 'utf8');
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.entries)) return [];
-    return parsed.entries.filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string');
+    return parsed.entries.filter((entry) => {
+      if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string') return false;
+      return String(entry.visibility || 'public').toLowerCase() !== 'hidden';
+    });
   } catch (_) {
     return [];
   }
@@ -119,8 +123,25 @@ function mergedCatalogValues() {
   return [...byId.values()];
 }
 
-export function listSouls() {
-  return mergedCatalogValues().map((soul) => ({
+async function mergedCatalogValuesAsync() {
+  const byId = new Map(Object.values(SOUL_CATALOG).map((item) => [item.id, item]));
+  let published = [];
+  try {
+    published = await listPublishedCatalogEntries();
+  } catch (_) {
+    published = loadPublishedCatalogSync();
+  }
+  for (const entry of Array.isArray(published) ? published : []) {
+    if (entry && typeof entry === 'object' && typeof entry.id === 'string') {
+      byId.set(entry.id, entry);
+    }
+  }
+  return [...byId.values()];
+}
+
+function toSoulSummary(soul) {
+  const sharePath = typeof soul.sharePath === 'string' && soul.sharePath.trim() ? soul.sharePath : `/soul.html?id=${encodeURIComponent(soul.id)}`;
+  return {
     id: soul.id,
     name: soul.name,
     description: soul.description,
@@ -138,9 +159,14 @@ export function listSouls() {
     preview: { available: true, excerpt: soul.preview },
     source_label: soul.sourceLabel || null,
     source_url: soul.sourceUrl || null,
+    share_path: sharePath,
     purchase_endpoint: `/api/souls/${soul.id}/download`,
     payment_protocol: 'x402'
-  }));
+  };
+}
+
+export function listSouls() {
+  return mergedCatalogValues().map((soul) => toSoulSummary(soul));
 }
 
 export function getSoul(id) {
@@ -153,15 +179,32 @@ export function soulIds() {
   return mergedCatalogValues().map((soul) => soul.id);
 }
 
-export async function loadSoulContent(id) {
-  const soul = getSoul(id);
+export async function listSoulsResolved() {
+  const souls = await mergedCatalogValuesAsync();
+  return souls.map((soul) => toSoulSummary(soul));
+}
+
+export async function getSoulResolved(id) {
+  if (SOUL_CATALOG[id]) return SOUL_CATALOG[id];
+  const published = await mergedCatalogValuesAsync();
+  return published.find((entry) => entry.id === id) || null;
+}
+
+export async function soulIdsResolved() {
+  const souls = await mergedCatalogValuesAsync();
+  return souls.map((soul) => soul.id);
+}
+
+export async function loadSoulContent(id, options = {}) {
+  const soul = options?.soul || (await getSoulResolved(id)) || getSoul(id);
   if (!soul) return null;
 
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  const candidates = [
-    path.join(process.cwd(), soul.contentFile),
-    path.resolve(moduleDir, '../../', soul.contentFile)
-  ];
+  const candidates = [];
+  if (typeof soul.contentFile === 'string' && soul.contentFile.trim()) {
+    candidates.push(path.join(process.cwd(), soul.contentFile));
+    candidates.push(path.resolve(moduleDir, '../../', soul.contentFile));
+  }
 
   for (const diskPath of candidates) {
     try {

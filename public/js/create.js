@@ -9,8 +9,7 @@ const STATE = {
   provider: null,
   signer: null,
   wallet: null,
-  walletType: null,
-  lastDraftId: null
+  walletType: null
 };
 
 function toast(message, type = 'info') {
@@ -28,8 +27,14 @@ function toast(message, type = 'info') {
 }
 
 function setStatus(text) {
-  const el = document.getElementById('draftStatus');
+  const el = document.getElementById('publishStatus');
   if (el) el.textContent = text;
+}
+
+function setOutput(value) {
+  const output = document.getElementById('publishOutput');
+  if (!output) return;
+  output.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }
 
 function initProviderDiscovery() {
@@ -37,8 +42,7 @@ function initProviderDiscovery() {
   providerDiscoveryInitialized = true;
   window.addEventListener('eip6963:announceProvider', (event) => {
     const detail = event?.detail;
-    if (!detail || typeof detail !== 'object') return;
-    if (!detail.provider || typeof detail.provider !== 'object') return;
+    if (!detail || typeof detail !== 'object' || !detail.provider || typeof detail.provider !== 'object') return;
     providerMetadata.set(detail.provider, {
       name: String(detail?.info?.name || ''),
       rdns: String(detail?.info?.rdns || '')
@@ -51,9 +55,7 @@ function getInjectedProviders() {
   const providers = [];
   if (Array.isArray(window?.ethereum?.providers)) {
     for (const candidate of window.ethereum.providers) {
-      if (candidate && typeof candidate === 'object' && !providers.includes(candidate)) {
-        providers.push(candidate);
-      }
+      if (candidate && typeof candidate === 'object' && !providers.includes(candidate)) providers.push(candidate);
     }
   }
   if (window?.ethereum && typeof window.ethereum === 'object' && !providers.includes(window.ethereum)) {
@@ -194,93 +196,54 @@ async function ensureBaseNetwork(provider) {
   }
 }
 
-async function connectWithProvider(rawProvider) {
-  if (!rawProvider) {
-    toast('Wallet provider not found', 'error');
-    return;
-  }
-  return connectWithProviderInternal(rawProvider, 'injected', false);
-}
-
 async function connectWithProviderInternal(rawProvider, walletType, silent) {
-  if (!rawProvider) {
-    throw new Error('Wallet provider not found');
-  }
+  if (!rawProvider) throw new Error('Wallet provider not found');
   closeWalletModal();
-  try {
-    STATE.provider = new ethers.BrowserProvider(rawProvider, 'any');
-    if (silent) {
-      const accounts = await STATE.provider.send('eth_accounts', []);
-      const first = Array.isArray(accounts) && accounts[0] ? String(accounts[0]) : '';
-      if (!first) throw new Error('No existing wallet authorization found');
-    } else {
-      await STATE.provider.send('eth_requestAccounts', []);
-    }
-    STATE.signer = await STATE.provider.getSigner();
-    STATE.wallet = (await STATE.signer.getAddress()).toLowerCase();
-    STATE.walletType = walletType;
-    await ensureBaseNetwork(STATE.provider);
-    saveWalletSession();
-    setWalletButton();
-    updateModeratorNavLinkVisibility();
-    if (!silent) toast('Wallet connected', 'success');
-  } catch (error) {
-    if (!silent) {
-      toast(error.message || 'Wallet connection failed', 'error');
-    }
-    throw error;
+  STATE.provider = new ethers.BrowserProvider(rawProvider, 'any');
+  if (silent) {
+    const accounts = await STATE.provider.send('eth_accounts', []);
+    const first = Array.isArray(accounts) && accounts[0] ? String(accounts[0]) : '';
+    if (!first) throw new Error('No existing wallet authorization found');
+  } else {
+    await STATE.provider.send('eth_requestAccounts', []);
   }
+  STATE.signer = await STATE.provider.getSigner();
+  STATE.wallet = (await STATE.signer.getAddress()).toLowerCase();
+  STATE.walletType = walletType;
+  await ensureBaseNetwork(STATE.provider);
+  saveWalletSession();
+  setWalletButton();
+  updateModeratorNavLinkVisibility();
 }
 
 async function connectMetaMask() {
   const metamaskProvider = findProviderByKind('metamask');
-  if (metamaskProvider) {
-    return connectWithProviderInternal(metamaskProvider, 'metamask', false);
-  }
-
+  if (metamaskProvider) return connectWithProviderInternal(metamaskProvider, 'metamask', false);
   const fallback = fallbackInjectedProvider();
-  if (!fallback) {
-    toast('MetaMask not found', 'error');
-    return;
-  }
-
+  if (!fallback) return toast('MetaMask not found', 'error');
   toast('MetaMask-specific provider not detected. Using current injected wallet.', 'warning');
   return connectWithProviderInternal(fallback, 'metamask', false);
 }
 
 async function connectRabby() {
   const rabbyProvider = findProviderByKind('rabby');
-  if (rabbyProvider) {
-    return connectWithProviderInternal(rabbyProvider, 'rabby', false);
-  }
-
+  if (rabbyProvider) return connectWithProviderInternal(rabbyProvider, 'rabby', false);
   const fallback = fallbackInjectedProvider();
-  if (!fallback) {
-    toast('Rabby wallet not found', 'error');
-    return;
-  }
-
+  if (!fallback) return toast('Rabby wallet not found', 'error');
   toast('Rabby-specific provider not detected. Using current injected wallet.', 'warning');
   return connectWithProviderInternal(fallback, 'rabby', false);
 }
 
 async function connectBankr() {
   const bankrProvider = findProviderByKind('bankr');
-  if (bankrProvider) {
-    return connectWithProviderInternal(bankrProvider, 'bankr', false);
-  }
-
+  if (bankrProvider) return connectWithProviderInternal(bankrProvider, 'bankr', false);
   const fallback = fallbackInjectedProvider();
-  if (!fallback) {
-    toast('Bankr Wallet not found', 'error');
-    return;
-  }
-
+  if (!fallback) return toast('Bankr Wallet not found', 'error');
   toast('Bankr-specific provider not detected. Using current injected wallet.', 'warning');
   return connectWithProviderInternal(fallback, 'bankr', false);
 }
 
-async function disconnectWallet() {
+function disconnectWallet() {
   STATE.provider = null;
   STATE.signer = null;
   STATE.wallet = null;
@@ -288,22 +251,22 @@ async function disconnectWallet() {
   clearWalletSession();
   setWalletButton();
   updateModeratorNavLinkVisibility();
+  renderPublishedList([]);
   toast('Wallet disconnected', 'info');
 }
 
 async function restoreWalletSession() {
   const session = readWalletSession();
   if (!session) return;
-
   const providerCandidate = findProviderByKind(session.walletType) || fallbackInjectedProvider();
   if (!providerCandidate) {
     clearWalletSession();
     return;
   }
-
   try {
     await connectWithProviderInternal(providerCandidate, session.walletType, true);
     if (STATE.wallet !== session.wallet) clearWalletSession();
+    await refreshPublished();
   } catch (_) {
     clearWalletSession();
   }
@@ -324,21 +287,17 @@ async function loadModeratorAllowlist() {
   }
   updateModeratorNavLinkVisibility();
 }
-function authMessage(action, timestamp) {
-  return [
-    'SoulStarter Creator Authentication',
-    `address:${STATE.wallet}`,
-    `action:${action}`,
-    `timestamp:${timestamp}`
-  ].join('\n');
+
+function creatorAuthMessage(action, timestamp) {
+  return ['SoulStarter Creator Authentication', `address:${STATE.wallet}`, `action:${action}`, `timestamp:${timestamp}`].join(
+    '\n'
+  );
 }
 
 async function creatorAuth(action) {
-  if (!STATE.signer || !STATE.wallet) {
-    throw new Error('Connect wallet first');
-  }
+  if (!STATE.signer || !STATE.wallet) throw new Error('Connect wallet first');
   const authTimestamp = Date.now();
-  const authSignature = await STATE.signer.signMessage(authMessage(action, authTimestamp));
+  const authSignature = await STATE.signer.signMessage(creatorAuthMessage(action, authTimestamp));
   return {
     wallet_address: STATE.wallet,
     auth_signature: authSignature,
@@ -346,12 +305,11 @@ async function creatorAuth(action) {
   };
 }
 
-function collectDraft() {
-  const name = document.getElementById('name').value.trim();
-  const description = document.getElementById('description').value.trim();
-  const price = Number(document.getElementById('priceUsdc').value);
-  const soulMarkdown = document.getElementById('soulMarkdown').value;
-
+function collectListing() {
+  const name = document.getElementById('name')?.value.trim() || '';
+  const description = document.getElementById('description')?.value.trim() || '';
+  const price = Number(document.getElementById('priceUsdc')?.value);
+  const soulMarkdown = document.getElementById('soulMarkdown')?.value || '';
   return {
     name,
     price_usdc: Number.isFinite(price) ? price : 0,
@@ -360,105 +318,83 @@ function collectDraft() {
   };
 }
 
-function applyDraft(draft) {
-  const payload = draft && typeof draft === 'object' ? draft : {};
-  const listing = payload.listing && typeof payload.listing === 'object' ? payload.listing : payload;
-  const assets = payload.assets && typeof payload.assets === 'object' ? payload.assets : payload;
-  document.getElementById('name').value = listing.name || '';
-  document.getElementById('description').value = listing.description || '';
-  document.getElementById('priceUsdc').value = listing.price_usdc || '';
-  document.getElementById('soulMarkdown').value = assets.soul_markdown || '';
+function applyTemplate(template) {
+  const payload = template && typeof template === 'object' ? template : {};
+  document.getElementById('name').value = payload.name || '';
+  document.getElementById('description').value = payload.description || '';
+  document.getElementById('priceUsdc').value = payload.price_usdc || '';
+  document.getElementById('soulMarkdown').value = payload.soul_markdown || '';
 }
 
 async function api(action, { method = 'GET', body, headers = {} } = {}) {
-  const url = `${API_BASE}?action=${encodeURIComponent(action)}`;
-  const response = await fetch(url, {
+  const response = await fetch(`${API_BASE}?action=${encodeURIComponent(action)}`, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers
-    },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: body ? JSON.stringify(body) : undefined
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || payload.auth_message_template || `Request failed (${response.status})`);
-  }
+  if (!response.ok) throw new Error(payload.error || payload.auth_message_template || `Request failed (${response.status})`);
   return payload;
-}
-
-function setValidationOutput(value) {
-  const output = document.getElementById('validationOutput');
-  if (!output) return;
-  output.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }
 
 async function loadTemplate() {
-  const data = await api('get_listing_template');
-  applyDraft(data.template);
-  setValidationOutput(data);
-  setStatus('Template loaded.');
+  const payload = await api('get_listing_template');
+  applyTemplate(payload.template);
+  setOutput(payload);
+  setStatus('Example loaded.');
 }
 
-async function validateDraft() {
-  const payload = await api('validate_listing_draft', {
-    method: 'POST',
-    body: collectDraft()
-  });
-  STATE.lastDraftId = payload.draft_id || null;
-  setValidationOutput(payload);
-  setStatus(payload.ok ? `Valid draft: ${payload.draft_id}` : 'Validation failed.');
-  toast(payload.ok ? 'Draft validated' : 'Validation has errors', payload.ok ? 'success' : 'warning');
-  return payload;
-}
-
-async function saveDraft() {
-  const auth = await creatorAuth('save_listing_draft');
-  const payload = await api('save_listing_draft', {
-    method: 'POST',
-    body: {
-      ...auth,
-      draft: collectDraft()
-    }
-  });
-  STATE.lastDraftId = payload?.draft?.draft_id || null;
-  setValidationOutput(payload);
-  setStatus(`Draft saved: ${STATE.lastDraftId || 'unknown'}`);
-  toast('Draft saved', 'success');
-  return payload;
-}
-
-function renderDraftList(items) {
-  const container = document.getElementById('draftList');
+function renderPublishedList(items) {
+  const container = document.getElementById('publishedList');
   if (!container) return;
+  if (!STATE.wallet) {
+    container.innerHTML = '<p class="admin-empty">Connect your wallet to view your published souls.</p>';
+    return;
+  }
   if (!Array.isArray(items) || items.length === 0) {
-    container.innerHTML = '<p class="admin-empty">No drafts found for this wallet.</p>';
+    container.innerHTML = '<p class="admin-empty">No published souls for this wallet yet.</p>';
     return;
   }
   container.innerHTML = items
-    .map(
-      (item) => `
-      <article class="admin-card">
-        <div class="admin-card-row">
-          <h4>${item.name || item.draft_id}</h4>
-          <span class="badge badge-hybrid">${item.status || 'draft'}</span>
-        </div>
-        <p class="admin-line">draft_id: <code>${item.draft_id}</code></p>
-        <p class="admin-line">soul_id: <code>${item.soul_id || '-'}</code></p>
-        <p class="admin-line">updated: <code>${item.updated_at || '-'}</code></p>
-        <div class="admin-card-actions">
-          <button class="btn btn-ghost" data-action="load-draft" data-draft="${item.draft_id}">load</button>
-          <button class="btn btn-primary" data-action="submit-review" data-draft="${item.draft_id}">submit for review</button>
-        </div>
-      </article>
-    `
-    )
+    .map((item) => {
+      const visibility = String(item.visibility || 'public');
+      const shareUrl = String(item.share_url || '');
+      return `
+        <article class="admin-card">
+          <div class="admin-card-row">
+            <h4>${escapeHtml(item.name || item.soul_id)}</h4>
+            <span class="badge ${visibility === 'hidden' ? 'badge-hybrid' : 'badge-organic'}">${escapeHtml(visibility)}</span>
+          </div>
+          <p class="admin-line">soul_id: <code>${escapeHtml(item.soul_id || '-')}</code></p>
+          <p class="admin-line">price: <code>${escapeHtml(item.price_display || '')}</code></p>
+          <p class="admin-line">published: <code>${escapeHtml(item.published_at || '-')}</code></p>
+          ${
+            shareUrl
+              ? `<div class="admin-card-actions">
+                  <a class="btn btn-ghost" href="${escapeHtml(shareUrl)}" target="_blank" rel="noopener noreferrer">open share link</a>
+                  <button class="btn btn-primary" data-action="copy-share" data-url="${escapeHtml(shareUrl)}">copy link</button>
+                </div>`
+              : ''
+          }
+        </article>
+      `;
+    })
     .join('');
 }
 
-async function listDrafts() {
-  const auth = await creatorAuth('list_my_listing_drafts');
-  const payload = await api('list_my_listing_drafts', {
+function escapeHtml(value) {
+  const div = document.createElement('div');
+  div.textContent = String(value || '');
+  return div.innerHTML;
+}
+
+async function refreshPublished() {
+  if (!STATE.wallet) {
+    renderPublishedList([]);
+    return;
+  }
+  const auth = await creatorAuth('list_my_published_listings');
+  const payload = await api('list_my_published_listings', {
     method: 'GET',
     headers: {
       'X-WALLET-ADDRESS': auth.wallet_address,
@@ -466,46 +402,32 @@ async function listDrafts() {
       'X-AUTH-TIMESTAMP': String(auth.auth_timestamp)
     }
   });
-  renderDraftList(payload.drafts || []);
-  setStatus(`Loaded ${payload.count || 0} drafts.`);
-  return payload;
+  renderPublishedList(payload.listings || []);
+  setStatus(`Loaded ${payload.count || 0} published listing(s).`);
 }
 
-async function loadDraftById(draftId) {
-  const auth = await creatorAuth('get_my_listing_draft');
-  const response = await fetch(
-    `${API_BASE}?action=get_my_listing_draft&draft_id=${encodeURIComponent(draftId)}`,
-    {
-      method: 'GET',
-      headers: {
-        'X-WALLET-ADDRESS': auth.wallet_address,
-        'X-AUTH-SIGNATURE': auth.auth_signature,
-        'X-AUTH-TIMESTAMP': String(auth.auth_timestamp)
-      }
-    }
-  );
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || `Unable to load draft (${response.status})`);
-  }
-  applyDraft(payload?.draft?.normalized || {});
-  setValidationOutput(payload);
-  setStatus(`Draft loaded: ${draftId}`);
-  toast('Draft loaded', 'success');
-}
-
-async function submitForReview(draftId) {
-  const auth = await creatorAuth('submit_listing_for_review');
-  const payload = await api('submit_listing_for_review', {
+async function publishNow() {
+  const auth = await creatorAuth('publish_listing');
+  const payload = await api('publish_listing', {
     method: 'POST',
     body: {
       ...auth,
-      draft_id: draftId
+      listing: collectListing()
     }
   });
-  setValidationOutput(payload);
-  setStatus(`Draft submitted: ${draftId}`);
-  toast('Draft submitted for review', 'success');
+  setOutput(payload);
+  setStatus(`Published ${payload?.listing?.soul_id || 'listing'} successfully.`);
+  toast('Soul published', 'success');
+  await refreshPublished();
+}
+
+async function copyShareUrl(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('Share link copied', 'success');
+  } catch (_) {
+    toast('Unable to copy link', 'warning');
+  }
 }
 
 function bindEvents() {
@@ -516,31 +438,16 @@ function bindEvents() {
       toast(error.message, 'error');
     }
   });
-  document.getElementById('validateBtn')?.addEventListener('click', async () => {
+  document.getElementById('publishBtn')?.addEventListener('click', async () => {
     try {
-      await validateDraft();
+      await publishNow();
     } catch (error) {
       toast(error.message, 'error');
     }
   });
-  document.getElementById('saveDraftBtn')?.addEventListener('click', async () => {
+  document.getElementById('refreshPublishedBtn')?.addEventListener('click', async () => {
     try {
-      await saveDraft();
-      await listDrafts();
-    } catch (error) {
-      toast(error.message, 'error');
-    }
-  });
-  document.getElementById('listDraftsBtn')?.addEventListener('click', async () => {
-    try {
-      await listDrafts();
-    } catch (error) {
-      toast(error.message, 'error');
-    }
-  });
-  document.getElementById('refreshDraftsBtn')?.addEventListener('click', async () => {
-    try {
-      await listDrafts();
+      await refreshPublished();
     } catch (error) {
       toast(error.message, 'error');
     }
@@ -548,22 +455,10 @@ function bindEvents() {
   document.addEventListener('click', async (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const action = target.getAttribute('data-action');
-    const draftId = target.getAttribute('data-draft');
-    if (!action || !draftId) return;
-    target.setAttribute('disabled', 'true');
-    try {
-      if (action === 'load-draft') {
-        await loadDraftById(draftId);
-      } else if (action === 'submit-review') {
-        await submitForReview(draftId);
-        await listDrafts();
-      }
-    } catch (error) {
-      toast(error.message, 'error');
-    } finally {
-      target.removeAttribute('disabled');
-    }
+    if (target.getAttribute('data-action') !== 'copy-share') return;
+    const url = target.getAttribute('data-url');
+    if (!url) return;
+    await copyShareUrl(url);
   });
 }
 
@@ -606,13 +501,40 @@ function initDefaults() {
   initProviderDiscovery();
   initMobileNav();
   setWalletButton();
+  setStatus('Ready.');
+  setOutput('No publish yet.');
+  renderPublishedList([]);
 }
 
-bindEvents();
 initDefaults();
+bindEvents();
 loadModeratorAllowlist().then(() => restoreWalletSession());
 
 window.closeWalletModal = closeWalletModal;
-window.connectMetaMask = connectMetaMask;
-window.connectRabby = connectRabby;
-window.connectBankr = connectBankr;
+window.connectMetaMask = async () => {
+  try {
+    await connectMetaMask();
+    toast('Wallet connected', 'success');
+    await refreshPublished();
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+};
+window.connectRabby = async () => {
+  try {
+    await connectRabby();
+    toast('Wallet connected', 'success');
+    await refreshPublished();
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+};
+window.connectBankr = async () => {
+  try {
+    await connectBankr();
+    toast('Wallet connected', 'success');
+    await refreshPublished();
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+};

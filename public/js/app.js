@@ -439,7 +439,7 @@ function updateSoulPagePurchaseState() {
   const soulId = match?.[1];
   if (!soulId) return;
   const owned = isSoulAccessible(soulId);
-  btn.textContent = owned ? 'Download Soul' : 'Purchase Soul';
+  btn.textContent = owned ? 'Download SOUL.md' : 'Purchase SOUL.md';
 }
 
 function renderOwnedSouls() {
@@ -488,7 +488,8 @@ function renderOwnedSouls() {
             <span class="price">${escapeHtml(isOwned ? 'Accessible' : 'Creator Access')}</span>
           </div>
         </div>
-        <button class="btn btn-primary btn-full" onclick="downloadOwnedSoul('${escapeHtml(soul.id)}')">Download Soul File</button>
+        <p class="soul-format-label">File: SOUL.md</p>
+        <button class="btn btn-primary btn-full" onclick="downloadOwnedSoul('${escapeHtml(soul.id)}')">Download SOUL.md</button>
       </article>
     `;
   });
@@ -1323,7 +1324,7 @@ async function loadSouls() {
       .map(
         (soul) => {
           const owned = isSoulAccessible(soul.id);
-          const cta = owned ? 'Download Soul' : 'Purchase Soul';
+          const cta = owned ? 'Download SOUL.md' : 'Purchase SOUL.md';
           return `
       <article class="soul-card ${soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : ''}" data-soul-id="${escapeHtml(soul.id)}">
         <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
@@ -1346,6 +1347,7 @@ async function loadSouls() {
             <span class="currency">USDC</span>
           </div>
         </div>
+        <p class="soul-format-label">File: SOUL.md</p>
         <button class="btn btn-primary btn-full" onclick="${owned ? `downloadOwnedSoul('${escapeHtml(soul.id)}')` : `purchaseSoul('${escapeHtml(soul.id)}')`}">${escapeHtml(cta)}</button>
       </article>
     `;

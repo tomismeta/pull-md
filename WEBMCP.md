@@ -27,6 +27,7 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 
 1. `GET /api/mcp/tools/list_souls`
 - Lists available souls and pricing metadata.
+- Includes built-in catalog souls plus moderator-published creator listings.
 
 2. `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
 - Returns detailed metadata and endpoint usage details for one soul.
@@ -39,62 +40,41 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 `{ wallet_address, proofs: [{ soul_id, receipt }] }`
 
 5. `GET /api/mcp/tools/creator_marketplace?action=get_listing_template`
-- Returns marketplace listing draft template for creator upload workflows.
+- Returns template for immediate publish payloads.
 
-6. `POST /api/mcp/tools/creator_marketplace?action=validate_listing_draft`
-- Validates and normalizes creator listing payloads.
-- Returns deterministic `draft_id`, `errors`, `warnings`, and normalized payload.
-- This phase does not publish listings; it only prepares validated drafts.
+6. `POST /api/mcp/tools/creator_marketplace?action=publish_listing`
+- Creator wallet-authenticated immediate publish.
+- Request fields:
+`wallet_address`, `auth_signature`, `auth_timestamp`, `listing`.
+- No draft state or approval queue.
+- Success returns `share_url` and `purchase_endpoint`.
 
-7. `POST /api/mcp/tools/creator_marketplace?action=save_listing_draft`
-- Wallet-authenticated save/upsert for creator draft records.
+7. `GET /api/mcp/tools/creator_marketplace?action=list_my_published_listings`
+- Creator wallet-authenticated list of creator-owned listings (includes hidden).
 
-8. `GET /api/mcp/tools/creator_marketplace?action=list_my_listing_drafts`
-- Wallet-authenticated list of creator-owned draft summaries.
+8. `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
+- Public list of visible listings only.
+- Backed by Postgres JSONB when configured (`MARKETPLACE_DATABASE_URL`/`DATABASE_URL`/`POSTGRES_URL`), with local file fallback for development.
 
-9. `GET /api/mcp/tools/creator_marketplace?action=get_my_listing_draft&draft_id=<id>`
-- Wallet-authenticated fetch of one full creator-owned draft.
-
-10. `POST /api/mcp/tools/creator_marketplace?action=submit_listing_for_review`
-- Wallet-authenticated transition of a draft to `submitted_for_review`.
-- Adds moderation metadata:
-`{ state: "pending", submitted_at, reviewed_at: null, reviewer: null, notes: null }`
-- Publish is still intentionally disabled in this phase.
-
-11. `POST /api/mcp/tools/creator_marketplace?action=review_listing_submission` (moderator wallet auth)
-- Headers:
-`X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
-- Body:
-`{ wallet_address, draft_id, decision: "approve" | "reject", reviewer?, notes? }`
-- Applies moderation decision and updates status:
-`approved_for_publish` or `rejected`.
-- Writes immutable audit entries to local review audit stream.
-
-12. `GET /api/mcp/tools/creator_marketplace?action=list_review_queue` (moderator wallet auth)
-- Headers:
-`X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
-- Returns drafts in `submitted_for_review` status.
-
-13. `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (moderator wallet auth)
-- Headers:
-`X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
-- Body:
-`{ wallet_address, draft_id, reviewer?, notes? }`
-- Requires draft status `approved_for_publish`.
-- Transitions draft to `published` and writes immutable audit entry.
-- Published drafts are promoted to active catalog and are purchasable from:
-`GET /api/souls/{published_soul_id}/download`
-
-14. `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
-- Public listing of all drafts currently in `published` status.
-
-15. `GET /api/mcp/tools/creator_marketplace?action=list_moderators`
+9. `GET /api/mcp/tools/creator_marketplace?action=list_moderators`
 - Lists allowlisted moderator wallet addresses.
 
+10. `GET /api/mcp/tools/creator_marketplace?action=list_moderation_listings` (moderator wallet auth)
+- Headers:
+`X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
+- Returns `visible[]` and `hidden[]` listing partitions.
+
+11. `POST /api/mcp/tools/creator_marketplace?action=remove_listing_visibility` (moderator wallet auth)
+- Headers:
+`X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
+- Body:
+`{ soul_id, reason? }`
+- Hides listing from public discovery/purchase without draft state transitions.
+
 UI companion:
-- `/admin.html` provides a lightweight human moderation console for queue review, approve/reject, and publish actions.
+- `/admin.html` provides a lightweight human moderation console for visibility removal only.
 - It requires connected allowlisted moderator wallet and signs `SoulStarter Moderator Authentication` messages per moderation action.
-- `/create.html` provides a lightweight creator console for draft template, validate, save, list/load, and submit-for-review flows.
+- `/create.html` provides a lightweight creator console for immediate publish and share-link retrieval.
 - Creator auth actions use wallet signatures over `SoulStarter Creator Authentication` messages with action-scoped timestamps.
 
 ## Download Endpoint
@@ -294,9 +274,9 @@ action:redownload
 timestamp:<unix_ms>
 ```
 
-## Creator Draft Auth Message
+## Creator Publish Auth Message
 
-Private creator-draft tools require wallet-auth headers:
+Creator publish tools require wallet-auth headers:
 - `X-WALLET-ADDRESS`
 - `X-AUTH-SIGNATURE`
 - `X-AUTH-TIMESTAMP`
@@ -311,10 +291,8 @@ timestamp:<unix_ms>
 ```
 
 Where `<tool_action>` is one of:
-- `save_listing_draft`
-- `list_my_listing_drafts`
-- `get_my_listing_draft`
-- `submit_listing_for_review`
+- `publish_listing`
+- `list_my_published_listings`
 
 ## Moderator Auth Message
 
@@ -333,6 +311,5 @@ timestamp:<unix_ms>
 ```
 
 Where `<tool_action>` is one of:
-- `list_review_queue`
-- `review_listing_submission`
-- `publish_listing`
+- `list_moderation_listings`
+- `remove_listing_visibility`

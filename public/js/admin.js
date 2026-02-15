@@ -31,8 +31,7 @@ function initProviderDiscovery() {
   providerDiscoveryInitialized = true;
   window.addEventListener('eip6963:announceProvider', (event) => {
     const detail = event?.detail;
-    if (!detail || typeof detail !== 'object') return;
-    if (!detail.provider || typeof detail.provider !== 'object') return;
+    if (!detail || typeof detail !== 'object' || !detail.provider || typeof detail.provider !== 'object') return;
     providerMetadata.set(detail.provider, {
       name: String(detail?.info?.name || ''),
       rdns: String(detail?.info?.rdns || '')
@@ -45,9 +44,7 @@ function getInjectedProviders() {
   const providers = [];
   if (Array.isArray(window?.ethereum?.providers)) {
     for (const candidate of window.ethereum.providers) {
-      if (candidate && typeof candidate === 'object' && !providers.includes(candidate)) {
-        providers.push(candidate);
-      }
+      if (candidate && typeof candidate === 'object' && !providers.includes(candidate)) providers.push(candidate);
     }
   }
   if (window?.ethereum && typeof window.ethereum === 'object' && !providers.includes(window.ethereum)) {
@@ -143,6 +140,12 @@ function formatDate(value) {
   return date.toLocaleString();
 }
 
+function escapeHtml(value) {
+  const div = document.createElement('div');
+  div.textContent = String(value || '');
+  return div.innerHTML;
+}
+
 function openWalletModal() {
   const modal = document.getElementById('walletModal');
   if (modal) modal.style.display = 'flex';
@@ -173,10 +176,6 @@ async function ensureBaseNetwork(provider) {
     }
     throw error;
   }
-}
-
-async function connectWithProvider(rawProvider) {
-  return connectWithProviderInternal(rawProvider, 'injected', false);
 }
 
 function saveWalletSession() {
@@ -233,52 +232,33 @@ async function connectWithProviderInternal(rawProvider, walletType, silent) {
 
 async function connectMetaMask() {
   const metamaskProvider = findProviderByKind('metamask');
-  if (metamaskProvider) {
-    return connectWithProviderInternal(metamaskProvider, 'metamask', false);
-  }
+  if (metamaskProvider) return connectWithProviderInternal(metamaskProvider, 'metamask', false);
   const fallback = fallbackInjectedProvider();
-  if (!fallback) {
-    showToast('MetaMask not found', 'error');
-    return;
-  }
+  if (!fallback) return showToast('MetaMask not found', 'error');
   showToast('MetaMask-specific provider not detected. Using current injected wallet.', 'warning');
   return connectWithProviderInternal(fallback, 'metamask', false);
 }
 
 async function connectRabby() {
   const rabbyProvider = findProviderByKind('rabby');
-  if (rabbyProvider) {
-    return connectWithProviderInternal(rabbyProvider, 'rabby', false);
-  }
+  if (rabbyProvider) return connectWithProviderInternal(rabbyProvider, 'rabby', false);
   const fallback = fallbackInjectedProvider();
-  if (!fallback) {
-    showToast('Rabby wallet not found', 'error');
-    return;
-  }
+  if (!fallback) return showToast('Rabby wallet not found', 'error');
   showToast('Rabby-specific provider not detected. Using current injected wallet.', 'warning');
   return connectWithProviderInternal(fallback, 'rabby', false);
 }
 
 async function connectBankr() {
   const bankrProvider = findProviderByKind('bankr');
-  if (bankrProvider) {
-    return connectWithProviderInternal(bankrProvider, 'bankr', false);
-  }
+  if (bankrProvider) return connectWithProviderInternal(bankrProvider, 'bankr', false);
   const fallback = fallbackInjectedProvider();
-  if (!fallback) {
-    showToast('Bankr Wallet not found', 'error');
-    return;
-  }
+  if (!fallback) return showToast('Bankr Wallet not found', 'error');
   showToast('Bankr-specific provider not detected. Using current injected wallet.', 'warning');
   return connectWithProviderInternal(fallback, 'bankr', false);
 }
+
 function moderatorAuthMessage(action, timestamp) {
-  return [
-    'SoulStarter Moderator Authentication',
-    `address:${state.wallet}`,
-    `action:${action}`,
-    `timestamp:${timestamp}`
-  ].join('\n');
+  return ['SoulStarter Moderator Authentication', `address:${state.wallet}`, `action:${action}`, `timestamp:${timestamp}`].join('\n');
 }
 
 async function signModeratorHeaders(action) {
@@ -294,14 +274,10 @@ async function signModeratorHeaders(action) {
 }
 
 async function apiCall(action, { method = 'GET', body, moderatorAuth = false } = {}) {
-  const url = `${API_BASE}?action=${encodeURIComponent(action)}`;
-  const authHeaders = moderatorAuth ? await signModeratorHeaders(action) : {};
-  const response = await fetch(url, {
+  const headers = moderatorAuth ? await signModeratorHeaders(action) : {};
+  const response = await fetch(`${API_BASE}?action=${encodeURIComponent(action)}`, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders
-    },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: body ? JSON.stringify(body) : undefined
   });
   const payload = await response.json().catch(() => ({}));
@@ -316,72 +292,59 @@ function renderModeratorList() {
     container.innerHTML = '<p class="admin-empty">No moderator wallets configured.</p>';
     return;
   }
-  container.innerHTML = state.moderators
-    .map((wallet) => `<p class="admin-line"><code>${wallet}</code></p>`)
-    .join('');
+  container.innerHTML = state.moderators.map((wallet) => `<p class="admin-line"><code>${wallet}</code></p>`).join('');
 }
 
-function draftCardActions(item) {
-  const wallet = item.wallet_address;
-  const draftId = item.draft_id;
-  return `
-    <div class="admin-card-actions">
-      <button class="btn btn-ghost" data-action="approve" data-wallet="${wallet}" data-draft="${draftId}">approve</button>
-      <button class="btn btn-ghost" data-action="reject" data-wallet="${wallet}" data-draft="${draftId}">reject</button>
-      <button class="btn btn-primary" data-action="publish" data-wallet="${wallet}" data-draft="${draftId}">publish</button>
-    </div>
-  `;
-}
-
-function renderQueue(items) {
-  const container = document.getElementById('queueContainer');
+function renderVisible(items) {
+  const container = document.getElementById('visibleContainer');
   if (!container) return;
   if (!Array.isArray(items) || items.length === 0) {
-    renderEmpty('queueContainer', 'No drafts waiting review.');
+    renderEmpty('visibleContainer', 'No visible listings.');
     return;
   }
   container.innerHTML = items
-    .map((item) => {
-      const listing = item.normalized?.listing || {};
-      return `
+    .map(
+      (item) => `
         <article class="admin-card">
           <div class="admin-card-row">
-            <h4>${listing.name || item.draft_id}</h4>
-            <span class="badge badge-hybrid">${item.status || 'unknown'}</span>
+            <h4>${escapeHtml(item.name || item.soul_id)}</h4>
+            <span class="badge badge-organic">public</span>
           </div>
-          <p class="admin-line">Soul ID: <code>${listing.soul_id || '-'}</code></p>
-          <p class="admin-line">Creator: <code>${item.wallet_address || '-'}</code></p>
-          <p class="admin-line">Price: <code>$${Number(listing.price_usdc || 0).toFixed(2)}</code></p>
-          <p class="admin-line">Submitted: <code>${formatDate(item.moderation?.submitted_at)}</code></p>
-          ${draftCardActions(item)}
+          <p class="admin-line">soul_id: <code>${escapeHtml(item.soul_id || '-')}</code></p>
+          <p class="admin-line">creator: <code>${escapeHtml(item.wallet_address || '-')}</code></p>
+          <p class="admin-line">published: <code>${escapeHtml(formatDate(item.published_at))}</code></p>
+          <div class="admin-card-actions">
+            ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
+            <button class="btn btn-primary" data-action="hide-listing" data-soul="${escapeHtml(item.soul_id)}">remove visibility</button>
+          </div>
         </article>
-      `;
-    })
+      `
+    )
     .join('');
 }
 
-function renderPublished(items) {
-  const container = document.getElementById('publishedContainer');
+function renderHidden(items) {
+  const container = document.getElementById('hiddenContainer');
   if (!container) return;
   if (!Array.isArray(items) || items.length === 0) {
-    renderEmpty('publishedContainer', 'No published listings yet.');
+    renderEmpty('hiddenContainer', 'No hidden listings.');
     return;
   }
   container.innerHTML = items
-    .map((item) => {
-      const listing = item.normalized?.listing || {};
-      return `
+    .map(
+      (item) => `
         <article class="admin-card">
           <div class="admin-card-row">
-            <h4>${listing.name || item.draft_id}</h4>
-            <span class="badge badge-organic">published</span>
+            <h4>${escapeHtml(item.name || item.soul_id)}</h4>
+            <span class="badge badge-hybrid">hidden</span>
           </div>
-          <p class="admin-line">Soul ID: <code>${listing.soul_id || '-'}</code></p>
-          <p class="admin-line">Creator: <code>${item.wallet_address || '-'}</code></p>
-          <p class="admin-line">Published: <code>${formatDate(item.published_at || item.updated_at)}</code></p>
+          <p class="admin-line">soul_id: <code>${escapeHtml(item.soul_id || '-')}</code></p>
+          <p class="admin-line">hidden_by: <code>${escapeHtml(item.hidden_by || '-')}</code></p>
+          <p class="admin-line">hidden_at: <code>${escapeHtml(formatDate(item.hidden_at))}</code></p>
+          <p class="admin-line">reason: <code>${escapeHtml(item.hidden_reason || '-')}</code></p>
         </article>
-      `;
-    })
+      `
+    )
     .join('');
 }
 
@@ -389,23 +352,6 @@ async function loadModerators() {
   const data = await apiCall('list_moderators');
   state.moderators = Array.isArray(data.moderators) ? data.moderators.map((w) => String(w).toLowerCase()) : [];
   renderModeratorList();
-}
-
-async function connectWallet() {
-  if (!state.signer || !state.wallet) {
-    throw new Error('No wallet session found');
-  }
-  const allowed = isAllowedModerator(state.wallet);
-  if (allowed) {
-    setStatus(`Connected moderator: ${state.wallet}`);
-    showToast('Moderator wallet connected', 'success');
-    await Promise.all([loadQueue(), loadPublished()]);
-  } else {
-    setStatus(`Connected wallet is not allowlisted: ${state.wallet}`);
-    renderEmpty('queueContainer', 'Access denied. Use an allowlisted moderator wallet.');
-    renderEmpty('publishedContainer', 'Access denied. Use an allowlisted moderator wallet.');
-    showToast('Wallet is not in moderator allowlist', 'warning');
-  }
 }
 
 function disconnectWallet() {
@@ -416,9 +362,45 @@ function disconnectWallet() {
   clearWalletSession();
   setConnectButton();
   setStatus('Wallet not connected.');
-  renderEmpty('queueContainer', 'Connect an allowlisted moderator wallet.');
-  renderEmpty('publishedContainer', 'Connect an allowlisted moderator wallet.');
+  renderEmpty('visibleContainer', 'Connect an allowlisted moderator wallet.');
+  renderEmpty('hiddenContainer', 'Connect an allowlisted moderator wallet.');
   showToast('Wallet disconnected', 'info');
+}
+
+async function requireAllowedModerator() {
+  if (!state.wallet || !state.signer) throw new Error('Connect an allowlisted moderator wallet first');
+  if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
+}
+
+async function loadModerationListings() {
+  await requireAllowedModerator();
+  const data = await apiCall('list_moderation_listings', { moderatorAuth: true });
+  renderVisible(data.visible || []);
+  renderHidden(data.hidden || []);
+}
+
+async function hideListing(soulId) {
+  await requireAllowedModerator();
+  const reason = window.prompt('Optional reason for removal from public visibility:', '') || '';
+  await apiCall('remove_listing_visibility', {
+    method: 'POST',
+    moderatorAuth: true,
+    body: { soul_id: soulId, reason }
+  });
+}
+
+async function connectWallet() {
+  if (!state.signer || !state.wallet) throw new Error('No wallet session found');
+  if (isAllowedModerator(state.wallet)) {
+    setStatus(`Connected moderator: ${state.wallet}`);
+    showToast('Moderator wallet connected', 'success');
+    await loadModerationListings();
+  } else {
+    setStatus(`Connected wallet is not allowlisted: ${state.wallet}`);
+    renderEmpty('visibleContainer', 'Access denied. Use an allowlisted moderator wallet.');
+    renderEmpty('hiddenContainer', 'Access denied. Use an allowlisted moderator wallet.');
+    showToast('Wallet is not in moderator allowlist', 'warning');
+  }
 }
 
 async function restoreWalletSession() {
@@ -441,99 +423,45 @@ async function restoreWalletSession() {
   }
 }
 
-async function requireAllowedModerator() {
-  if (!state.wallet || !state.signer) throw new Error('Connect an allowlisted moderator wallet first');
-  if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
-}
-
-async function loadQueue() {
-  await requireAllowedModerator();
-  const data = await apiCall('list_review_queue', { moderatorAuth: true });
-  renderQueue(data.queue || []);
-}
-
-async function loadPublished() {
-  await requireAllowedModerator();
-  const data = await apiCall('list_published_listings');
-  renderPublished(data.listings || []);
-}
-
-async function reviewDecision(walletAddress, draftId, decision) {
-  await requireAllowedModerator();
-  await apiCall('review_listing_submission', {
-    method: 'POST',
-    moderatorAuth: true,
-    body: {
-      wallet_address: walletAddress,
-      draft_id: draftId,
-      decision,
-      reviewer: state.wallet
-    }
-  });
-}
-
-async function publishDraft(walletAddress, draftId) {
-  await requireAllowedModerator();
-  await apiCall('publish_listing', {
-    method: 'POST',
-    moderatorAuth: true,
-    body: {
-      wallet_address: walletAddress,
-      draft_id: draftId,
-      reviewer: state.wallet
-    }
-  });
-}
-
 function bindEvents() {
   document.getElementById('connectWalletBtn')?.addEventListener('click', async () => {
     try {
-      if (state.wallet) {
-        disconnectWallet();
-      } else {
-        openWalletModal();
-      }
+      if (state.wallet) disconnectWallet();
+      else openWalletModal();
     } catch (error) {
       showToast(error.message, 'error');
     }
   });
 
-  document.getElementById('refreshQueueBtn')?.addEventListener('click', async () => {
+  document.getElementById('refreshListingsBtn')?.addEventListener('click', async () => {
     try {
-      await loadQueue();
+      await loadModerationListings();
     } catch (error) {
       showToast(error.message, 'error');
-      renderEmpty('queueContainer', `Queue load failed: ${error.message}`);
+      renderEmpty('visibleContainer', `Visible list load failed: ${error.message}`);
     }
   });
 
-  document.getElementById('refreshPublishedBtn')?.addEventListener('click', async () => {
+  document.getElementById('refreshHiddenBtn')?.addEventListener('click', async () => {
     try {
-      await loadPublished();
+      await loadModerationListings();
     } catch (error) {
       showToast(error.message, 'error');
-      renderEmpty('publishedContainer', `Published load failed: ${error.message}`);
+      renderEmpty('hiddenContainer', `Hidden list load failed: ${error.message}`);
     }
   });
 
   document.addEventListener('click', async (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const action = target.getAttribute('data-action');
-    if (!action) return;
-    const wallet = target.getAttribute('data-wallet');
-    const draft = target.getAttribute('data-draft');
-    if (!wallet || !draft) return;
+    if (target.getAttribute('data-action') !== 'hide-listing') return;
+    const soulId = target.getAttribute('data-soul');
+    if (!soulId) return;
     target.setAttribute('disabled', 'true');
     try {
-      if (action === 'approve' || action === 'reject') {
-        await reviewDecision(wallet, draft, action);
-        showToast(`Draft ${action}d`, 'success');
-      } else if (action === 'publish') {
-        await publishDraft(wallet, draft);
-        showToast('Draft published', 'success');
-      }
-      await Promise.all([loadQueue(), loadPublished()]);
+      await hideListing(soulId);
+      showToast('Listing removed from public visibility', 'success');
+      await loadModerationListings();
     } catch (error) {
       showToast(error.message, 'error');
     } finally {
@@ -609,8 +537,8 @@ async function init() {
   await loadModerators();
   setConnectButton();
   setStatus('Wallet not connected.');
-  renderEmpty('queueContainer', 'Connect an allowlisted moderator wallet.');
-  renderEmpty('publishedContainer', 'Connect an allowlisted moderator wallet.');
+  renderEmpty('visibleContainer', 'Connect an allowlisted moderator wallet.');
+  renderEmpty('hiddenContainer', 'Connect an allowlisted moderator wallet.');
   await restoreWalletSession();
 }
 

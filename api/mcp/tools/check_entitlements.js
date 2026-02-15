@@ -1,7 +1,7 @@
-import { getSoul, soulIds } from '../../_lib/catalog.js';
+import { getSoulResolved, soulIdsResolved } from '../../_lib/catalog.js';
 import { setCors, verifyPurchaseReceipt } from '../../_lib/payments.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   setCors(res, req.headers.origin);
 
   if (req.method === 'OPTIONS') {
@@ -26,16 +26,18 @@ export default function handler(req, res) {
     });
   }
 
-  const results = proofs.map((proof) => {
+  const availableSoulIds = await soulIdsResolved();
+  const results = await Promise.all(proofs.map(async (proof) => {
     const soulId = String(proof?.soul_id || '');
     const receipt = String(proof?.receipt || '');
 
-    if (!getSoul(soulId)) {
+    const soul = await getSoulResolved(soulId);
+    if (!soul) {
       return {
         soul_id: soulId,
         entitled: false,
         reason: 'Unknown soul',
-        available_souls: soulIds()
+        available_souls: availableSoulIds
       };
     }
 
@@ -51,7 +53,7 @@ export default function handler(req, res) {
       reason: check.ok ? null : check.error,
       transaction: check.transaction || null
     };
-  });
+  }));
 
   return res.status(200).json({
     wallet_address: walletAddress,
