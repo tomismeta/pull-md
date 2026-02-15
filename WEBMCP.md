@@ -113,6 +113,7 @@ Authoritative purchase flow:
 - Header `PAYMENT-REQUIRED` (base64 JSON payment requirements)
 
 2. Paid retry:
+- Include `X-CLIENT-MODE: agent` for strict headless behavior
 - Header `PAYMENT-SIGNATURE` (preferred), or `PAYMENT`, or `X-PAYMENT`
 - Value format for all three:
 base64(JSON x402 payload)
@@ -188,12 +189,19 @@ Only the SoulStarter server needs facilitator credentials.
 
 Required base headers:
 
+- `X-CLIENT-MODE: agent` (strict headless mode)
 - `X-WALLET-ADDRESS`
 - `X-PURCHASE-RECEIPT`
 
-This receipt-first pair is the primary flow for headless agents and browser clients.
+This receipt-first trio is the strict canonical flow for headless agents.
 If receipt is valid for wallet+soul, response is `200` with soul file.
 If re-download headers are present, server prioritizes entitlement delivery over purchase processing, even if a payment header is also present.
+
+Strict agent mode rules:
+- `X-CLIENT-MODE: agent` disables browser recovery branches.
+- Do not send `X-REDOWNLOAD-SESSION`, `X-AUTH-SIGNATURE`, or `X-AUTH-TIMESTAMP`.
+- Missing/invalid receipt returns `401` (`receipt_required_agent_mode` / `invalid_receipt_agent_mode`).
+- No `/api/auth/session` call is required for headless agents.
 
 Human/creator recovery mode (receipt unavailable):
 - `X-WALLET-ADDRESS`
@@ -245,7 +253,7 @@ use `accepted_copy_paste` exactly as top-level `accepted`, then fill `copy_paste
 - `Incomplete re-download header set`:
 you sent partial entitlement headers, so server blocked purchase fallback to prevent accidental repay.
 Re-download requires:
-`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT`.
+`X-CLIENT-MODE: agent` + `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` for strict headless agents.
 Recovery (receipt unavailable):
 `X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
 - `flow_hint: Payment header was detected but could not be verified/settled`:

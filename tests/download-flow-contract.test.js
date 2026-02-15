@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { classifyRedownloadHeaders } from '../api/souls/[id]/download.js';
+import { classifyClientMode, classifyRedownloadHeaders } from '../api/souls/[id]/download.js';
 
 const WALLET = '0xa7d395faf5e0a77a8d42d68ea01d2336671e5f55';
 
@@ -64,4 +64,22 @@ test('classifyRedownloadHeaders rejects incomplete redownload headers', () => {
   assert.equal(result.mode, 'invalid');
   assert.equal(result.hasAnyRedownloadHeaders, true);
   assert.equal(result.hasAnyValidEntitlementHeaders, false);
+});
+
+test('classifyClientMode enables strict agent mode via X-CLIENT-MODE', () => {
+  const result = classifyClientMode({
+    headers: {
+      'x-client-mode': 'agent'
+    }
+  });
+  assert.equal(result.strictAgentMode, true);
+  assert.equal(result.rawMode, 'agent');
+});
+
+test('classifyClientMode defaults to non-strict mode when header is absent', () => {
+  const result = classifyClientMode({
+    headers: {}
+  });
+  assert.equal(result.strictAgentMode, false);
+  assert.equal(result.rawMode, '');
 });

@@ -32,8 +32,11 @@ export default function handler(req, res) {
         'X-PAYMENT',
         'PAYMENT-SIGNATURE',
         'PAYMENT-REQUIRED',
-        'PAYMENT-RESPONSE'
+        'PAYMENT-RESPONSE',
+        'X-CLIENT-MODE'
       ],
+      client_mode_headers: ['X-CLIENT-MODE'],
+      strict_agent_mode_value: 'agent',
       redownload_headers: [
         'X-WALLET-ADDRESS',
         'X-PURCHASE-RECEIPT',
@@ -246,8 +249,10 @@ export default function handler(req, res) {
       method: 'GET',
       flow_profiles: {
         headless_agent: {
-          purchase: 'GET /api/souls/{id}/download -> 402 + PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE',
-          redownload: 'GET /api/souls/{id}/download with X-WALLET-ADDRESS + X-PURCHASE-RECEIPT'
+          purchase:
+            'GET /api/souls/{id}/download with X-CLIENT-MODE: agent -> 402 + PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE',
+          redownload:
+            'GET /api/souls/{id}/download with X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT (strict receipt-only)'
         },
         human_browser: {
           purchase: 'Connect wallet in UI and submit x402 payment',
@@ -258,7 +263,9 @@ export default function handler(req, res) {
       first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
       claim_request: 'Include PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload to claim entitlement and download',
       redownload_request:
-        'Primary: include X-WALLET-ADDRESS + X-PURCHASE-RECEIPT (receipt-first). Recovery for humans/creators: X-WALLET-ADDRESS + session or signed auth.',
+        'Headless agents should send X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT only (no session/auth recovery). Human/browser flow can use recovery mode.',
+      strict_agent_mode:
+        'When X-CLIENT-MODE=agent is set, re-download is receipt-only and session/auth recovery headers are rejected.',
       redownload_session_bootstrap:
         'Bootstrap session at GET /api/auth/session with X-WALLET-ADDRESS + X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP to obtain X-REDOWNLOAD-SESSION.',
       anti_poisoning_rule:

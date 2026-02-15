@@ -34,12 +34,20 @@ export default function handler(req, res) {
       payment_protocol: 'x402',
       auth_headers: {
         purchase: ['PAYMENT-SIGNATURE'],
+        client_mode: ['X-CLIENT-MODE'],
+        strict_agent_purchase: ['X-CLIENT-MODE', 'PAYMENT-SIGNATURE'],
         redownload_primary: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+        strict_agent_redownload: ['X-CLIENT-MODE', 'X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
         redownload_session_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
         redownload_signed_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
         redownload_session_bootstrap: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       },
       redownload_session_endpoint: '/api/auth/session',
+      strict_agent_mode: {
+        header: 'X-CLIENT-MODE',
+        value: 'agent',
+        note: 'Strict headless mode is receipt-only for re-download. Session/auth recovery headers are not used.'
+      },
       auth_message_examples: {
         redownload: buildAuthMessage({
           wallet: '0x<your-wallet>',

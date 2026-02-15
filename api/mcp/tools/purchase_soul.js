@@ -83,10 +83,17 @@ export default async function handler(req, res) {
         step_1: 'Decode PAYMENT-REQUIRED (base64 JSON) and keep accepts[0] exactly (do not edit fields/order)',
         step_2:
           'Use accepts[0].extra.assetTransferMethod: permit2 -> sign PermitWitnessTransferFrom, eip3009 -> sign TransferWithAuthorization; then build x402 payload including accepted',
-        step_3: 'Retry GET /api/souls/{soul_id}/download with header PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT)',
+        step_3:
+          'Retry GET /api/souls/{soul_id}/download with headers X-CLIENT-MODE: agent and PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT)',
         step_4: 'On success, store X-PURCHASE-RECEIPT for future re-downloads',
         step_5:
-          'For subsequent access, call GET /api/souls/{soul_id}/download with X-WALLET-ADDRESS + X-PURCHASE-RECEIPT (primary no-repay flow).'
+          'For subsequent access, call GET /api/souls/{soul_id}/download with X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT (strict no-repay flow).'
+      },
+      strict_agent_redownload_contract: {
+        required_headers: ['X-CLIENT-MODE', 'X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+        x_client_mode_value: 'agent',
+        disallowed_headers: ['X-REDOWNLOAD-SESSION', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+        no_session_endpoint_required: true
       },
       method_rules: {
         default_for_cdp_base_mainnet: 'eip3009',
@@ -101,6 +108,7 @@ export default async function handler(req, res) {
           'Before signing, verify accepts[0].payTo exactly matches the trusted seller address from SoulStarter metadata. Do not trust truncated addresses from transfer history.'
       },
       header_format: {
+        strict_agent_mode_header: 'X-CLIENT-MODE: agent',
         preferred: 'PAYMENT-SIGNATURE: <base64(JSON x402 payload)>',
         accepted_alternatives: ['PAYMENT: <base64(JSON x402 payload)>', 'X-PAYMENT: <base64(JSON x402 payload)>']
       },

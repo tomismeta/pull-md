@@ -96,6 +96,16 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
   };
 }
 
+export function classifyClientMode({ headers = {}, query = {} } = {}) {
+  const rawMode = String(
+    headers['x-client-mode'] || headers['x-soulstarter-client-mode'] || query.client_mode || ''
+  )
+    .trim()
+    .toLowerCase();
+  const strictAgentMode = rawMode === 'agent' || rawMode === 'headless-agent' || rawMode === 'strict-agent';
+  return { rawMode, strictAgentMode };
+}
+
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
 
@@ -117,6 +127,7 @@ export default async function handler(req, res) {
   if (!sellerAddress) {
     return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required' });
   }
+  const { rawMode: clientModeRaw, strictAgentMode } = classifyClientMode({ headers: req.headers, query: req.query });
 
   // Re-download path: wallet re-auth + signed purchase receipt.
   const {
@@ -137,9 +148,33 @@ export default async function handler(req, res) {
     soulId
   });
 
+  if (strictAgentMode) {
+    if (hasSessionRecoveryHeaders || hasSignedRecoveryHeaders) {
+      return res.status(400).json({
+        error: 'Unsupported headers for strict agent mode',
+        code: 'agent_mode_disallows_session_auth',
+        client_mode: clientModeRaw || 'agent',
+        flow_hint:
+          'Strict agent mode supports only receipt-based redownload. Use X-WALLET-ADDRESS + X-PURCHASE-RECEIPT for redownload.',
+        required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+        disallowed_headers: ['X-REDOWNLOAD-SESSION', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
+      });
+    }
+    if (hasAnyRedownloadHeaders && !hasReceiptRedownloadHeaders && !paymentSignature) {
+      return res.status(401).json({
+        error: 'Receipt required for strict agent redownload',
+        code: 'receipt_required_agent_mode',
+        client_mode: clientModeRaw || 'agent',
+        flow_hint:
+          'Strict agent mode does not use session/auth recovery. Persist X-PURCHASE-RECEIPT from successful purchase and resend it with X-WALLET-ADDRESS.',
+        required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT']
+      });
+    }
+  }
+
   // Guardrail: partial re-download header sets should never fall through into purchase flow.
   // This prevents accidental repurchase when clients intended entitlement-based access.
-  if (hasAnyRedownloadHeaders && !hasAnyValidEntitlementHeaders) {
+  if (hasAnyRedownloadHeaders && !hasAnyValidEntitlementHeaders && !paymentSignature) {
     const walletForTemplate = typeof wallet === 'string' && wallet ? wallet : '0x<your-wallet>';
     return res.status(401).json({
       error: 'Incomplete re-download header set',
@@ -190,6 +225,16 @@ export default async function handler(req, res) {
       });
 
       if (!receiptCheck.ok) {
+        if (strictAgentMode) {
+          return res.status(401).json({
+            error: receiptCheck.error,
+            code: 'invalid_receipt_agent_mode',
+            client_mode: clientModeRaw || 'agent',
+            flow_hint:
+              'Strict agent redownload requires a valid receipt. Reuse the original X-PURCHASE-RECEIPT from purchase success.',
+            required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT']
+          });
+        }
         const onchainEntitlement = await resolveOnchainEntitlement({
           wallet: authWallet,
           soulId,
@@ -318,10 +363,12 @@ export default async function handler(req, res) {
     if (usedSignedAuth) {
       try {
         const sessionToken = createRedownloadSessionToken({ wallet: authWallet });
-        appendSetCookieHeader(
-          res,
-          buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host })
-        );
+        if (!strictAgentMode) {
+          appendSetCookieHeader(
+            res,
+            buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host })
+          );
+        }
       } catch (_) {}
     }
     if (entitlementSource !== 'receipt') {
@@ -332,10 +379,12 @@ export default async function handler(req, res) {
           transaction: entitlementTransaction
         });
         res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
-        appendSetCookieHeader(
-          res,
-          buildPurchaseReceiptSetCookie({ soulId, receipt: receiptToken, reqHost: req.headers.host })
-        );
+        if (!strictAgentMode) {
+          appendSetCookieHeader(
+            res,
+            buildPurchaseReceiptSetCookie({ soulId, receipt: receiptToken, reqHost: req.headers.host })
+          );
+        }
       } catch (_) {}
     }
 
@@ -370,14 +419,24 @@ export default async function handler(req, res) {
         const paymentDebug = includeDebug ? buildPaymentDebug(req, paymentRequired) : null;
 
         if (!context.paymentHeader) {
-          result.response.body.auth_message_template = buildAuthMessage({
-            wallet: '0x<your-wallet>',
-            soulId,
-            action: 'redownload',
-            timestamp: Date.now()
-          });
-          result.response.body.flow_hint =
-            'No payment header was detected. Send PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload for purchase.';
+          if (strictAgentMode) {
+            result.response.body.flow_hint =
+              'Strict agent mode purchase step: send PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload.';
+            result.response.body.client_mode = clientModeRaw || 'agent';
+            result.response.body.redownload_contract = {
+              required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+              disallowed_headers: ['X-REDOWNLOAD-SESSION', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
+            };
+          } else {
+            result.response.body.auth_message_template = buildAuthMessage({
+              wallet: '0x<your-wallet>',
+              soulId,
+              action: 'redownload',
+              timestamp: Date.now()
+            });
+            result.response.body.flow_hint =
+              'No payment header was detected. Send PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload for purchase.';
+          }
         } else {
           result.response.body.flow_hint =
             'Payment header was detected but could not be verified/settled. Regenerate PAYMENT-SIGNATURE from the latest PAYMENT-REQUIRED and retry.';
@@ -421,10 +480,12 @@ export default async function handler(req, res) {
         transaction: cachedEntitlement.transaction || 'prior-entitlement'
       });
       res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
-      appendSetCookieHeader(
-        res,
-        buildPurchaseReceiptSetCookie({ soulId, receipt: receiptToken, reqHost: req.headers.host })
-      );
+      if (!strictAgentMode) {
+        appendSetCookieHeader(
+          res,
+          buildPurchaseReceiptSetCookie({ soulId, receipt: receiptToken, reqHost: req.headers.host })
+        );
+      }
       res.setHeader(
         'PAYMENT-RESPONSE',
         Buffer.from(
@@ -525,18 +586,22 @@ export default async function handler(req, res) {
 
     if (receiptToken) {
       res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
-      appendSetCookieHeader(
-        res,
-        buildPurchaseReceiptSetCookie({ soulId, receipt: receiptToken, reqHost: req.headers.host })
-      );
+      if (!strictAgentMode) {
+        appendSetCookieHeader(
+          res,
+          buildPurchaseReceiptSetCookie({ soulId, receipt: receiptToken, reqHost: req.headers.host })
+        );
+      }
     }
     if (settlement.success && settlement.payer) {
       try {
         const sessionToken = createRedownloadSessionToken({ wallet: settlement.payer });
-        appendSetCookieHeader(
-          res,
-          buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host })
-        );
+        if (!strictAgentMode) {
+          appendSetCookieHeader(
+            res,
+            buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host })
+          );
+        }
       } catch (_) {}
     }
 

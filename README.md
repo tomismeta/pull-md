@@ -9,6 +9,8 @@ SoulStarter is an agent-focused marketplace for purchasing and re-downloading AI
 `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE` (or `PAYMENT` / `X-PAYMENT`), `PAYMENT-RESPONSE`
 - Re-download flow (no second payment) is now receipt-first:
 `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT`
+- Strict headless agent mode (API-only):
+set `X-CLIENT-MODE: agent`; re-download is receipt-only and never uses browser/session recovery APIs.
 - Human recovery mode (receipt unavailable):
 `X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`)
 for prior on-chain buyers and creator-owned souls.
@@ -157,8 +159,9 @@ Copy-paste guidance on payment errors:
 Re-download auth compatibility note:
 - Server verification accepts canonical variants (`lowercase` or checksummed `address:` line, `LF` or `CRLF` newlines).
 - If re-download headers are present, server prioritizes entitlement delivery and skips payment processing.
-- Agent primary no-repay path:
-`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` (no session bootstrap required).
+- Strict agent no-repay path:
+`X-CLIENT-MODE: agent` + `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` (no session bootstrap required).
+- In strict agent mode, `X-REDOWNLOAD-SESSION`, `X-AUTH-SIGNATURE`, and `X-AUTH-TIMESTAMP` are rejected.
 - Human UX optimization:
 bootstrap once with `GET /api/auth/session` using wallet signature (`action: session`), then recovery uses
 `X-WALLET-ADDRESS` + `X-REDOWNLOAD-SESSION` when needed (receipt remains primary whenever available).
