@@ -24,7 +24,7 @@ export default function handler(req, res) {
       access_type: 'x402_paywall',
       flow: 'GET /api/souls/{id}/download -> 402 PAYMENT-REQUIRED -> GET with PAYMENT-SIGNATURE',
       reauth_flow:
-        'Preferred: X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + (X-REDOWNLOAD-SESSION or signed fallback). Recovery: X-WALLET-ADDRESS + (X-REDOWNLOAD-SESSION or signed fallback) for prior on-chain buyers and creators.'
+        'Primary: X-WALLET-ADDRESS + X-PURCHASE-RECEIPT. Recovery: X-WALLET-ADDRESS + X-REDOWNLOAD-SESSION (or signed fallback) for prior buyers and creators.'
     }
   });
 }

@@ -34,10 +34,9 @@ export default function handler(req, res) {
       payment_protocol: 'x402',
       auth_headers: {
         purchase: ['PAYMENT-SIGNATURE'],
-        redownload: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SESSION'],
-        redownload_signed_fallback: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
-        redownload_session_only_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
-        redownload_signed_only_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+        redownload_primary: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+        redownload_session_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
+        redownload_signed_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
         redownload_session_bootstrap: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       },
       redownload_session_endpoint: '/api/auth/session',
@@ -63,7 +62,7 @@ export default function handler(req, res) {
       documentation: '/api/mcp/manifest',
       wallet_compatibility: {
         as_of: '2026-02-14',
-        preferred_for_purchase: 'EmblemVault',
+        supported_browser_wallets: ['MetaMask', 'Rabby', 'Bankr Wallet'],
         bankr_status: 'experimental',
         bankr_note: 'Known issue: EIP-3009 signatures can fail with FiatTokenV2: invalid signature in this flow.'
       }

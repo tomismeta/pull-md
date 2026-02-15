@@ -2,8 +2,9 @@ const API_BASE = '/api/mcp/tools/creator_marketplace';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
-let walletConnectProjectId = null;
 let moderatorAllowlist = new Set();
+const providerMetadata = new WeakMap();
+let providerDiscoveryInitialized = false;
 const STATE = {
   provider: null,
   signer: null,
@@ -29,6 +30,80 @@ function toast(message, type = 'info') {
 function setStatus(text) {
   const el = document.getElementById('draftStatus');
   if (el) el.textContent = text;
+}
+
+function initProviderDiscovery() {
+  if (providerDiscoveryInitialized || typeof window === 'undefined') return;
+  providerDiscoveryInitialized = true;
+  window.addEventListener('eip6963:announceProvider', (event) => {
+    const detail = event?.detail;
+    if (!detail || typeof detail !== 'object') return;
+    if (!detail.provider || typeof detail.provider !== 'object') return;
+    providerMetadata.set(detail.provider, {
+      name: String(detail?.info?.name || ''),
+      rdns: String(detail?.info?.rdns || '')
+    });
+  });
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+}
+
+function getInjectedProviders() {
+  const providers = [];
+  if (Array.isArray(window?.ethereum?.providers)) {
+    for (const candidate of window.ethereum.providers) {
+      if (candidate && typeof candidate === 'object' && !providers.includes(candidate)) {
+        providers.push(candidate);
+      }
+    }
+  }
+  if (window?.ethereum && typeof window.ethereum === 'object' && !providers.includes(window.ethereum)) {
+    providers.push(window.ethereum);
+  }
+  return providers;
+}
+
+function getProviderMetadata(rawProvider) {
+  return providerMetadata.get(rawProvider) || { name: '', rdns: '' };
+}
+
+function isBankrProvider(rawProvider) {
+  if (!rawProvider || typeof rawProvider !== 'object') return false;
+  const meta = getProviderMetadata(rawProvider);
+  return Boolean(
+    rawProvider.isImpersonator ||
+      /bankr/i.test(String(meta.name || '')) ||
+      /bankr/i.test(String(meta.rdns || ''))
+  );
+}
+
+function isRabbyProvider(rawProvider) {
+  if (!rawProvider || typeof rawProvider !== 'object') return false;
+  const meta = getProviderMetadata(rawProvider);
+  return Boolean(rawProvider.isRabby || /rabby/i.test(String(meta.name || '')) || /rabby/i.test(String(meta.rdns || '')));
+}
+
+function isMetaMaskProvider(rawProvider) {
+  if (!rawProvider || typeof rawProvider !== 'object') return false;
+  return Boolean(rawProvider.isMetaMask && !isRabbyProvider(rawProvider) && !isBankrProvider(rawProvider));
+}
+
+function findProviderByKind(kind) {
+  initProviderDiscovery();
+  const providers = getInjectedProviders();
+  const predicate =
+    kind === 'bankr'
+      ? isBankrProvider
+      : kind === 'rabby'
+        ? isRabbyProvider
+        : kind === 'metamask'
+          ? isMetaMaskProvider
+          : null;
+  if (!predicate) return null;
+  return providers.find((candidate) => predicate(candidate)) || null;
+}
+
+function fallbackInjectedProvider() {
+  return window?.ethereum && typeof window.ethereum === 'object' ? window.ethereum : null;
 }
 
 function setWalletButton() {
@@ -162,58 +237,51 @@ async function connectWithProviderInternal(rawProvider, walletType, silent) {
 }
 
 async function connectMetaMask() {
-  if (!window.ethereum) {
+  const metamaskProvider = findProviderByKind('metamask');
+  if (metamaskProvider) {
+    return connectWithProviderInternal(metamaskProvider, 'metamask', false);
+  }
+
+  const fallback = fallbackInjectedProvider();
+  if (!fallback) {
     toast('MetaMask not found', 'error');
     return;
   }
-  if (Array.isArray(window.ethereum.providers)) {
-    const mm = window.ethereum.providers.find((p) => p.isMetaMask);
-    if (mm) return connectWithProviderInternal(mm, 'metamask', false);
-  }
-  return connectWithProviderInternal(window.ethereum, 'metamask', false);
+
+  toast('MetaMask-specific provider not detected. Using current injected wallet.', 'warning');
+  return connectWithProviderInternal(fallback, 'metamask', false);
 }
 
-async function connectCoinbase() {
-  if (!window.ethereum) {
-    toast('Coinbase Wallet not found', 'error');
+async function connectRabby() {
+  const rabbyProvider = findProviderByKind('rabby');
+  if (rabbyProvider) {
+    return connectWithProviderInternal(rabbyProvider, 'rabby', false);
+  }
+
+  const fallback = fallbackInjectedProvider();
+  if (!fallback) {
+    toast('Rabby wallet not found', 'error');
     return;
   }
-  if (Array.isArray(window.ethereum.providers)) {
-    const cb = window.ethereum.providers.find((p) => p.isCoinbaseWallet);
-    if (cb) return connectWithProviderInternal(cb, 'coinbase', false);
-  }
-  if (window.ethereum.isCoinbaseWallet) {
-    return connectWithProviderInternal(window.ethereum, 'coinbase', false);
-  }
-  toast('Coinbase provider not detected', 'warning');
+
+  toast('Rabby-specific provider not detected. Using current injected wallet.', 'warning');
+  return connectWithProviderInternal(fallback, 'rabby', false);
 }
 
-async function connectInjected() {
-  if (!window.ethereum) {
-    toast('No injected wallet found', 'error');
-    return;
+async function connectBankr() {
+  const bankrProvider = findProviderByKind('bankr');
+  if (bankrProvider) {
+    return connectWithProviderInternal(bankrProvider, 'bankr', false);
   }
-  return connectWithProviderInternal(window.ethereum, 'injected', false);
-}
 
-async function connectWalletConnect() {
-  if (!window.EthereumProvider) {
-    toast('WalletConnect provider script failed to load', 'error');
+  const fallback = fallbackInjectedProvider();
+  if (!fallback) {
+    toast('Bankr Wallet not found', 'error');
     return;
   }
-  if (!walletConnectProjectId) {
-    toast('WalletConnect is not configured on this deployment', 'error');
-    return;
-  }
-  closeWalletModal();
-  const wcProvider = await window.EthereumProvider.init({
-    projectId: walletConnectProjectId,
-    chains: [BASE_CHAIN_DEC],
-    optionalChains: [1, 8453],
-    showQrModal: true
-  });
-  await wcProvider.enable();
-  return connectWithProviderInternal(wcProvider, 'walletconnect', false);
+
+  toast('Bankr-specific provider not detected. Using current injected wallet.', 'warning');
+  return connectWithProviderInternal(fallback, 'bankr', false);
 }
 
 async function disconnectWallet() {
@@ -231,55 +299,17 @@ async function restoreWalletSession() {
   const session = readWalletSession();
   if (!session) return;
 
-  if (session.walletType === 'walletconnect') {
-    if (!window.EthereumProvider || !walletConnectProjectId) {
-      clearWalletSession();
-      return;
-    }
-    try {
-      const wcProvider = await window.EthereumProvider.init({
-        projectId: walletConnectProjectId,
-        chains: [BASE_CHAIN_DEC],
-        optionalChains: [1, 8453],
-        showQrModal: false
-      });
-      await connectWithProviderInternal(wcProvider, 'walletconnect', true);
-      if (STATE.wallet !== session.wallet) clearWalletSession();
-    } catch (_) {
-      clearWalletSession();
-    }
-    return;
-  }
-
-  if (!window.ethereum) {
+  const providerCandidate = findProviderByKind(session.walletType) || fallbackInjectedProvider();
+  if (!providerCandidate) {
     clearWalletSession();
     return;
   }
 
   try {
-    let providerCandidate = window.ethereum;
-    if (Array.isArray(window.ethereum.providers)) {
-      if (session.walletType === 'metamask') {
-        providerCandidate = window.ethereum.providers.find((p) => p.isMetaMask) || window.ethereum;
-      } else if (session.walletType === 'coinbase') {
-        providerCandidate = window.ethereum.providers.find((p) => p.isCoinbaseWallet) || window.ethereum;
-      }
-    }
     await connectWithProviderInternal(providerCandidate, session.walletType, true);
     if (STATE.wallet !== session.wallet) clearWalletSession();
   } catch (_) {
     clearWalletSession();
-  }
-}
-
-async function loadWalletConfig() {
-  try {
-    const response = await fetch('/api/wallet-config');
-    if (!response.ok) return;
-    const payload = await response.json();
-    walletConnectProjectId = payload.walletConnectProjectId || null;
-  } catch (_) {
-    walletConnectProjectId = null;
   }
 }
 
@@ -298,7 +328,6 @@ async function loadModeratorAllowlist() {
   }
   updateModeratorNavLinkVisibility();
 }
-
 function authMessage(action, timestamp) {
   return [
     'SoulStarter Creator Authentication',
@@ -578,18 +607,16 @@ function initMobileNav() {
 }
 
 function initDefaults() {
+  initProviderDiscovery();
   initMobileNav();
   setWalletButton();
 }
 
 bindEvents();
 initDefaults();
-loadWalletConfig()
-  .then(() => loadModeratorAllowlist())
-  .then(() => restoreWalletSession());
+loadModeratorAllowlist().then(() => restoreWalletSession());
 
 window.closeWalletModal = closeWalletModal;
 window.connectMetaMask = connectMetaMask;
-window.connectCoinbase = connectCoinbase;
-window.connectInjected = connectInjected;
-window.connectWalletConnect = connectWalletConnect;
+window.connectRabby = connectRabby;
+window.connectBankr = connectBankr;

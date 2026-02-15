@@ -16,6 +16,8 @@ Canonical production host:
 
 ## Wallet Compatibility Status (2026-02-14)
 
+- Browser UX wallet scope:
+MetaMask, Rabby, Bankr Wallet.
 - `EmblemVault`: purchase + re-download verified working.
 - `Bankr`: purchase signing via EIP-3009 currently unreliable/incompatible in this deployment (`FiatTokenV2: invalid signature` in diagnostics).
 - Agent guidance:
@@ -189,17 +191,11 @@ Required base headers:
 - `X-WALLET-ADDRESS`
 - `X-PURCHASE-RECEIPT`
 
-Then provide one auth mode:
-
-- Session mode (preferred):
-`X-REDOWNLOAD-SESSION`
-- Signed mode (fallback):
-`X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`
-
-If receipt and wallet auth/session are valid, response is `200` with soul file.
+This receipt-first pair is the primary flow for headless agents and browser clients.
+If receipt is valid for wallet+soul, response is `200` with soul file.
 If re-download headers are present, server prioritizes entitlement delivery over purchase processing, even if a payment header is also present.
 
-Session-only recovery mode (receipt unavailable):
+Human/creator recovery mode (receipt unavailable):
 - `X-WALLET-ADDRESS`
 - `X-REDOWNLOAD-SESSION` (or signed fallback `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`)
 - Server checks creator ownership and prior on-chain buyer payment history for entitlement recovery.
@@ -249,7 +245,7 @@ use `accepted_copy_paste` exactly as top-level `accepted`, then fill `copy_paste
 - `Incomplete re-download header set`:
 you sent partial entitlement headers, so server blocked purchase fallback to prevent accidental repay.
 Re-download requires:
-`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
+`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT`.
 Recovery (receipt unavailable):
 `X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
 - `flow_hint: Payment header was detected but could not be verified/settled`:

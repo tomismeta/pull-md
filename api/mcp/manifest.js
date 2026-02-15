@@ -21,7 +21,7 @@ export default function handler(req, res) {
   return res.status(200).json({
     schema_version: 'v1',
     name: 'SoulStarter',
-    description: 'Agent soul marketplace with x402 payments and wallet re-authenticated redownloads',
+    description: 'Agent soul marketplace with x402 payments and receipt-first redownloads',
     url: 'https://soulstarter.vercel.app',
     auth: {
       type: 'x402',
@@ -42,10 +42,9 @@ export default function handler(req, res) {
         'X-AUTH-TIMESTAMP'
       ],
       redownload_modes: {
-        session_preferred: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SESSION'],
-        signed_fallback: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
-        session_only_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
-        signed_only_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
+        agent_primary: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+        human_session_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
+        human_signed_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       },
       redownload_session_endpoint: '/api/auth/session',
       redownload_session_bootstrap_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
@@ -55,7 +54,8 @@ export default function handler(req, res) {
     },
     wallet_compatibility: {
       as_of: '2026-02-14',
-      recommended_for_purchase: 'EmblemVault',
+      supported_browser_wallets: ['MetaMask', 'Rabby', 'Bankr Wallet'],
+      recommended_for_purchase: 'MetaMask or Rabby',
       bankr_status: 'experimental',
       bankr_note:
         'Bankr EIP-3009 signatures may fail USDC contract verification in this flow (FiatTokenV2: invalid signature). Prefer EmblemVault until upstream signer compatibility is fixed.'
@@ -244,17 +244,27 @@ export default function handler(req, res) {
       canonical_base_url: 'https://soulstarter.vercel.app',
       endpoint_pattern: '/api/souls/{id}/download',
       method: 'GET',
+      flow_profiles: {
+        headless_agent: {
+          purchase: 'GET /api/souls/{id}/download -> 402 + PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE',
+          redownload: 'GET /api/souls/{id}/download with X-WALLET-ADDRESS + X-PURCHASE-RECEIPT'
+        },
+        human_browser: {
+          purchase: 'Connect wallet in UI and submit x402 payment',
+          redownload: 'Receipt-first, with optional session bootstrap at /api/auth/session for recovery UX'
+        }
+      },
       canonical_purchase_flow: 'GET /api/souls/{id}/download is the authoritative x402 flow for payment requirements and paid retry.',
       first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
       claim_request: 'Include PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload to claim entitlement and download',
       redownload_request:
-        'Preferred: include X-WALLET-ADDRESS + X-PURCHASE-RECEIPT and either X-REDOWNLOAD-SESSION or X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP. Recovery: session/signed mode without receipt is allowed for prior on-chain buyers and creators.',
+        'Primary: include X-WALLET-ADDRESS + X-PURCHASE-RECEIPT (receipt-first). Recovery for humans/creators: X-WALLET-ADDRESS + session or signed auth.',
       redownload_session_bootstrap:
         'Bootstrap session at GET /api/auth/session with X-WALLET-ADDRESS + X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP to obtain X-REDOWNLOAD-SESSION.',
       anti_poisoning_rule:
         'Always verify the full PAYMENT-REQUIRED.accepts[0].payTo address against the canonical seller address from trusted SoulStarter metadata before signing.',
       redownload_priority:
-        'If re-download headers are present, entitlement path is processed first (prevents accidental repay even when payment headers are also sent).',
+        'If wallet+receipt headers are present, entitlement path is processed first (prevents accidental repay even when payment headers are also sent).',
       note: 'auth_message_template may appear in a 402 response as helper text; purchase still requires payment header submission.',
       domain_note: 'Use the canonical production host (soulstarter.vercel.app). Preview/alias domains may not reflect the latest contract behavior.',
       v2_requirement: 'Submitted payment JSON must include accepted matching PAYMENT-REQUIRED.accepts[0] exactly.',

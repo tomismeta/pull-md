@@ -7,18 +7,19 @@ SoulStarter is an agent-focused marketplace for purchasing and re-downloading AI
 - Strict x402 v2 purchase flow on `GET /api/souls/{id}/download`
 - Required x402 headers for payment flow:
 `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE` (or `PAYMENT` / `X-PAYMENT`), `PAYMENT-RESPONSE`
-- Re-download flow (no second payment) requires wallet entitlement proof:
-`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` plus either:
-`X-REDOWNLOAD-SESSION` (preferred after session bootstrap) or
-`X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP` (signed fallback)
-- Session-only recovery mode:
+- Re-download flow (no second payment) is now receipt-first:
+`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT`
+- Human recovery mode (receipt unavailable):
 `X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`)
-is accepted for prior on-chain buyers and creator-owned souls (receipt optional in recovery mode).
+for prior on-chain buyers and creator-owned souls.
 - Facilitator resiliency includes:
 preflight checks, multi-endpoint failover, timeout, circuit breaker
 - Agent-discoverable API via WebMCP manifest at `/api/mcp/manifest`
 
-## Wallet Compatibility Status (2026-02-14)
+## Wallet Compatibility Status (2026-02-15)
+
+- Browser UX scope:
+MetaMask, Rabby, and Bankr Wallet are the only wallet options exposed in the web UI.
 
 - Confirmed working:
 `EmblemVault` for purchase and re-download auth.
@@ -101,7 +102,6 @@ Audit trail:
 | `FACILITATOR_COOLDOWN_MS` | optional | Circuit cooldown duration (default `60000`) |
 | `FACILITATOR_PREFLIGHT_TTL_MS` | optional | Cached preflight TTL (default `120000`) |
 | `X402_ASSET_TRANSFER_METHOD` | optional | `eip3009` (default) or `permit2`; use `eip3009` for CDP Base mainnet compatibility |
-| `WALLETCONNECT_PROJECT_ID` | optional | WalletConnect Cloud project ID for browser wallet UX |
 | `SOUL_META_STARTER_V1` | optional | Env fallback content for `meta-starter-v1` |
 
 ## Facilitator Health Checks
@@ -157,10 +157,11 @@ Copy-paste guidance on payment errors:
 Re-download auth compatibility note:
 - Server verification accepts canonical variants (`lowercase` or checksummed `address:` line, `LF` or `CRLF` newlines).
 - If re-download headers are present, server prioritizes entitlement delivery and skips payment processing.
+- Agent primary no-repay path:
+`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` (no session bootstrap required).
 - Human UX optimization:
-Bootstrap once with `GET /api/auth/session` using wallet signature (`action: session`), then re-download with
-`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SESSION` without repeated soul-specific signing.
-If receipt is unavailable, session-only recovery can still re-download for prior on-chain buyers/creators.
+bootstrap once with `GET /api/auth/session` using wallet signature (`action: session`), then recovery uses
+`X-WALLET-ADDRESS` + `X-REDOWNLOAD-SESSION` when needed (receipt remains primary whenever available).
 
 Multi-spend guardrails:
 - In-flight settlement submissions are idempotent by payer+soul+nonce to reduce duplicate settlement attempts.
@@ -183,7 +184,7 @@ your submitted `accepted` object did not match the latest `PAYMENT-REQUIRED.acce
 Re-fetch paywall and copy `accepts[0]` exactly (including `maxTimeoutSeconds` and `extra`).
 - `Incomplete re-download header set`:
 you sent partial entitlement headers. For no-repay re-download, send:
-`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
+`X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT`.
 Recovery (receipt unavailable):
 `X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
 - `flow_hint: "Payment header was detected but could not be verified/settled..."`:

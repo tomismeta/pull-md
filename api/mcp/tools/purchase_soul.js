@@ -86,7 +86,7 @@ export default async function handler(req, res) {
         step_3: 'Retry GET /api/souls/{soul_id}/download with header PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT)',
         step_4: 'On success, store X-PURCHASE-RECEIPT for future re-downloads',
         step_5:
-          'For subsequent access, call GET /api/souls/{soul_id}/download with X-WALLET-ADDRESS + X-PURCHASE-RECEIPT and either X-REDOWNLOAD-SESSION (preferred) or signed fallback headers.'
+          'For subsequent access, call GET /api/souls/{soul_id}/download with X-WALLET-ADDRESS + X-PURCHASE-RECEIPT (primary no-repay flow).'
       },
       method_rules: {
         default_for_cdp_base_mainnet: 'eip3009',
@@ -112,7 +112,8 @@ export default async function handler(req, res) {
       },
       wallet_compatibility: {
         as_of: '2026-02-14',
-        preferred_for_purchase: 'EmblemVault',
+        supported_browser_wallets: ['MetaMask', 'Rabby', 'Bankr Wallet'],
+        preferred_for_purchase: 'MetaMask or Rabby',
         bankr_known_issue:
           'Bankr EIP-3009 signatures may fail with FiatTokenV2: invalid signature. Use EmblemVault or another compatible signer for production purchase runs.'
       },

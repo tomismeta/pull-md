@@ -20,7 +20,7 @@ import {
   inspectFacilitatorVerify
 } from '../../_lib/x402.js';
 
-const SETTLE_RETRY_DELAYS_MS = String(process.env.X402_SETTLE_RETRY_DELAYS_MS || '500')
+const SETTLE_RETRY_DELAYS_MS = String(process.env.X402_SETTLE_RETRY_DELAYS_MS || '')
   .split(',')
   .map((v) => Number(v.trim()))
   .filter((v) => Number.isFinite(v) && v >= 0);
@@ -39,6 +39,44 @@ const ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK = Number(process.env.ONCHAIN_ENTITLEME
 const ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE = Number(process.env.ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE || '2000000');
 const BASE_MAINNET_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const ERC20_TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
+
+export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '' } = {}) {
+  const cookies = parseCookieHeader(cookieHeader);
+  const wallet = headers['x-wallet-address'];
+  const authSignature = headers['x-auth-signature'];
+  const authTimestamp = headers['x-auth-timestamp'];
+  const receipt = headers['x-purchase-receipt'];
+  const redownloadSessionToken = headers['x-redownload-session'] || cookies.soulstarter_redownload_session || null;
+  const paymentSignature = headers['payment-signature'] || headers.payment || headers['x-payment'];
+
+  const hasAnyRedownloadHeaders = Boolean(wallet || authSignature || authTimestamp || receipt || redownloadSessionToken);
+  const hasReceiptRedownloadHeaders = Boolean(wallet && receipt);
+  const hasSessionRecoveryHeaders = Boolean(wallet && !receipt && redownloadSessionToken && !authSignature && !authTimestamp);
+  const hasSignedRecoveryHeaders = Boolean(wallet && !receipt && authSignature && authTimestamp);
+  const hasAnyValidEntitlementHeaders =
+    hasReceiptRedownloadHeaders || hasSessionRecoveryHeaders || hasSignedRecoveryHeaders;
+
+  let mode = 'none';
+  if (hasReceiptRedownloadHeaders) mode = 'agent_primary_receipt';
+  else if (hasSessionRecoveryHeaders) mode = 'human_recovery_session';
+  else if (hasSignedRecoveryHeaders) mode = 'human_recovery_signed';
+  else if (hasAnyRedownloadHeaders) mode = 'invalid';
+
+  return {
+    wallet,
+    authSignature,
+    authTimestamp,
+    receipt,
+    redownloadSessionToken,
+    paymentSignature,
+    hasAnyRedownloadHeaders,
+    hasReceiptRedownloadHeaders,
+    hasSessionRecoveryHeaders,
+    hasSignedRecoveryHeaders,
+    hasAnyValidEntitlementHeaders,
+    mode
+  };
+}
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -63,20 +101,22 @@ export default async function handler(req, res) {
   }
 
   // Re-download path: wallet re-auth + signed purchase receipt.
-  const wallet = req.headers['x-wallet-address'];
-  const authSignature = req.headers['x-auth-signature'];
-  const authTimestamp = req.headers['x-auth-timestamp'];
-  const receipt = req.headers['x-purchase-receipt'];
-  const cookies = parseCookieHeader(req.headers.cookie);
-  const redownloadSessionToken = req.headers['x-redownload-session'] || cookies.soulstarter_redownload_session || null;
-  const paymentSignature = req.headers['payment-signature'] || req.headers.payment || req.headers['x-payment'];
-  const hasAnyRedownloadHeaders = Boolean(wallet || authSignature || authTimestamp || receipt || redownloadSessionToken);
-  const hasSessionRedownloadHeaders = Boolean(wallet && receipt && redownloadSessionToken);
-  const hasSignedRedownloadHeaders = Boolean(wallet && receipt && authSignature && authTimestamp);
-  const hasSessionCreatorHeaders = Boolean(wallet && redownloadSessionToken && !receipt && !authSignature && !authTimestamp);
-  const hasSignedCreatorHeaders = Boolean(wallet && !receipt && authSignature && authTimestamp);
-  const hasAnyValidEntitlementHeaders =
-    hasSessionRedownloadHeaders || hasSignedRedownloadHeaders || hasSessionCreatorHeaders || hasSignedCreatorHeaders;
+  const {
+    wallet,
+    authSignature,
+    authTimestamp,
+    receipt,
+    redownloadSessionToken,
+    paymentSignature,
+    hasAnyRedownloadHeaders,
+    hasReceiptRedownloadHeaders,
+    hasSessionRecoveryHeaders,
+    hasSignedRecoveryHeaders,
+    hasAnyValidEntitlementHeaders
+  } = classifyRedownloadHeaders({
+    headers: req.headers,
+    cookieHeader: req.headers.cookie
+  });
 
   // Guardrail: partial re-download header sets should never fall through into purchase flow.
   // This prevents accidental repurchase when clients intended entitlement-based access.
@@ -85,7 +125,7 @@ export default async function handler(req, res) {
     return res.status(401).json({
       error: 'Incomplete re-download header set',
       flow_hint:
-        'Re-download requires either receipt mode (X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + auth/session) or session mode (X-WALLET-ADDRESS + auth/session for prior buyers and creators). No payment retry was attempted.',
+        'Re-download requires either agent primary mode (X-WALLET-ADDRESS + X-PURCHASE-RECEIPT) or recovery mode (X-WALLET-ADDRESS + auth/session for prior buyers and creators). No payment retry was attempted.',
       received_headers: {
         has_wallet: Boolean(wallet),
         has_receipt: Boolean(receipt),
@@ -95,10 +135,9 @@ export default async function handler(req, res) {
         has_payment_header: Boolean(paymentSignature)
       },
       expected_header_sets: {
-        session_mode: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SESSION'],
-        signed_fallback_mode: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
-        creator_session_mode: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
-        creator_signed_mode: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
+        agent_primary_mode: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT'],
+        human_session_recovery_mode: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
+        human_signed_recovery_mode: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       },
       redownload_session_bootstrap: {
         endpoint: '/api/auth/session',
@@ -122,36 +161,9 @@ export default async function handler(req, res) {
   if (hasAnyValidEntitlementHeaders) {
     let authWallet = String(wallet || '').toLowerCase();
     let usedSignedAuth = false;
-    if (authSignature && authTimestamp) {
-      const authCheck = verifyWalletAuth({
-        wallet,
-        soulId,
-        action: 'redownload',
-        timestamp: authTimestamp,
-        signature: authSignature
-      });
-
-      if (!authCheck.ok) {
-        return res.status(401).json({
-          error: authCheck.error,
-          auth_debug: authCheck.auth_debug || null
-        });
-      }
-      authWallet = authCheck.wallet;
-      usedSignedAuth = true;
-    } else {
-      const sessionCheck = verifyRedownloadSessionToken({
-        token: String(redownloadSessionToken || ''),
-        wallet: authWallet
-      });
-      if (!sessionCheck.ok) {
-        return res.status(401).json({ error: sessionCheck.error });
-      }
-    }
-
     let entitlementSource = 'receipt';
     let entitlementTransaction = 'prior-entitlement';
-    if (receipt) {
+    if (hasReceiptRedownloadHeaders) {
       const receiptCheck = verifyPurchaseReceipt({
         receipt,
         wallet: authWallet,
@@ -184,6 +196,33 @@ export default async function handler(req, res) {
         entitlementTransaction = receiptCheck.transaction || 'prior-entitlement';
       }
     } else {
+      if (authSignature && authTimestamp) {
+        const authCheck = verifyWalletAuth({
+          wallet,
+          soulId,
+          action: 'redownload',
+          timestamp: authTimestamp,
+          signature: authSignature
+        });
+
+        if (!authCheck.ok) {
+          return res.status(401).json({
+            error: authCheck.error,
+            auth_debug: authCheck.auth_debug || null
+          });
+        }
+        authWallet = authCheck.wallet;
+        usedSignedAuth = true;
+      } else {
+        const sessionCheck = verifyRedownloadSessionToken({
+          token: String(redownloadSessionToken || ''),
+          wallet: authWallet
+        });
+        if (!sessionCheck.ok) {
+          return res.status(401).json({ error: sessionCheck.error });
+        }
+      }
+
       const creatorEntitled = isCreatorWalletForSoul({ wallet: authWallet, soul });
       if (!creatorEntitled) {
         const onchainEntitlement = await resolveOnchainEntitlement({
@@ -237,7 +276,7 @@ export default async function handler(req, res) {
         res.setHeader('Set-Cookie', buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host }));
       } catch (_) {}
     }
-    if (entitlementSource === 'creator') {
+    if (entitlementSource !== 'receipt') {
       try {
         const receiptToken = createPurchaseReceipt({
           wallet: authWallet,
@@ -271,11 +310,12 @@ export default async function handler(req, res) {
     const httpServer = await getX402HTTPServer({ soulId, soul, sellerAddress });
     const context = createRequestContext(req);
     const result = await httpServer.processHTTPRequest(context);
+    const includeDebug = shouldIncludeDebug(req);
 
     if (result.type === 'payment-error') {
       if (result.response?.body && typeof result.response.body === 'object') {
         const paymentRequired = decodePaymentRequiredHeader(result.response?.headers);
-        const paymentDebug = buildPaymentDebug(req, paymentRequired);
+        const paymentDebug = includeDebug ? buildPaymentDebug(req, paymentRequired) : null;
 
         if (!context.paymentHeader) {
           result.response.body.auth_message_template = buildAuthMessage({
@@ -287,23 +327,25 @@ export default async function handler(req, res) {
           result.response.body.flow_hint =
             'No payment header was detected. Send PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload for purchase.';
         } else {
-          const submittedPayment = decodeSubmittedPayment(req);
-          const facilitatorVerify = await inspectFacilitatorVerify({
-            paymentPayload: submittedPayment,
-            paymentRequirements: paymentRequired?.accepts?.[0] || null,
-            x402Version: paymentRequired?.x402Version ?? submittedPayment?.x402Version ?? 2
-          });
-          const copyPastePayload = buildCopyPastePaymentPayloadTemplate(paymentRequired);
           result.response.body.flow_hint =
             'Payment header was detected but could not be verified/settled. Regenerate PAYMENT-SIGNATURE from the latest PAYMENT-REQUIRED and retry.';
-          result.response.body.accepted_copy_paste = paymentRequired?.accepts?.[0] || null;
-          result.response.body.copy_paste_payment_payload = copyPastePayload;
-          result.response.body.copy_paste_header_hint =
-            'PAYMENT-SIGNATURE: base64(JSON.stringify(copy_paste_payment_payload))';
-          result.response.body.payment_debug = {
-            ...paymentDebug,
-            facilitator_verify: facilitatorVerify
-          };
+          if (includeDebug) {
+            const submittedPayment = decodeSubmittedPayment(req);
+            const facilitatorVerify = await inspectFacilitatorVerify({
+              paymentPayload: submittedPayment,
+              paymentRequirements: paymentRequired?.accepts?.[0] || null,
+              x402Version: paymentRequired?.x402Version ?? submittedPayment?.x402Version ?? 2
+            });
+            const copyPastePayload = buildCopyPastePaymentPayloadTemplate(paymentRequired);
+            result.response.body.accepted_copy_paste = paymentRequired?.accepts?.[0] || null;
+            result.response.body.copy_paste_payment_payload = copyPastePayload;
+            result.response.body.copy_paste_header_hint =
+              'PAYMENT-SIGNATURE: base64(JSON.stringify(copy_paste_payment_payload))';
+            result.response.body.payment_debug = {
+              ...paymentDebug,
+              facilitator_verify: facilitatorVerify
+            };
+          }
         }
       }
       return applyInstructionResponse(res, result.response);
@@ -367,30 +409,39 @@ export default async function handler(req, res) {
 
     const settlement = settlementResult.settlement;
     if (!settlement.success) {
-      const settlementDiagnostics = await buildSettlementDiagnostics({
-        paymentPayload: result.paymentPayload,
-        paymentRequirements: result.paymentRequirements
-      });
-      const cdpSettleRequestDebug = buildCdpRequestDebug({
-        paymentPayload: result.paymentPayload,
-        paymentRequirements: result.paymentRequirements,
-        x402Version: result.paymentPayload?.x402Version ?? 2
-      });
+      const includeDebug = shouldIncludeDebug(req);
+      const settlementDiagnostics = includeDebug
+        ? await buildSettlementDiagnostics({
+            paymentPayload: result.paymentPayload,
+            paymentRequirements: result.paymentRequirements
+          })
+        : null;
+      const cdpSettleRequestDebug = includeDebug
+        ? buildCdpRequestDebug({
+            paymentPayload: result.paymentPayload,
+            paymentRequirements: result.paymentRequirements,
+            x402Version: result.paymentPayload?.x402Version ?? 2
+          })
+        : null;
       return res.status(402).json({
         error: 'Settlement failed',
         reason: settlement.errorReason,
         message: settlement.errorMessage,
-        settlement_diagnostics: settlementDiagnostics,
+        ...(includeDebug ? { settlement_diagnostics: settlementDiagnostics } : {}),
         settlement_attempts: settlementResult.attempts,
-        cdp_settle_request_preview: {
-          top_level_x402Version: cdpSettleRequestDebug?.top_level_x402Version ?? null,
-          transfer_method: cdpSettleRequestDebug?.transfer_method ?? null,
-          paymentPayload_keys: cdpSettleRequestDebug?.paymentPayload_keys ?? [],
-          paymentRequirements_keys: cdpSettleRequestDebug?.paymentRequirements_keys ?? [],
-          paymentPayload_field_types: cdpSettleRequestDebug?.paymentPayload_field_types ?? null,
-          paymentPayload_field_checks: cdpSettleRequestDebug?.paymentPayload_field_checks ?? null
-        },
-        cdp_settle_request_redacted: cdpSettleRequestDebug?.cdp_request_redacted ?? null
+        ...(includeDebug
+          ? {
+              cdp_settle_request_preview: {
+                top_level_x402Version: cdpSettleRequestDebug?.top_level_x402Version ?? null,
+                transfer_method: cdpSettleRequestDebug?.transfer_method ?? null,
+                paymentPayload_keys: cdpSettleRequestDebug?.paymentPayload_keys ?? [],
+                paymentRequirements_keys: cdpSettleRequestDebug?.paymentRequirements_keys ?? [],
+                paymentPayload_field_types: cdpSettleRequestDebug?.paymentPayload_field_types ?? null,
+                paymentPayload_field_checks: cdpSettleRequestDebug?.paymentPayload_field_checks ?? null
+              },
+              cdp_settle_request_redacted: cdpSettleRequestDebug?.cdp_request_redacted ?? null
+            }
+          : {})
       });
     }
 
@@ -1177,6 +1228,12 @@ function extractX402Error(error) {
   };
 
   return result;
+}
+
+function shouldIncludeDebug(req) {
+  const queryDebug = String(req?.query?.debug || '').toLowerCase();
+  if (queryDebug === '1' || queryDebug === 'true') return true;
+  return String(process.env.X402_VERBOSE_DEBUG || '').toLowerCase() === 'true';
 }
 
 async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements }) {
