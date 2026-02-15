@@ -1322,10 +1322,20 @@ async function loadSouls() {
     grid.innerHTML = souls
       .map(
         (soul) => {
-          const owned = isSoulAccessible(soul.id);
-          const cta = owned ? 'Download Soul' : 'Purchase Soul';
+          const purchased = ownedSoulSetForCurrentWallet().has(soul.id);
+          const accessible = isSoulAccessible(soul.id);
+          const cta = accessible ? 'Download Soul' : 'Purchase Soul';
+          const cardClasses = [
+            'soul-card',
+            soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : '',
+            purchased ? 'soul-card-owned' : ''
+          ]
+            .filter(Boolean)
+            .join(' ');
+          const ownershipPill = purchased ? '<span class="soul-card-state soul-card-state-owned">Purchased</span>' : '';
           return `
-      <article class="soul-card ${soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : ''}" data-soul-id="${escapeHtml(soul.id)}">
+      <article class="${cardClasses}" data-soul-id="${escapeHtml(soul.id)}">
+        ${ownershipPill}
         <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
         <h3>${escapeHtml(soul.name)}</h3>
         <p>${escapeHtml(soul.description)}</p>
@@ -1339,14 +1349,14 @@ async function loadSouls() {
         <div class="soul-card-meta">
           <div class="soul-lineage">
             <span class="badge badge-${escapeHtml((soul.provenance?.type || 'hybrid').toLowerCase())}">${escapeHtml(soul.provenance?.type || 'Hybrid')}</span>
-            <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(soul.provenance?.raised_by || 'Unknown lineage')}</span>
+            <span class="soul-lineage-note">${escapeHtml(soul.provenance?.raised_by || 'Unknown lineage')}</span>
           </div>
           <div>
             <span class="price">${escapeHtml(soul.price?.display || '$0.00 USDC')}</span>
             <span class="currency">USDC</span>
           </div>
         </div>
-        <button class="btn btn-primary btn-full" onclick="${owned ? `downloadOwnedSoul('${escapeHtml(soul.id)}')` : `purchaseSoul('${escapeHtml(soul.id)}')`}">${escapeHtml(cta)}</button>
+        <button class="btn btn-primary btn-full" onclick="${accessible ? `downloadOwnedSoul('${escapeHtml(soul.id)}')` : `purchaseSoul('${escapeHtml(soul.id)}')`}">${escapeHtml(cta)}</button>
       </article>
     `;
         }
