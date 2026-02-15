@@ -653,6 +653,31 @@ function buildAuthMessage({ wallet, soulId, action, timestamp }) {
   ].join('\n');
 }
 
+function buildAuthTypedData({ wallet, soulId, action, timestamp }) {
+  return {
+    domain: {
+      name: 'SoulStarter Authentication',
+      version: '1'
+    },
+    types: {
+      SoulStarterAuth: [
+        { name: 'wallet', type: 'address' },
+        { name: 'soul', type: 'string' },
+        { name: 'action', type: 'string' },
+        { name: 'timestamp', type: 'uint256' },
+        { name: 'statement', type: 'string' }
+      ]
+    },
+    message: {
+      wallet,
+      soul: String(soulId || ''),
+      action: String(action || ''),
+      timestamp: Number(timestamp),
+      statement: 'Authentication only. No token transfer or approval.'
+    }
+  };
+}
+
 function normalizeAddress(address) {
   try {
     return ethers.getAddress(String(address || '').trim());
@@ -698,13 +723,26 @@ async function ensureRedownloadSession() {
   if (existing) return existing;
 
   const timestamp = Date.now();
-  const message = buildAuthMessage({
+  const typed = buildAuthTypedData({
     wallet: walletAddress,
     soulId: '*',
     action: 'session',
     timestamp
   });
-  const signature = await signer.signMessage(message);
+  let signature;
+  try {
+    signature = await signer.signTypedData(typed.domain, typed.types, typed.message);
+  } catch (_) {
+    // Backward-compatible fallback for wallets that do not expose typed-data signing.
+    signature = await signer.signMessage(
+      buildAuthMessage({
+        wallet: walletAddress,
+        soulId: '*',
+        action: 'session',
+        timestamp
+      })
+    );
+  }
   const response = await fetchWithTimeout(`${CONFIG.apiBase}/auth/session`, {
     method: 'GET',
     headers: {

@@ -261,11 +261,40 @@ function moderatorAuthMessage(action, timestamp) {
   return ['SoulStarter Moderator Authentication', `address:${state.wallet}`, `action:${action}`, `timestamp:${timestamp}`].join('\n');
 }
 
+function moderatorAuthTypedData(action, timestamp) {
+  return {
+    domain: {
+      name: 'SoulStarter Moderator Authentication',
+      version: '1'
+    },
+    types: {
+      SoulStarterModeratorAuth: [
+        { name: 'wallet', type: 'address' },
+        { name: 'action', type: 'string' },
+        { name: 'timestamp', type: 'uint256' },
+        { name: 'statement', type: 'string' }
+      ]
+    },
+    message: {
+      wallet: state.wallet,
+      action: String(action || ''),
+      timestamp: Number(timestamp),
+      statement: 'Authentication only. No token transfer or approval.'
+    }
+  };
+}
+
 async function signModeratorHeaders(action) {
   if (!state.wallet || !state.signer) throw new Error('Connect wallet first');
   if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
   const timestamp = Date.now();
-  const signature = await state.signer.signMessage(moderatorAuthMessage(action, timestamp));
+  let signature;
+  try {
+    const typed = moderatorAuthTypedData(action, timestamp);
+    signature = await state.signer.signTypedData(typed.domain, typed.types, typed.message);
+  } catch (_) {
+    signature = await state.signer.signMessage(moderatorAuthMessage(action, timestamp));
+  }
   return {
     'X-MODERATOR-ADDRESS': state.wallet,
     'X-MODERATOR-SIGNATURE': signature,

@@ -53,6 +53,9 @@ export default function handler(req, res) {
       redownload_session_endpoint: '/api/auth/session',
       redownload_session_bootstrap_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
       purchase_header_preference: ['PAYMENT-SIGNATURE'],
+      ownership_auth_signature_preferred: 'eip712_typed_data',
+      ownership_auth_note:
+        'Creator/moderator/session ownership checks prefer EIP-712 typed-data auth signatures (no token transfer/approval).',
       agent_key_boundary:
         'Never send Bankr API keys or signer secrets to SoulStarter. SoulStarter accepts only signed x402 payment headers.'
     },

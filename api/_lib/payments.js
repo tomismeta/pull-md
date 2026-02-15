@@ -1,6 +1,21 @@
 import crypto from 'crypto';
 import { ethers } from 'ethers';
 
+const AUTH_STATEMENT = 'Authentication only. No token transfer or approval.';
+const AUTH_TYPED_DOMAIN = {
+  name: 'SoulStarter Authentication',
+  version: '1'
+};
+const AUTH_TYPED_TYPES = {
+  SoulStarterAuth: [
+    { name: 'wallet', type: 'address' },
+    { name: 'soul', type: 'string' },
+    { name: 'action', type: 'string' },
+    { name: 'timestamp', type: 'uint256' },
+    { name: 'statement', type: 'string' }
+  ]
+};
+
 export function setCors(res, origin) {
   const allowedOrigins = [
     'https://soulstarter.vercel.app',
@@ -59,13 +74,21 @@ export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature 
     return { ok: false, error: 'Authentication message expired' };
   }
 
+  const typed = buildAuthTypedData({ wallet, soulId, action, timestamp: ts });
+  try {
+    const recoveredTyped = ethers.verifyTypedData(typed.domain, typed.types, typed.message, signature);
+    if (typeof recoveredTyped === 'string' && recoveredTyped.toLowerCase() === wallet.toLowerCase()) {
+      return { ok: true, wallet: wallet.toLowerCase(), auth_format: 'eip712' };
+    }
+  } catch (_) {}
+
   const candidates = buildAuthMessageCandidates({ wallet, soulId, action, timestamp: ts });
   const recoveredMatches = [];
   for (const candidate of candidates) {
     try {
       const recovered = ethers.verifyMessage(candidate.message, signature);
       if (typeof recovered === 'string' && recovered.toLowerCase() === wallet.toLowerCase()) {
-        return { ok: true, wallet: wallet.toLowerCase() };
+        return { ok: true, wallet: wallet.toLowerCase(), auth_format: 'personal_sign' };
       }
       recoveredMatches.push({
         variant: candidate.variant,
@@ -85,6 +108,22 @@ export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature 
     auth_debug: {
       tried_variants: candidates.map((candidate) => candidate.variant),
       recovered: recoveredMatches
+    }
+  };
+}
+
+export function buildAuthTypedData({ wallet, soulId, action, timestamp }) {
+  const checksummed = ethers.getAddress(String(wallet || '').trim());
+  return {
+    domain: AUTH_TYPED_DOMAIN,
+    types: AUTH_TYPED_TYPES,
+    primaryType: 'SoulStarterAuth',
+    message: {
+      wallet: checksummed,
+      soul: String(soulId || ''),
+      action: String(action || ''),
+      timestamp: Number(timestamp),
+      statement: AUTH_STATEMENT
     }
   };
 }

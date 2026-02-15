@@ -294,10 +294,39 @@ function creatorAuthMessage(action, timestamp) {
   );
 }
 
+function creatorAuthTypedData(action, timestamp) {
+  return {
+    domain: {
+      name: 'SoulStarter Creator Authentication',
+      version: '1'
+    },
+    types: {
+      SoulStarterCreatorAuth: [
+        { name: 'wallet', type: 'address' },
+        { name: 'action', type: 'string' },
+        { name: 'timestamp', type: 'uint256' },
+        { name: 'statement', type: 'string' }
+      ]
+    },
+    message: {
+      wallet: STATE.wallet,
+      action: String(action || ''),
+      timestamp: Number(timestamp),
+      statement: 'Authentication only. No token transfer or approval.'
+    }
+  };
+}
+
 async function creatorAuth(action) {
   if (!STATE.signer || !STATE.wallet) throw new Error('Connect wallet first');
   const authTimestamp = Date.now();
-  const authSignature = await STATE.signer.signMessage(creatorAuthMessage(action, authTimestamp));
+  let authSignature;
+  try {
+    const typed = creatorAuthTypedData(action, authTimestamp);
+    authSignature = await STATE.signer.signTypedData(typed.domain, typed.types, typed.message);
+  } catch (_) {
+    authSignature = await STATE.signer.signMessage(creatorAuthMessage(action, authTimestamp));
+  }
   return {
     wallet_address: STATE.wallet,
     auth_signature: authSignature,

@@ -132,6 +132,7 @@ Important:
 - If `accepted` is missing or altered, server returns `No matching payment requirements`.
 - Keep `scheme` and `network` at top level (not nested under `payload`).
 - For `eip3009`, signature must be `payload.signature` (not `payload.authorization.signature`).
+- Ownership/auth signatures (creator/moderator/session/re-download challenge) use EIP-712 typed data when available and are non-spending (`Authentication only. No token transfer or approval.`).
 - Before signing, verify `accepted.payTo` matches trusted seller metadata exactly (full address, checksum comparison).
 - Ignore tiny unsolicited transfers and never copy destination addresses from transfer history.
 

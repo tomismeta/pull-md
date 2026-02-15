@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { ethers } from 'ethers';
 
 import {
+  buildAuthTypedData,
   buildAuthMessage,
   createPurchaseReceipt,
   createRedownloadSessionToken,
@@ -21,6 +22,29 @@ test('wallet session auth signature verifies with action=session', async () => {
     timestamp
   });
   const signature = await wallet.signMessage(message);
+
+  const checked = verifyWalletAuth({
+    wallet: wallet.address,
+    soulId: '*',
+    action: 'session',
+    timestamp,
+    signature
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.wallet, wallet.address.toLowerCase());
+});
+
+test('wallet session auth typed-data signature verifies with action=session', async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const timestamp = Date.now();
+  const typed = buildAuthTypedData({
+    wallet: wallet.address,
+    soulId: '*',
+    action: 'session',
+    timestamp
+  });
+  const signature = await wallet.signTypedData(typed.domain, typed.types, typed.message);
 
   const checked = verifyWalletAuth({
     wallet: wallet.address,

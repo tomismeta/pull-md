@@ -9,6 +9,7 @@ const MAX_SOUL_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 const MODERATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
+const AUTH_STATEMENT = 'Authentication only. No token transfer or approval.';
 const REVIEW_AUDIT_FILE = 'review-audit.jsonl';
 const PUBLISHED_CATALOG_FILE = 'published-catalog.json';
 const DEFAULT_MODERATOR_WALLETS = ['0x7F46aCB709cd8DF5879F84915CA431fB740989E4'];
@@ -268,6 +269,32 @@ function safeChecksumAddress(address) {
   } catch (_) {
     return null;
   }
+}
+
+function buildTypedAuthPayload({ domainName, primaryType, wallet, action, timestamp }) {
+  const normalizedWallet = ethers.getAddress(String(wallet || '').trim());
+  const ts = Number(timestamp);
+  return {
+    domain: {
+      name: domainName,
+      version: '1'
+    },
+    primaryType,
+    types: {
+      [primaryType]: [
+        { name: 'wallet', type: 'address' },
+        { name: 'action', type: 'string' },
+        { name: 'timestamp', type: 'uint256' },
+        { name: 'statement', type: 'string' }
+      ]
+    },
+    message: {
+      wallet: normalizedWallet,
+      action: String(action || '').trim(),
+      timestamp: ts,
+      statement: AUTH_STATEMENT
+    }
+  };
 }
 
 function buildCreatorAuthMessageWithNewline({ wallet, action, timestamp, newline }) {
@@ -754,6 +781,20 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
     return { ok: false, error: 'Authentication message expired' };
   }
 
+  try {
+    const typed = buildTypedAuthPayload({
+      domainName: 'SoulStarter Creator Authentication',
+      primaryType: 'SoulStarterCreatorAuth',
+      wallet,
+      action,
+      timestamp: ts
+    });
+    const recoveredTyped = ethers.verifyTypedData(typed.domain, typed.types, typed.message, signature);
+    if (typeof recoveredTyped === 'string' && recoveredTyped.toLowerCase() === String(wallet).toLowerCase()) {
+      return { ok: true, wallet: String(wallet).toLowerCase(), matched_variant: 'eip712' };
+    }
+  } catch (_) {}
+
   const candidates = buildCreatorAuthMessageCandidates({ wallet, action, timestamp: ts });
   for (const candidate of candidates) {
     try {
@@ -1020,6 +1061,20 @@ export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
   if (Math.abs(Date.now() - ts) > MODERATOR_AUTH_DRIFT_MS) {
     return { ok: false, error: 'Authentication message expired' };
   }
+
+  try {
+    const typed = buildTypedAuthPayload({
+      domainName: 'SoulStarter Moderator Authentication',
+      primaryType: 'SoulStarterModeratorAuth',
+      wallet,
+      action,
+      timestamp: ts
+    });
+    const recoveredTyped = ethers.verifyTypedData(typed.domain, typed.types, typed.message, signature);
+    if (typeof recoveredTyped === 'string' && recoveredTyped.toLowerCase() === normalizedWallet) {
+      return { ok: true, wallet: normalizedWallet, matched_variant: 'eip712' };
+    }
+  } catch (_) {}
 
   const candidates = buildModeratorAuthMessageCandidates({ wallet, action, timestamp: ts });
   for (const candidate of candidates) {
