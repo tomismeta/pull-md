@@ -542,7 +542,43 @@ function bindEvents() {
   });
 }
 
+function initMobileNav() {
+  const toggle = document.getElementById('navToggle');
+  const nav = document.getElementById('topNav');
+  if (!toggle || !nav) return;
+
+  const closeNav = () => {
+    nav.classList.remove('open');
+    toggle.setAttribute('aria-expanded', 'false');
+  };
+
+  toggle.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextOpen = !nav.classList.contains('open');
+    nav.classList.toggle('open', nextOpen);
+    toggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+  });
+
+  nav.querySelectorAll('a, button').forEach((item) => {
+    item.addEventListener('click', () => {
+      if (window.innerWidth <= 760) closeNav();
+    });
+  });
+
+  document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (!nav.contains(target) && !toggle.contains(target)) closeNav();
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 760) closeNav();
+  });
+}
+
 function initDefaults() {
+  initMobileNav();
   setWalletButton();
 }
 

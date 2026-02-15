@@ -37,7 +37,17 @@
           <span class="logo-mark">SS</span>
           <span>SoulStarter</span>
         </a>
-        <nav class="nav">
+        <button
+          class="nav-toggle"
+          id="navToggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="topNav"
+          aria-label="Toggle navigation"
+        >
+          Menu
+        </button>
+        <nav class="nav" id="topNav">
           <a href="/" class="nav-link">Back to Discover</a>
           <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">
             <span id="walletText">Connect Wallet</span>
