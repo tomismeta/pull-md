@@ -287,12 +287,6 @@ async function loadModeratorAllowlist() {
   updateModeratorNavLinkVisibility();
 }
 
-function creatorAuthMessage(action, timestamp) {
-  return ['SoulStarter Creator Authentication', `address:${STATE.wallet}`, `action:${action}`, `timestamp:${timestamp}`].join(
-    '\n'
-  );
-}
-
 function creatorSiweMessage(action, timestamp) {
   const ts = Number(timestamp);
   const nonceSeed = `${String(action || '')}|${String(ts)}`;
@@ -323,12 +317,7 @@ function creatorSiweMessage(action, timestamp) {
 async function creatorAuth(action) {
   if (!STATE.signer || !STATE.wallet) throw new Error('Connect wallet first');
   const authTimestamp = Date.now();
-  let authSignature;
-  try {
-    authSignature = await STATE.signer.signMessage(creatorSiweMessage(action, authTimestamp));
-  } catch (_) {
-    authSignature = await STATE.signer.signMessage(creatorAuthMessage(action, authTimestamp));
-  }
+  const authSignature = await STATE.signer.signMessage(creatorSiweMessage(action, authTimestamp));
   return {
     wallet_address: STATE.wallet,
     auth_signature: authSignature,

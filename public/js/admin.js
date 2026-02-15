@@ -257,10 +257,6 @@ async function connectBankr() {
   return connectWithProviderInternal(fallback, 'bankr', false);
 }
 
-function moderatorAuthMessage(action, timestamp) {
-  return ['SoulStarter Moderator Authentication', `address:${state.wallet}`, `action:${action}`, `timestamp:${timestamp}`].join('\n');
-}
-
 function moderatorSiweMessage(action, timestamp) {
   const ts = Number(timestamp);
   const nonceSeed = `${String(action || '')}|${String(ts)}`;
@@ -292,12 +288,7 @@ async function signModeratorHeaders(action) {
   if (!state.wallet || !state.signer) throw new Error('Connect wallet first');
   if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
   const timestamp = Date.now();
-  let signature;
-  try {
-    signature = await state.signer.signMessage(moderatorSiweMessage(action, timestamp));
-  } catch (_) {
-    signature = await state.signer.signMessage(moderatorAuthMessage(action, timestamp));
-  }
+  const signature = await state.signer.signMessage(moderatorSiweMessage(action, timestamp));
   return {
     'X-MODERATOR-ADDRESS': state.wallet,
     'X-MODERATOR-SIGNATURE': signature,

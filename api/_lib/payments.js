@@ -78,6 +78,8 @@ export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature 
     return { ok: false, error: 'Authentication message expired' };
   }
 
+  const allowLegacy = String(action || '').trim().toLowerCase() === 'redownload';
+
   const siweCandidates = buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp: ts });
   for (const candidate of siweCandidates) {
     try {
@@ -88,13 +90,12 @@ export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature 
     } catch (_) {}
   }
 
-  const typed = buildAuthTypedData({ wallet, soulId, action, timestamp: ts });
-  try {
-    const recoveredTyped = ethers.verifyTypedData(typed.domain, typed.types, typed.message, signature);
-    if (typeof recoveredTyped === 'string' && recoveredTyped.toLowerCase() === wallet.toLowerCase()) {
-      return { ok: true, wallet: wallet.toLowerCase(), auth_format: 'eip712' };
-    }
-  } catch (_) {}
+  if (!allowLegacy) {
+    return {
+      ok: false,
+      error: 'Signature does not match SIWE wallet authentication format'
+    };
+  }
 
   const candidates = buildAuthMessageCandidates({ wallet, soulId, action, timestamp: ts });
   const recoveredMatches = [];

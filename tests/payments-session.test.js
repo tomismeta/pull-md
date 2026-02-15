@@ -13,7 +13,7 @@ import {
   verifyWalletAuth
 } from '../api/_lib/payments.js';
 
-test('wallet session auth signature verifies with action=session', async () => {
+test('wallet session auth plain message is rejected (SIWE-only)', async () => {
   const wallet = ethers.Wallet.createRandom();
   const timestamp = Date.now();
   const message = buildAuthMessage({
@@ -32,11 +32,11 @@ test('wallet session auth signature verifies with action=session', async () => {
     signature
   });
 
-  assert.equal(checked.ok, true);
-  assert.equal(checked.wallet, wallet.address.toLowerCase());
+  assert.equal(checked.ok, false);
+  assert.match(String(checked.error || ''), /SIWE/i);
 });
 
-test('wallet session auth typed-data signature verifies with action=session', async () => {
+test('wallet session auth typed-data signature is rejected (SIWE-only)', async () => {
   const wallet = ethers.Wallet.createRandom();
   const timestamp = Date.now();
   const typed = buildAuthTypedData({
@@ -55,8 +55,8 @@ test('wallet session auth typed-data signature verifies with action=session', as
     signature
   });
 
-  assert.equal(checked.ok, true);
-  assert.equal(checked.wallet, wallet.address.toLowerCase());
+  assert.equal(checked.ok, false);
+  assert.match(String(checked.error || ''), /SIWE/i);
 });
 
 test('wallet session auth SIWE signature verifies with action=session', async () => {
@@ -81,6 +81,26 @@ test('wallet session auth SIWE signature verifies with action=session', async ()
   assert.equal(checked.ok, true);
   assert.equal(checked.wallet, wallet.address.toLowerCase());
   assert.equal(checked.auth_format, 'siwe');
+});
+
+test('redownload auth still accepts legacy plain message for strict agent compatibility', async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const timestamp = Date.now();
+  const message = buildAuthMessage({
+    wallet: wallet.address,
+    soulId: 'sassy-starter-v1',
+    action: 'redownload',
+    timestamp
+  });
+  const signature = await wallet.signMessage(message);
+  const checked = verifyWalletAuth({
+    wallet: wallet.address,
+    soulId: 'sassy-starter-v1',
+    action: 'redownload',
+    timestamp,
+    signature
+  });
+  assert.equal(checked.ok, true);
 });
 
 test('redownload session token binds to wallet and expires', async () => {

@@ -643,16 +643,6 @@ async function restoreWalletSession() {
   }
 }
 
-function buildAuthMessage({ wallet, soulId, action, timestamp }) {
-  return [
-    'SoulStarter Wallet Authentication',
-    `address:${wallet.toLowerCase()}`,
-    `soul:${soulId}`,
-    `action:${action}`,
-    `timestamp:${timestamp}`
-  ].join('\n');
-}
-
 function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
   const ts = Number(timestamp);
   const nonceSeed = `${String(soulId || '*')}|${String(action || '')}|${String(ts)}`;
@@ -731,19 +721,7 @@ async function ensureRedownloadSession() {
     action: 'session',
     timestamp
   });
-  let signature;
-  try {
-    signature = await signer.signMessage(siwe);
-  } catch (_) {
-    signature = await signer.signMessage(
-      buildAuthMessage({
-        wallet: walletAddress,
-        soulId: '*',
-        action: 'session',
-        timestamp
-      })
-    );
-  }
+  const signature = await signer.signMessage(siwe);
   const response = await fetchWithTimeout(`${CONFIG.apiBase}/auth/session`, {
     method: 'GET',
     headers: {

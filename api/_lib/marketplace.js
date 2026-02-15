@@ -9,7 +9,6 @@ const MAX_SOUL_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 const MODERATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
-const AUTH_STATEMENT = 'Authentication only. No token transfer or approval.';
 const SIWE_STATEMENT = 'Authenticate wallet ownership for SoulStarter. No token transfer or approval.';
 const SIWE_DOMAIN = String(process.env.SIWE_DOMAIN || 'soulstarter.vercel.app').trim();
 const SIWE_URI = String(process.env.SIWE_URI || `https://${SIWE_DOMAIN}`).trim();
@@ -275,55 +274,6 @@ function safeChecksumAddress(address) {
   }
 }
 
-function buildTypedAuthPayload({ domainName, primaryType, wallet, action, timestamp }) {
-  const normalizedWallet = ethers.getAddress(String(wallet || '').trim());
-  const ts = Number(timestamp);
-  return {
-    domain: {
-      name: domainName,
-      version: '1'
-    },
-    primaryType,
-    types: {
-      [primaryType]: [
-        { name: 'wallet', type: 'address' },
-        { name: 'action', type: 'string' },
-        { name: 'timestamp', type: 'uint256' },
-        { name: 'statement', type: 'string' }
-      ]
-    },
-    message: {
-      wallet: normalizedWallet,
-      action: String(action || '').trim(),
-      timestamp: ts,
-      statement: AUTH_STATEMENT
-    }
-  };
-}
-
-function buildCreatorAuthMessageWithNewline({ wallet, action, timestamp, newline }) {
-  return ['SoulStarter Creator Authentication', `address:${wallet}`, `action:${action}`, `timestamp:${timestamp}`].join(
-    newline
-  );
-}
-
-function buildCreatorAuthMessageCandidates({ wallet, action, timestamp }) {
-  const raw = asString(wallet);
-  const lower = raw.toLowerCase();
-  const checksummed = safeChecksumAddress(raw);
-  const wallets = [...new Set([lower, checksummed].filter(Boolean))];
-  const newlines = ['\n', '\r\n'];
-  const messages = [];
-  for (const walletVariant of wallets) {
-    for (const newline of newlines) {
-      messages.push({
-        variant: `${walletVariant === lower ? 'lowercase' : 'checksummed'}-${newline === '\n' ? 'lf' : 'crlf'}`,
-        message: buildCreatorAuthMessageWithNewline({ wallet: walletVariant, action, timestamp, newline })
-      });
-    }
-  }
-  return messages;
-}
 
 async function ensureDraftStore() {
   if (isMarketplaceDbEnabled()) return;
@@ -861,33 +811,9 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
     } catch (_) {}
   }
 
-  try {
-    const typed = buildTypedAuthPayload({
-      domainName: 'SoulStarter Creator Authentication',
-      primaryType: 'SoulStarterCreatorAuth',
-      wallet,
-      action,
-      timestamp: ts
-    });
-    const recoveredTyped = ethers.verifyTypedData(typed.domain, typed.types, typed.message, signature);
-    if (typeof recoveredTyped === 'string' && recoveredTyped.toLowerCase() === String(wallet).toLowerCase()) {
-      return { ok: true, wallet: String(wallet).toLowerCase(), matched_variant: 'eip712', auth_format: 'eip712' };
-    }
-  } catch (_) {}
-
-  const candidates = buildCreatorAuthMessageCandidates({ wallet, action, timestamp: ts });
-  for (const candidate of candidates) {
-    try {
-      const recovered = ethers.verifyMessage(candidate.message, signature);
-      if (typeof recovered === 'string' && recovered.toLowerCase() === String(wallet).toLowerCase()) {
-        return { ok: true, wallet: String(wallet).toLowerCase(), matched_variant: candidate.variant };
-      }
-    } catch (_) {}
-  }
-
   return {
     ok: false,
-    error: 'Signature does not match wallet address',
+    error: 'Signature does not match SIWE wallet authentication format',
     auth_message_template: buildCreatorAuthMessage({
       wallet: '0x<your-wallet>',
       action,
@@ -1084,30 +1010,6 @@ export function listModeratorWallets() {
   return parseModeratorWalletEnv();
 }
 
-function buildModeratorAuthMessageWithNewline({ wallet, action, timestamp, newline }) {
-  return ['SoulStarter Moderator Authentication', `address:${wallet}`, `action:${action}`, `timestamp:${timestamp}`].join(
-    newline
-  );
-}
-
-function buildModeratorAuthMessageCandidates({ wallet, action, timestamp }) {
-  const raw = asString(wallet);
-  const lower = raw.toLowerCase();
-  const checksummed = safeChecksumAddress(raw);
-  const wallets = [...new Set([lower, checksummed].filter(Boolean))];
-  const newlines = ['\n', '\r\n'];
-  const messages = [];
-  for (const walletVariant of wallets) {
-    for (const newline of newlines) {
-      messages.push({
-        variant: `${walletVariant === lower ? 'lowercase' : 'checksummed'}-${newline === '\n' ? 'lf' : 'crlf'}`,
-        message: buildModeratorAuthMessageWithNewline({ wallet: walletVariant, action, timestamp, newline })
-      });
-    }
-  }
-  return messages;
-}
-
 export function buildModeratorAuthMessage({ wallet, action, timestamp }) {
   return buildSiweAuthMessage({
     wallet: String(wallet || '').toLowerCase(),
@@ -1152,33 +1054,9 @@ export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
     } catch (_) {}
   }
 
-  try {
-    const typed = buildTypedAuthPayload({
-      domainName: 'SoulStarter Moderator Authentication',
-      primaryType: 'SoulStarterModeratorAuth',
-      wallet,
-      action,
-      timestamp: ts
-    });
-    const recoveredTyped = ethers.verifyTypedData(typed.domain, typed.types, typed.message, signature);
-    if (typeof recoveredTyped === 'string' && recoveredTyped.toLowerCase() === normalizedWallet) {
-      return { ok: true, wallet: normalizedWallet, matched_variant: 'eip712', auth_format: 'eip712' };
-    }
-  } catch (_) {}
-
-  const candidates = buildModeratorAuthMessageCandidates({ wallet, action, timestamp: ts });
-  for (const candidate of candidates) {
-    try {
-      const recovered = ethers.verifyMessage(candidate.message, signature);
-      if (typeof recovered === 'string' && recovered.toLowerCase() === normalizedWallet) {
-        return { ok: true, wallet: normalizedWallet, matched_variant: candidate.variant };
-      }
-    } catch (_) {}
-  }
-
   return {
     ok: false,
-    error: 'Signature does not match wallet address',
+    error: 'Signature does not match SIWE wallet authentication format',
     auth_message_template: buildModeratorAuthMessage({
       wallet: '0x<your-wallet>',
       action,
