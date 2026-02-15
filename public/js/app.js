@@ -61,6 +61,7 @@ let walletAddress = null;
 let walletType = null;
 const providerMetadata = new WeakMap();
 let providerDiscoveryInitialized = false;
+let activeSuccessDownloadUrl = null;
 
 function initProviderDiscovery() {
   if (providerDiscoveryInitialized || typeof window === 'undefined') return;
@@ -958,6 +959,14 @@ function triggerMarkdownDownload(content, soulId) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function revokeActiveSuccessDownloadUrl() {
+  if (!activeSuccessDownloadUrl) return;
+  try {
+    URL.revokeObjectURL(activeSuccessDownloadUrl);
+  } catch (_) {}
+  activeSuccessDownloadUrl = null;
+}
+
 function showPaymentSuccess(content, txHash, soulId, redownload) {
   const purchaseCard = document.getElementById('purchaseCard');
   if (purchaseCard) purchaseCard.style.display = 'none';
@@ -980,8 +989,9 @@ function showPaymentSuccess(content, txHash, soulId, redownload) {
   }
 
   if (downloadLink) {
-    const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
-    downloadLink.href = url;
+    revokeActiveSuccessDownloadUrl();
+    activeSuccessDownloadUrl = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
+    downloadLink.href = activeSuccessDownloadUrl;
     downloadLink.download = `${soulId}-SOUL.md`;
   }
 
@@ -989,14 +999,6 @@ function showPaymentSuccess(content, txHash, soulId, redownload) {
   try {
     triggerMarkdownDownload(content, soulId);
   } catch (_) {}
-
-  if (downloadLink) {
-    setTimeout(() => {
-      try {
-        URL.revokeObjectURL(downloadLink.href);
-      } catch (_) {}
-    }, 1000);
-  }
 
   const txHashEl = document.getElementById('txHash');
   if (txHashEl && successCard) {
@@ -1220,4 +1222,7 @@ window.connectBankr = connectBankr;
 window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
 window.downloadOwnedSoul = downloadOwnedSoul;
+window.addEventListener('beforeunload', () => {
+  revokeActiveSuccessDownloadUrl();
+});
 window.showToast = showToast;
