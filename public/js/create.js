@@ -175,23 +175,19 @@ function closeWalletModal() {
 async function ensureBaseNetwork(provider) {
   const network = await provider.getNetwork();
   if (Number(network.chainId) === BASE_CHAIN_DEC) return;
-  const raw = provider.provider;
   try {
-    await raw.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE_CHAIN_HEX }] });
+    await provider.send('wallet_switchEthereumChain', [{ chainId: BASE_CHAIN_HEX }]);
   } catch (error) {
     if (error.code === 4902) {
-      await raw.request({
-        method: 'wallet_addEthereumChain',
-        params: [
-          {
-            chainId: BASE_CHAIN_HEX,
-            chainName: 'Base',
-            nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-            rpcUrls: ['https://mainnet.base.org'],
-            blockExplorerUrls: ['https://basescan.org']
-          }
-        ]
-      });
+      await provider.send('wallet_addEthereumChain', [
+        {
+          chainId: BASE_CHAIN_HEX,
+          chainName: 'Base',
+          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+          rpcUrls: ['https://mainnet.base.org'],
+          blockExplorerUrls: ['https://basescan.org']
+        }
+      ]);
       return;
     }
     throw error;

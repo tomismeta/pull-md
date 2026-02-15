@@ -284,12 +284,11 @@ async function ensureBaseNetwork() {
   const network = await provider.getNetwork();
   if (Number(network.chainId) === CONFIG.baseChainIdDec) return;
 
-  const raw = provider.provider;
   try {
-    await raw.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CONFIG.baseChainIdHex }] });
+    await provider.send('wallet_switchEthereumChain', [{ chainId: CONFIG.baseChainIdHex }]);
   } catch (error) {
     if (error.code === 4902) {
-      await raw.request({ method: 'wallet_addEthereumChain', params: [CONFIG.baseChainParams] });
+      await provider.send('wallet_addEthereumChain', [CONFIG.baseChainParams]);
       return;
     }
     throw error;
