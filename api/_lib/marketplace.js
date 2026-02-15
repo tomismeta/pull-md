@@ -145,6 +145,11 @@ function buildDraftInput(input, options = {}) {
 }
 
 function getMarketplaceDraftsDir() {
+  const configured = String(process.env.MARKETPLACE_DRAFTS_DIR || '').trim();
+  if (configured) return configured;
+  if (process.env.VERCEL) {
+    return '/tmp/soulstarter-marketplace-drafts';
+  }
   return process.env.MARKETPLACE_DRAFTS_DIR || path.join(process.cwd(), '.marketplace-drafts');
 }
 

@@ -90,141 +90,160 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const action = getAction(req);
-  if (!action) {
-    return res.status(400).json({ error: 'Missing required action', endpoint: '/api/mcp/tools/creator_marketplace' });
-  }
+  try {
+    const action = getAction(req);
+    if (!action) {
+      return res.status(400).json({ error: 'Missing required action', endpoint: '/api/mcp/tools/creator_marketplace' });
+    }
 
-  const baseUrl = resolveBaseUrl(req);
+    const baseUrl = resolveBaseUrl(req);
 
-  if (DEPRECATED_ACTIONS.has(action)) {
-    return res.status(410).json({
-      error: 'Deprecated creator workflow action',
-      code: 'creator_workflow_simplified',
-      flow_hint:
-        'Draft and approval actions were removed. Use publish_listing for immediate publish, then moderate with remove_listing_visibility if needed.',
-      supported_actions: [
-        'get_listing_template',
-        'publish_listing',
-        'list_my_published_listings',
-        'list_published_listings',
-        'list_moderators',
-        'list_moderation_listings',
-        'remove_listing_visibility'
-      ]
-    });
-  }
-
-  if (action === 'get_listing_template' && req.method === 'GET') {
-    return res.status(200).json({
-      template: getMarketplaceDraftTemplate(),
-      notes: [
-        'Immediate publish workflow: name, price_usdc, description, soul_markdown.',
-        'No drafts, no approval queue, no publish state transitions.',
-        'Successful publish returns a shareable soul page URL.'
-      ]
-    });
-  }
-
-  if (action === 'list_moderators' && req.method === 'GET') {
-    const moderators = listModeratorWallets();
-    return res.status(200).json({ count: moderators.length, moderators });
-  }
-
-  if (action === 'publish_listing' && req.method === 'POST') {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const wallet = String(body.wallet_address || '').trim();
-    const signature = String(body.auth_signature || '').trim();
-    const timestamp = body.auth_timestamp;
-    const auth = verifyCreatorAuth({ wallet, signature, timestamp, action });
-    if (!auth.ok) return res.status(401).json(creatorAuthError(action, auth));
-
-    const listingPayload =
-      body.listing && typeof body.listing === 'object'
-        ? body.listing
-        : body.publish && typeof body.publish === 'object'
-          ? body.publish
-          : body;
-    const result = await publishCreatorListingDirect({
-      walletAddress: auth.wallet,
-      payload: listingPayload
-    });
-    if (!result.ok) {
-      return res.status(400).json({
-        ok: false,
-        errors: result.errors,
-        warnings: result.warnings,
-        draft_id: result.draft_id
+    if (DEPRECATED_ACTIONS.has(action)) {
+      return res.status(410).json({
+        error: 'Deprecated creator workflow action',
+        code: 'creator_workflow_simplified',
+        flow_hint:
+          'Draft and approval actions were removed. Use publish_listing for immediate publish, then moderate with remove_listing_visibility if needed.',
+        supported_actions: [
+          'get_listing_template',
+          'publish_listing',
+          'list_my_published_listings',
+          'list_published_listings',
+          'list_moderators',
+          'list_moderation_listings',
+          'remove_listing_visibility'
+        ]
       });
     }
 
-    const listing = withShareUrl(baseUrl, result.listing);
-    return res.status(200).json({
-      ok: true,
-      wallet_address: auth.wallet,
-      listing,
-      share_url: listing.share_url,
-      purchase_endpoint: `/api/souls/${listing.soul_id}/download`,
-      warnings: result.warnings || []
-    });
-  }
-
-  if (action === 'list_my_published_listings' && req.method === 'GET') {
-    const auth = creatorAuthFromHeaders(req, action);
-    if (!auth.ok) return res.status(401).json(creatorAuthError(action, auth));
-    const listings = await listPublishedListingSummaries({ includeHidden: true, publishedBy: auth.wallet });
-    return res.status(200).json({
-      wallet_address: auth.wallet,
-      count: listings.length,
-      listings: listings.map((item) => withShareUrl(baseUrl, item))
-    });
-  }
-
-  if (action === 'list_published_listings' && req.method === 'GET') {
-    const listings = await listPublishedListingSummaries({ includeHidden: false });
-    return res.status(200).json({
-      count: listings.length,
-      listings: listings.map((item) => withShareUrl(baseUrl, item))
-    });
-  }
-
-  if (action === 'list_moderation_listings' && req.method === 'GET') {
-    const moderator = moderatorAuthFromRequest(req, action);
-    if (!moderator.ok) return res.status(401).json(moderatorAuthError(action, moderator));
-    const listings = await listPublishedListingSummaries({ includeHidden: true });
-    const visible = listings.filter((item) => item.visibility !== 'hidden').map((item) => withShareUrl(baseUrl, item));
-    const hidden = listings.filter((item) => item.visibility === 'hidden').map((item) => withShareUrl(baseUrl, item));
-    return res.status(200).json({
-      moderator: moderator.wallet,
-      count: listings.length,
-      visible,
-      hidden
-    });
-  }
-
-  if (action === 'remove_listing_visibility' && req.method === 'POST') {
-    const moderator = moderatorAuthFromRequest(req, action);
-    if (!moderator.ok) return res.status(401).json(moderatorAuthError(action, moderator));
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const soulId = String(body.soul_id || '').trim();
-    const reason = typeof body.reason === 'string' ? body.reason : '';
-    if (!soulId) return res.status(400).json({ error: 'Missing required field: soul_id' });
-
-    const result = await setListingVisibility({
-      soulId,
-      visibility: 'hidden',
-      moderator: moderator.wallet,
-      reason
-    });
-    if (!result.ok) {
-      const statusCode = /not found/i.test(result.error) ? 404 : 400;
-      return res.status(statusCode).json({ ok: false, error: result.error });
+    if (action === 'get_listing_template' && req.method === 'GET') {
+      return res.status(200).json({
+        template: getMarketplaceDraftTemplate(),
+        notes: [
+          'Immediate publish workflow: name, price_usdc, description, soul_markdown.',
+          'No drafts, no approval queue, no publish state transitions.',
+          'Successful publish returns a shareable soul page URL.'
+        ]
+      });
     }
-    return res.status(200).json({
-      ok: true,
-      listing: withShareUrl(baseUrl, result.listing)
+
+    if (action === 'list_moderators' && req.method === 'GET') {
+      const moderators = listModeratorWallets();
+      return res.status(200).json({ count: moderators.length, moderators });
+    }
+
+    if (action === 'publish_listing' && req.method === 'GET') {
+      return res.status(405).json({
+        error: 'Method not allowed for publish_listing',
+        code: 'publish_listing_requires_post',
+        flow_hint:
+          'Use POST /api/mcp/tools/creator_marketplace?action=publish_listing with wallet auth fields and listing payload.',
+        required_method: 'POST'
+      });
+    }
+
+    if (action === 'publish_listing' && req.method === 'POST') {
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const wallet = String(body.wallet_address || '').trim();
+      const signature = String(body.auth_signature || '').trim();
+      const timestamp = body.auth_timestamp;
+      const auth = verifyCreatorAuth({ wallet, signature, timestamp, action });
+      if (!auth.ok) return res.status(401).json(creatorAuthError(action, auth));
+
+      const listingPayload =
+        body.listing && typeof body.listing === 'object'
+          ? body.listing
+          : body.publish && typeof body.publish === 'object'
+            ? body.publish
+            : body;
+      const result = await publishCreatorListingDirect({
+        walletAddress: auth.wallet,
+        payload: listingPayload
+      });
+      if (!result.ok) {
+        return res.status(400).json({
+          ok: false,
+          errors: result.errors,
+          warnings: result.warnings,
+          draft_id: result.draft_id
+        });
+      }
+
+      const listing = withShareUrl(baseUrl, result.listing);
+      return res.status(200).json({
+        ok: true,
+        wallet_address: auth.wallet,
+        listing,
+        share_url: listing.share_url,
+        purchase_endpoint: `/api/souls/${listing.soul_id}/download`,
+        warnings: result.warnings || []
+      });
+    }
+
+    if (action === 'list_my_published_listings' && req.method === 'GET') {
+      const auth = creatorAuthFromHeaders(req, action);
+      if (!auth.ok) return res.status(401).json(creatorAuthError(action, auth));
+      const listings = await listPublishedListingSummaries({ includeHidden: true, publishedBy: auth.wallet });
+      return res.status(200).json({
+        wallet_address: auth.wallet,
+        count: listings.length,
+        listings: listings.map((item) => withShareUrl(baseUrl, item))
+      });
+    }
+
+    if (action === 'list_published_listings' && req.method === 'GET') {
+      const listings = await listPublishedListingSummaries({ includeHidden: false });
+      return res.status(200).json({
+        count: listings.length,
+        listings: listings.map((item) => withShareUrl(baseUrl, item))
+      });
+    }
+
+    if (action === 'list_moderation_listings' && req.method === 'GET') {
+      const moderator = moderatorAuthFromRequest(req, action);
+      if (!moderator.ok) return res.status(401).json(moderatorAuthError(action, moderator));
+      const listings = await listPublishedListingSummaries({ includeHidden: true });
+      const visible = listings.filter((item) => item.visibility !== 'hidden').map((item) => withShareUrl(baseUrl, item));
+      const hidden = listings.filter((item) => item.visibility === 'hidden').map((item) => withShareUrl(baseUrl, item));
+      return res.status(200).json({
+        moderator: moderator.wallet,
+        count: listings.length,
+        visible,
+        hidden
+      });
+    }
+
+    if (action === 'remove_listing_visibility' && req.method === 'POST') {
+      const moderator = moderatorAuthFromRequest(req, action);
+      if (!moderator.ok) return res.status(401).json(moderatorAuthError(action, moderator));
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const soulId = String(body.soul_id || '').trim();
+      const reason = typeof body.reason === 'string' ? body.reason : '';
+      if (!soulId) return res.status(400).json({ error: 'Missing required field: soul_id' });
+
+      const result = await setListingVisibility({
+        soulId,
+        visibility: 'hidden',
+        moderator: moderator.wallet,
+        reason
+      });
+      if (!result.ok) {
+        const statusCode = /not found/i.test(result.error) ? 404 : 400;
+        return res.status(statusCode).json({ ok: false, error: result.error });
+      }
+      return res.status(200).json({
+        ok: true,
+        listing: withShareUrl(baseUrl, result.listing)
+      });
+    }
+
+    return res.status(405).json({ error: 'Unsupported method/action combination', action, method: req.method });
+  } catch (error) {
+    console.error('creator_marketplace handler failed:', error);
+    return res.status(500).json({
+      error: 'creator_marketplace_internal_error',
+      action: getAction(req),
+      method: req.method
     });
   }
-
-  return res.status(405).json({ error: 'Unsupported method/action combination', action, method: req.method });
 }
