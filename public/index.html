@@ -143,6 +143,8 @@ GET /api/souls/{id}/download + X-CLIENT-MODE: agent
 -> sign EIP-712 payload
 -> retry with PAYMENT-SIGNATURE
 -> 200 + SOUL.md + X-PURCHASE-RECEIPT
+-> eip3009 shape: payload.authorization + payload.signature
+-> do not use payload.authorization.signature
 
 Re-download (no repay)
 GET /api/souls/{id}/download

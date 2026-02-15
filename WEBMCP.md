@@ -130,6 +130,8 @@ base64(JSON.stringify({
 Important:
 - `accepted` is mandatory for v2 in this implementation.
 - If `accepted` is missing or altered, server returns `No matching payment requirements`.
+- Keep `scheme` and `network` at top level (not nested under `payload`).
+- For `eip3009`, signature must be `payload.signature` (not `payload.authorization.signature`).
 - Before signing, verify `accepted.payTo` matches trusted seller metadata exactly (full address, checksum comparison).
 - Ignore tiny unsolicited transfers and never copy destination addresses from transfer history.
 
@@ -141,7 +143,7 @@ Read `accepted.extra.assetTransferMethod` and sign accordingly:
 - CDP/Base production default:
 SoulStarter defaults to `eip3009`. Treat this as the primary path unless the latest `PAYMENT-REQUIRED` explicitly sets `permit2`.
 - Bankr wallet:
-Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
+Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` only.
 Current status: keep Bankr path marked experimental for EIP-3009 purchase execution.
 - Bankr API capability mapping:
 `/agent/me` for wallet discovery, `/agent/sign` for EIP-712 signature generation, and **do not** use `/agent/submit` for SoulStarter settlement.
@@ -163,6 +165,7 @@ Only the SoulStarter server needs facilitator credentials.
    Do not include `payload.authorization` when in permit2 mode.
    Send permit2 numeric fields as strings.
    For `eip3009`, include only `payload.authorization` + `payload.signature`.
+   Do not place signature inside `payload.authorization.signature`.
    Do not include `payload.permit2Authorization` or `payload.transaction` in eip3009 mode.
 5. Build x402 JSON payload, base64-encode it, and send:
    `PAYMENT-SIGNATURE: <base64(JSON payload)>`

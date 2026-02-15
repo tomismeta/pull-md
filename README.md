@@ -140,11 +140,13 @@ top-level `network` must be `eip155:8453` (not `base`), use `payload.permit2Auth
 - CDP/Base production default:
 `eip3009` is the default transfer method in this deployment.
 For eip3009 submit only `payload.authorization` + `payload.signature`.
+For eip3009, do not place signature in `payload.authorization.signature`.
 Never submit both `payload.authorization` and `payload.permit2Authorization` in one payload.
 
 Critical v2 payload requirement:
 - Include `accepted` exactly as `PAYMENT-REQUIRED.accepts[0]` in the submitted payment JSON.
 - If missing or modified, server returns `No matching payment requirements`.
+- Keep `scheme` and `network` at top level (not nested under `payload`).
 
 If a `402` body contains `auth_message_template`, treat it as optional re-download helper text.
 It does **not** replace the purchase flow.

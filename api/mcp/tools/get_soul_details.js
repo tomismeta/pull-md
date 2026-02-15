@@ -49,6 +49,12 @@ export default async function handler(req, res) {
         value: 'agent',
         note: 'Strict headless mode is receipt-only for re-download. Session/auth recovery headers are not used.'
       },
+      payment_payload_contract: {
+        top_level_required: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
+        eip3009_required: ['payload.authorization', 'payload.signature'],
+        eip3009_forbidden: ['payload.authorization.signature', 'payload.permit2Authorization', 'payload.transaction'],
+        note: 'Use accepted exactly as returned in PAYMENT-REQUIRED.accepts[0]. Keep scheme/network at top level.'
+      },
       auth_message_examples: {
         redownload: buildAuthMessage({
           wallet: '0x<your-wallet>',

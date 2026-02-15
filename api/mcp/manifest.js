@@ -205,6 +205,15 @@ export default function handler(req, res) {
       canonical_purchase_flow: 'GET /api/souls/{id}/download is the authoritative x402 flow for payment requirements and paid retry.',
       first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
       claim_request: 'Include PAYMENT-SIGNATURE with base64-encoded x402 payload to claim entitlement and download',
+      payment_payload_contract: {
+        top_level_required: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
+        eip3009_payload_required: ['payload.authorization', 'payload.signature'],
+        eip3009_payload_forbidden: ['payload.authorization.signature', 'payload.permit2Authorization', 'payload.transaction'],
+        notes: [
+          'accepted must exactly equal PAYMENT-REQUIRED.accepts[0]',
+          'scheme/network must be top-level (not nested under payload)'
+        ]
+      },
       redownload_request:
         'Headless agents should send X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT only (no session/auth recovery). Human/browser flow can use recovery mode.',
       strict_agent_mode:

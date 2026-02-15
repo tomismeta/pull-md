@@ -488,6 +488,26 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Unexpected x402 processing state' });
     }
 
+    const payloadContractCheck = validatePaymentPayloadContract({
+      paymentPayload: result.paymentPayload,
+      paymentRequirements: result.paymentRequirements
+    });
+    if (!payloadContractCheck.ok) {
+      return res.status(402).json({
+        error: 'Invalid payment payload contract',
+        code: payloadContractCheck.code,
+        flow_hint: payloadContractCheck.flowHint,
+        contract_requirements: payloadContractCheck.required || null,
+        mismatch_hints: payloadContractCheck.mismatchHints || [],
+        ...(shouldIncludeDebug(req)
+          ? {
+              payment_payload_shape: payloadContractCheck.shape || null,
+              payment_payload_preview: payloadContractCheck.preview || null
+            }
+          : {})
+      });
+    }
+
     const content = await loadSoulContent(soulId, { soul });
     if (!content) {
       return res.status(500).json({ error: 'Soul unavailable' });
@@ -986,6 +1006,13 @@ function canonicalizeSubmittedPayment(submitted) {
 
   const transferMethod = getTransferMethodFromSubmittedPayment(submitted);
   const payload = { ...submitted.payload };
+  const canonical = { ...submitted };
+
+  // Normalize malformed agent submissions where scheme/network were nested under payload.
+  if (!canonical.scheme && typeof payload.scheme === 'string') canonical.scheme = payload.scheme;
+  if (!canonical.network && typeof payload.network === 'string') canonical.network = payload.network;
+  delete payload.scheme;
+  delete payload.network;
 
   if (transferMethod === 'permit2') {
     if (payload.permit2 && !payload.permit2Authorization) {
@@ -994,13 +1021,18 @@ function canonicalizeSubmittedPayment(submitted) {
     delete payload.permit2;
     delete payload.authorization;
   } else {
+    // Normalize malformed eip3009 submissions where signature is nested under authorization.
+    if (!payload.signature && payload.authorization?.signature) {
+      payload.signature = payload.authorization.signature;
+      delete payload.authorization.signature;
+    }
     delete payload.transaction;
     delete payload.permit2Authorization;
     delete payload.permit2;
   }
 
   return {
-    ...submitted,
+    ...canonical,
     payload
   };
 }
@@ -1410,6 +1442,132 @@ function shouldIncludeDebug(req) {
   const queryDebug = String(req?.query?.debug || '').toLowerCase();
   if (queryDebug === '1' || queryDebug === 'true') return true;
   return String(process.env.X402_VERBOSE_DEBUG || '').toLowerCase() === 'true';
+}
+
+function validatePaymentPayloadContract({ paymentPayload, paymentRequirements }) {
+  const transferMethod = String(paymentRequirements?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
+  const payload = paymentPayload?.payload && typeof paymentPayload.payload === 'object' ? paymentPayload.payload : null;
+
+  if (!payload) {
+    return {
+      ok: false,
+      code: 'missing_payload_object',
+      flowHint: 'PAYMENT-SIGNATURE must decode to JSON containing a top-level payload object.',
+      required: { top_level: ['x402Version', 'scheme', 'network', 'accepted', 'payload'] },
+      mismatchHints: ['Missing top-level payload object.'],
+      shape: null,
+      preview: paymentPayload || null
+    };
+  }
+
+  if (transferMethod !== 'eip3009') {
+    return { ok: true };
+  }
+
+  const auth = payload.authorization && typeof payload.authorization === 'object' ? payload.authorization : null;
+  const signature = typeof payload.signature === 'string' ? payload.signature : null;
+  const mismatchHints = [];
+
+  if (!auth) {
+    mismatchHints.push('Missing payload.authorization for eip3009 payment.');
+  }
+  if (!signature) {
+    mismatchHints.push('Missing payload.signature for eip3009 payment.');
+  }
+  if (auth?.signature) {
+    mismatchHints.push('Do not nest signature under payload.authorization.signature; use payload.signature.');
+  }
+
+  if (!auth || !signature) {
+    return {
+      ok: false,
+      code: 'invalid_eip3009_payload_shape',
+      flowHint:
+        'For eip3009, send payload.signature at payload root and payload.authorization with from/to/value/validAfter/validBefore/nonce.',
+      required: {
+        eip3009_payload: {
+          payload: {
+            signature: '0x<eip712_signature>',
+            authorization: {
+              from: '<buyer_wallet>',
+              to: '<payTo>',
+              value: '<amount>',
+              validAfter: '<unix_sec>',
+              validBefore: '<unix_sec>',
+              nonce: '0x<bytes32>'
+            }
+          }
+        }
+      },
+      mismatchHints,
+      shape: {
+        hasPayload: Boolean(payload),
+        hasSignature: Boolean(signature),
+        hasAuthorization: Boolean(auth),
+        hasAuthorizationSignature: Boolean(auth?.signature)
+      },
+      preview: paymentPayload || null
+    };
+  }
+
+  const domain = {
+    name: paymentRequirements?.extra?.name ?? 'USD Coin',
+    version: paymentRequirements?.extra?.version ?? '2',
+    chainId: toChainId(paymentRequirements?.network) ?? 8453,
+    verifyingContract: paymentRequirements?.asset ?? null
+  };
+  const types = {
+    TransferWithAuthorization: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'validAfter', type: 'uint256' },
+      { name: 'validBefore', type: 'uint256' },
+      { name: 'nonce', type: 'bytes32' }
+    ]
+  };
+  const message = {
+    from: auth.from,
+    to: auth.to,
+    value: auth.value,
+    validAfter: auth.validAfter,
+    validBefore: auth.validBefore,
+    nonce: auth.nonce
+  };
+
+  try {
+    const recovered = ethers.verifyTypedData(domain, types, message, signature);
+    if (!equalAddress(recovered, auth.from)) {
+      return {
+        ok: false,
+        code: 'signature_authorizer_mismatch',
+        flowHint:
+          'EIP-712 signature does not match authorization.from. Re-sign the exact authorization object from the latest PAYMENT-REQUIRED and retry.',
+        required: null,
+        mismatchHints: [
+          `Recovered signer ${recovered} does not match authorization.from ${String(auth.from || '')}.`
+        ],
+        shape: {
+          recovered,
+          authorization_from: auth.from ?? null
+        },
+        preview: paymentPayload || null
+      };
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'signature_verification_failed',
+      flowHint:
+        'Unable to verify EIP-712 signature against payload.authorization. Ensure domain/message match and signature is in payload.signature.',
+      required: null,
+      mismatchHints: [error instanceof Error ? error.message : String(error)],
+      shape: null,
+      preview: paymentPayload || null
+    };
+  }
+
+  return { ok: true };
 }
 
 async function buildSettlementDiagnostics({ paymentPayload, paymentRequirements }) {
