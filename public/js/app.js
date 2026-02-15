@@ -27,6 +27,9 @@ const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 const X402_EXACT_PERMIT2_PROXY = '0x4020615294c913F045dc10f0a5cdEbd86c280001';
 const MAX_UINT256_DEC = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
 const EXPECTED_SELLER_ADDRESS = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
+const BASE_PUBLIC_RPC_URL = 'https://mainnet.base.org';
+const ERC20_TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
+const ERC20_TRANSFER_IFACE = new ethers.Interface(['event Transfer(address indexed from,address indexed to,uint256 value)']);
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 const RECEIPT_PREFIX = 'soulstarter.receipt.';
 const REDOWNLOAD_SESSION_PREFIX = 'soulstarter.redownload.session.';
@@ -63,6 +66,8 @@ const providerMetadata = new WeakMap();
 let providerDiscoveryInitialized = false;
 let activeSuccessDownloadUrl = null;
 let latestSoulDownload = null;
+let baseRpcProvider = null;
+let settlementVerificationSequence = 0;
 
 function initProviderDiscovery() {
   if (providerDiscoveryInitialized || typeof window === 'undefined') return;
@@ -830,7 +835,14 @@ async function purchaseSoul(soulId) {
       entitlementCacheByWallet.set(walletAddress, owned);
     }
 
-    showPaymentSuccess(content, tx, soulId, false);
+    const expectedSettlement = {
+      token: paymentPayload?.accepted?.asset || null,
+      amount: paymentPayload?.accepted?.amount || null,
+      payTo: paymentPayload?.accepted?.payTo || null,
+      payer: walletAddress,
+      network: paymentPayload?.accepted?.network || null
+    };
+    showPaymentSuccess(content, tx, soulId, false, expectedSettlement);
     showToast('Soul acquired successfully!', 'success');
     loadSouls();
     updateSoulPagePurchaseState();
@@ -877,6 +889,175 @@ function readSettlementResponse(response) {
   } catch (_) {
     return null;
   }
+}
+
+function getBaseRpcProvider() {
+  if (!baseRpcProvider) {
+    baseRpcProvider = new ethers.JsonRpcProvider(BASE_PUBLIC_RPC_URL);
+  }
+  return baseRpcProvider;
+}
+
+function normalizeAddressLower(value) {
+  try {
+    return ethers.getAddress(String(value || '').trim()).toLowerCase();
+  } catch (_) {
+    return null;
+  }
+}
+
+function parseBigInt(value) {
+  try {
+    if (value === null || value === undefined || value === '') return null;
+    return BigInt(String(value));
+  } catch (_) {
+    return null;
+  }
+}
+
+function isTransactionHash(value) {
+  return /^0x[a-fA-F0-9]{64}$/.test(String(value || ''));
+}
+
+function formatMicroUsdc(value) {
+  const amount = parseBigInt(value);
+  if (amount === null) return '-';
+  const whole = amount / 1000000n;
+  const fractional = (amount % 1000000n).toString().padStart(6, '0').replace(/0+$/, '');
+  return fractional ? `${whole}.${fractional} USDC` : `${whole} USDC`;
+}
+
+function shortenAddress(value) {
+  const normalized = normalizeAddressLower(value);
+  if (!normalized) return String(value || '-');
+  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
+}
+
+function renderSettlementVerification(view) {
+  const panel = document.getElementById('settlementVerification');
+  if (!panel) return;
+  if (!view || view.phase === 'hidden') {
+    panel.style.display = 'none';
+    panel.className = 'settlement-verification';
+    panel.innerHTML = '';
+    return;
+  }
+
+  panel.style.display = 'block';
+  if (view.phase === 'pending') {
+    panel.className = 'settlement-verification settlement-verification-pending';
+    panel.innerHTML = `
+      <div class="settlement-verification-header">
+        <strong>Verifying settlement</strong>
+      </div>
+      <p>Confirming on-chain USDC transfer details.</p>
+    `;
+    return;
+  }
+
+  if (view.phase === 'verified') {
+    const actual = view.actual || {};
+    panel.className = 'settlement-verification settlement-verification-ok';
+    panel.innerHTML = `
+      <div class="settlement-verification-header">
+        <strong>Verified settlement</strong>
+        <span class="verification-pill verification-pill-ok">Verified</span>
+      </div>
+      <p>This transaction matches SoulStarter payment expectations.</p>
+      <dl class="verification-grid">
+        <dt>Payer</dt><dd>${escapeHtml(shortenAddress(actual.from || view.expected?.payer || '-'))}</dd>
+        <dt>Pay To</dt><dd>${escapeHtml(shortenAddress(actual.to || view.expected?.payTo || '-'))}</dd>
+        <dt>Amount</dt><dd>${escapeHtml(formatMicroUsdc(actual.amount || view.expected?.amount || null))}</dd>
+        <dt>Token</dt><dd>${escapeHtml(shortenAddress(view.expected?.token || '-'))}</dd>
+      </dl>
+    `;
+    return;
+  }
+
+  panel.className = 'settlement-verification settlement-verification-warn';
+  panel.innerHTML = `
+    <div class="settlement-verification-header">
+      <strong>Settlement not verified</strong>
+      <span class="verification-pill verification-pill-warn">Check manually</span>
+    </div>
+    <p>${escapeHtml(view.reason || 'Transaction details did not match expected settlement fields.')}</p>
+    <dl class="verification-grid">
+      <dt>Expected Pay To</dt><dd>${escapeHtml(shortenAddress(view.expected?.payTo || '-'))}</dd>
+      <dt>Expected Amount</dt><dd>${escapeHtml(formatMicroUsdc(view.expected?.amount || null))}</dd>
+      <dt>Expected Token</dt><dd>${escapeHtml(shortenAddress(view.expected?.token || '-'))}</dd>
+    </dl>
+  `;
+}
+
+async function verifySettlementOnchain(txHash, expectedSettlement) {
+  const expected = {
+    token: normalizeAddressLower(expectedSettlement?.token),
+    payTo: normalizeAddressLower(expectedSettlement?.payTo),
+    payer: normalizeAddressLower(expectedSettlement?.payer),
+    amount: parseBigInt(expectedSettlement?.amount),
+    network: String(expectedSettlement?.network || '')
+  };
+
+  if (!isTransactionHash(txHash)) {
+    return { verified: false, reason: 'Missing or invalid transaction hash.', expected };
+  }
+
+  if (expected.network && expected.network !== 'eip155:8453') {
+    return { verified: false, reason: `Unexpected network: ${expected.network}`, expected };
+  }
+
+  const receipt = await getBaseRpcProvider().getTransactionReceipt(txHash);
+  if (!receipt) {
+    return { verified: false, reason: 'Transaction receipt not found yet.', expected };
+  }
+  if (Number(receipt.status) !== 1) {
+    return { verified: false, reason: 'Transaction reverted on-chain.', expected };
+  }
+
+  const transfers = [];
+  for (const log of receipt.logs || []) {
+    if (normalizeAddressLower(log.address) !== expected.token) continue;
+    if (!Array.isArray(log.topics) || String(log.topics[0] || '').toLowerCase() !== ERC20_TRANSFER_TOPIC.toLowerCase()) continue;
+    try {
+      const parsed = ERC20_TRANSFER_IFACE.parseLog(log);
+      if (!parsed || parsed.name !== 'Transfer') continue;
+      transfers.push({
+        from: normalizeAddressLower(parsed.args.from),
+        to: normalizeAddressLower(parsed.args.to),
+        amount: parseBigInt(parsed.args.value)
+      });
+    } catch (_) {}
+  }
+
+  if (!transfers.length) {
+    return { verified: false, reason: 'No USDC transfer log found for expected token in this transaction.', expected };
+  }
+
+  const exact = transfers.find((entry) => {
+    if (!entry.from || !entry.to || entry.amount === null) return false;
+    if (expected.payTo && entry.to !== expected.payTo) return false;
+    if (expected.payer && entry.from !== expected.payer) return false;
+    if (expected.amount !== null && entry.amount < expected.amount) return false;
+    return true;
+  });
+
+  if (exact) {
+    return { verified: true, expected, actual: exact };
+  }
+
+  const mismatch = [];
+  const best = transfers[0];
+  if (expected.payTo && !transfers.some((entry) => entry.to === expected.payTo)) mismatch.push('seller address mismatch');
+  if (expected.payer && !transfers.some((entry) => entry.from === expected.payer)) mismatch.push('payer mismatch');
+  if (expected.amount !== null && !transfers.some((entry) => entry.amount !== null && entry.amount >= expected.amount)) {
+    mismatch.push('amount below expected value');
+  }
+  return {
+    verified: false,
+    expected,
+    actual: best || null,
+    reason: mismatch.length ? mismatch.join('; ') : 'Transfer log found but fields did not match expected payment details.'
+  };
 }
 
 async function readError(response) {
@@ -1014,7 +1195,10 @@ function revokeActiveSuccessDownloadUrl() {
   activeSuccessDownloadUrl = null;
 }
 
-function showPaymentSuccess(content, txHash, soulId, redownload) {
+function showPaymentSuccess(content, txRef, soulId, redownload, expectedSettlement = null) {
+  const txHash = typeof txRef === 'string' ? txRef : null;
+  settlementVerificationSequence += 1;
+  const verificationRunId = settlementVerificationSequence;
   latestSoulDownload = { content, soulId };
   const purchaseCard = document.getElementById('purchaseCard');
   if (purchaseCard) purchaseCard.style.display = 'none';
@@ -1064,6 +1248,38 @@ function showPaymentSuccess(content, txHash, soulId, redownload) {
       txHashEl.textContent = 'Transaction: prior entitlement';
     }
   }
+
+  if (redownload || !txHash || !expectedSettlement) {
+    renderSettlementVerification({ phase: 'hidden' });
+    return;
+  }
+
+  renderSettlementVerification({ phase: 'pending' });
+  verifySettlementOnchain(txHash, expectedSettlement)
+    .then((result) => {
+      if (verificationRunId !== settlementVerificationSequence) return;
+      if (result.verified) {
+        renderSettlementVerification({
+          phase: 'verified',
+          actual: result.actual,
+          expected: result.expected
+        });
+        return;
+      }
+      renderSettlementVerification({
+        phase: 'warn',
+        reason: result.reason,
+        expected: result.expected
+      });
+    })
+    .catch(() => {
+      if (verificationRunId !== settlementVerificationSequence) return;
+      renderSettlementVerification({
+        phase: 'warn',
+        reason: 'Unable to verify settlement right now. You can still inspect the transaction on BaseScan.',
+        expected: expectedSettlement
+      });
+    });
 }
 
 function escapeHtml(text) {

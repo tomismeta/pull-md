@@ -812,6 +812,83 @@ main {
   text-decoration: none;
 }
 
+.settlement-verification {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.settlement-verification p {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-size: 0.75rem;
+}
+
+.settlement-verification-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.verification-pill {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  font-family: 'Manrope', sans-serif;
+  border: 1px solid transparent;
+}
+
+.verification-pill-ok {
+  border-color: rgba(20, 120, 75, 0.25);
+  background: rgba(20, 120, 75, 0.12);
+  color: #0d6d45;
+}
+
+.verification-pill-warn {
+  border-color: rgba(160, 98, 26, 0.3);
+  background: rgba(160, 98, 26, 0.12);
+  color: #8a5214;
+}
+
+.settlement-verification-ok {
+  border-color: #b7dfc8;
+  background: #f4fcf7;
+}
+
+.settlement-verification-warn {
+  border-color: #e6d2b3;
+  background: #fffaf3;
+}
+
+.settlement-verification-pending {
+  border-color: #d5ddeb;
+  background: #f6f9ff;
+}
+
+.verification-grid {
+  margin: 8px 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  align-items: baseline;
+}
+
+.verification-grid dt {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.verification-grid dd {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text);
+  font-family: 'Manrope', sans-serif;
+}
+
 .modal {
   position: fixed;
   inset: 0;
