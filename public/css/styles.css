@@ -323,6 +323,7 @@ main {
   color: var(--text-soft);
   margin-bottom: 12px;
   font-size: 0.89rem;
+  overflow-wrap: anywhere;
 }
 
 .soul-format-label {

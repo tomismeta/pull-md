@@ -368,7 +368,7 @@ function renderPublishedList(items) {
       const soulId = String(item.soul_id || '').trim();
       const type = 'hybrid';
       const creator = shortenAddress(item.wallet_address || STATE.wallet || '');
-      const description = String(item.description || 'Published soul listing.');
+      const description = formatCardDescription(item.description, 'Published soul listing.');
       return `
         <article class="soul-card">
           <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(item))}</div>
@@ -419,6 +419,18 @@ function escapeHtml(value) {
   const div = document.createElement('div');
   div.textContent = String(value || '');
   return div.innerHTML;
+}
+
+function formatCardDescription(value, fallback) {
+  const raw = String(value || '').replace(/\r?\n+/g, ' ').trim();
+  if (!raw) return fallback;
+  const cleaned = raw
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/[*_`~>#]+/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([:;,.!?])/g, '$1')
+    .trim();
+  return cleaned || fallback;
 }
 
 async function refreshPublished() {

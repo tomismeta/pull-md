@@ -591,6 +591,7 @@ function renderOwnedSouls() {
   const byId = new Map((Array.isArray(soulCatalogCache) ? soulCatalogCache : []).map((soul) => [soul.id, soul]));
   const cards = [...allSoulIds].map((soulId) => {
     const soul = byId.get(soulId) || { id: soulId, name: soulId, description: 'Soul access available' };
+    const cardDescription = formatCardDescription(soul.description, 'Soul access available');
     const isOwned = owned.has(soulId);
     const isCreated = created.has(soulId);
     const sourceLabel = isOwned && isCreated ? 'Purchased and created' : isCreated ? 'Creator access' : 'Wallet entitlement';
@@ -598,7 +599,7 @@ function renderOwnedSouls() {
       <article class="soul-card" data-owned-soul-id="${escapeHtml(soul.id)}">
         <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
         <h3>${escapeHtml(soul.name || soul.id)}</h3>
-        <p>${escapeHtml(soul.description || 'Soul access available')}</p>
+        <p>${escapeHtml(cardDescription)}</p>
         <div class="soul-card-meta">
           <div class="soul-lineage">
             ${
@@ -1418,6 +1419,18 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function formatCardDescription(value, fallback) {
+  const raw = String(value || '').replace(/\r?\n+/g, ' ').trim();
+  if (!raw) return fallback;
+  const cleaned = raw
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/[*_`~>#]+/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([:;,.!?])/g, '$1')
+    .trim();
+  return cleaned || fallback;
+}
+
 function getSoulGlyph(soul) {
   const name = String(soul?.name || soul?.id || 'Soul').trim();
   const clean = name.replace(/[^a-zA-Z0-9 ]/g, '');
@@ -1455,11 +1468,12 @@ async function loadSouls() {
           const cta = owned ? 'Download SOUL.md' : 'Purchase SOUL.md';
           const lineageLabel = formatCreatorLabel(soul.provenance?.raised_by || '');
           const type = String((soul.provenance?.type || 'hybrid')).toLowerCase();
+          const cardDescription = formatCardDescription(soul.description, 'Soul listing available.');
           return `
       <article class="soul-card ${soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : ''}" data-soul-id="${escapeHtml(soul.id)}">
         <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
         <h3>${escapeHtml(soul.name)}</h3>
-        <p>${escapeHtml(soul.description)}</p>
+        <p>${escapeHtml(cardDescription)}</p>
         ${
           soul.source_url
             ? `<a class="soul-source-link" href="${escapeHtml(soul.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
