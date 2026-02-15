@@ -28,6 +28,17 @@ const SETTLE_INITIAL_DELAY_MS = Number(process.env.X402_SETTLE_INITIAL_DELAY_MS 
 const inFlightSettlements = new Map();
 const entitlementCache = new Map();
 const ENTITLEMENT_CACHE_TTL_MS = Number(process.env.ENTITLEMENT_CACHE_TTL_MS || String(7 * 24 * 60 * 60 * 1000));
+const onchainEntitlementCache = new Map();
+const ONCHAIN_ENTITLEMENT_POSITIVE_TTL_MS = Number(
+  process.env.ONCHAIN_ENTITLEMENT_POSITIVE_TTL_MS || String(24 * 60 * 60 * 1000)
+);
+const ONCHAIN_ENTITLEMENT_NEGATIVE_TTL_MS = Number(
+  process.env.ONCHAIN_ENTITLEMENT_NEGATIVE_TTL_MS || String(5 * 60 * 1000)
+);
+const ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK = Number(process.env.ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK || '0');
+const ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE = Number(process.env.ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE || '2000000');
+const BASE_MAINNET_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+const ERC20_TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -62,15 +73,19 @@ export default async function handler(req, res) {
   const hasAnyRedownloadHeaders = Boolean(wallet || authSignature || authTimestamp || receipt || redownloadSessionToken);
   const hasSessionRedownloadHeaders = Boolean(wallet && receipt && redownloadSessionToken);
   const hasSignedRedownloadHeaders = Boolean(wallet && receipt && authSignature && authTimestamp);
+  const hasSessionCreatorHeaders = Boolean(wallet && redownloadSessionToken && !receipt && !authSignature && !authTimestamp);
+  const hasSignedCreatorHeaders = Boolean(wallet && !receipt && authSignature && authTimestamp);
+  const hasAnyValidEntitlementHeaders =
+    hasSessionRedownloadHeaders || hasSignedRedownloadHeaders || hasSessionCreatorHeaders || hasSignedCreatorHeaders;
 
   // Guardrail: partial re-download header sets should never fall through into purchase flow.
   // This prevents accidental repurchase when clients intended entitlement-based access.
-  if (hasAnyRedownloadHeaders && !hasSessionRedownloadHeaders && !hasSignedRedownloadHeaders) {
+  if (hasAnyRedownloadHeaders && !hasAnyValidEntitlementHeaders) {
     const walletForTemplate = typeof wallet === 'string' && wallet ? wallet : '0x<your-wallet>';
     return res.status(401).json({
       error: 'Incomplete re-download header set',
       flow_hint:
-        'Re-download requires X-WALLET-ADDRESS + X-PURCHASE-RECEIPT and either X-REDOWNLOAD-SESSION (preferred) or X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP. No payment retry was attempted.',
+        'Re-download requires either receipt mode (X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + auth/session) or session mode (X-WALLET-ADDRESS + auth/session for prior buyers and creators). No payment retry was attempted.',
       received_headers: {
         has_wallet: Boolean(wallet),
         has_receipt: Boolean(receipt),
@@ -81,7 +96,9 @@ export default async function handler(req, res) {
       },
       expected_header_sets: {
         session_mode: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SESSION'],
-        signed_fallback_mode: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
+        signed_fallback_mode: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+        creator_session_mode: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
+        creator_signed_mode: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       },
       redownload_session_bootstrap: {
         endpoint: '/api/auth/session',
@@ -102,7 +119,7 @@ export default async function handler(req, res) {
     });
   }
 
-  if (hasSessionRedownloadHeaders || hasSignedRedownloadHeaders) {
+  if (hasAnyValidEntitlementHeaders) {
     let authWallet = String(wallet || '').toLowerCase();
     let usedSignedAuth = false;
     if (authSignature && authTimestamp) {
@@ -132,15 +149,78 @@ export default async function handler(req, res) {
       }
     }
 
-    const receiptCheck = verifyPurchaseReceipt({
-      receipt,
-      wallet: authWallet,
-      soulId
-    });
+    let entitlementSource = 'receipt';
+    let entitlementTransaction = 'prior-entitlement';
+    if (receipt) {
+      const receiptCheck = verifyPurchaseReceipt({
+        receipt,
+        wallet: authWallet,
+        soulId
+      });
 
-    if (!receiptCheck.ok) {
-      return res.status(401).json({ error: receiptCheck.error });
+      if (!receiptCheck.ok) {
+        const onchainEntitlement = await resolveOnchainEntitlement({
+          wallet: authWallet,
+          soulId,
+          soul,
+          sellerAddress
+        });
+        if (!onchainEntitlement.ok) {
+          return res.status(401).json({
+            error: receiptCheck.error,
+            flow_hint:
+              'Receipt verification failed and no on-chain entitlement was found for this wallet+soul. Ensure wallet matches original buyer or submit PAYMENT-SIGNATURE for new purchase.',
+            onchain_entitlement: {
+              checked: true,
+              entitled: false,
+              reason: onchainEntitlement.reason || null
+            }
+          });
+        }
+        entitlementSource = 'onchain';
+        entitlementTransaction = onchainEntitlement.transaction || 'onchain-entitlement';
+      } else {
+        entitlementSource = 'receipt';
+        entitlementTransaction = receiptCheck.transaction || 'prior-entitlement';
+      }
+    } else {
+      const creatorEntitled = isCreatorWalletForSoul({ wallet: authWallet, soul });
+      if (!creatorEntitled) {
+        const onchainEntitlement = await resolveOnchainEntitlement({
+          wallet: authWallet,
+          soulId,
+          soul,
+          sellerAddress
+        });
+        if (!onchainEntitlement.ok) {
+          return res.status(401).json({
+            error: 'No receipt provided and wallet has no prior entitlement for this soul',
+            flow_hint:
+              'Session-only mode works for prior buyers/creators. This wallet has no verified ownership for this soul yet.',
+            onchain_entitlement: {
+              checked: true,
+              entitled: false,
+              reason: onchainEntitlement.reason || null
+            }
+          });
+        }
+        entitlementSource = 'onchain';
+        entitlementTransaction = onchainEntitlement.transaction || 'onchain-entitlement';
+      } else {
+        entitlementSource = 'creator';
+        entitlementTransaction = 'creator-entitlement';
+      }
     }
+
+    if (entitlementSource === 'creator') {
+      // Creator access is explicitly wallet-bound to publishedBy and requires wallet auth/session.
+    } else if (entitlementSource === 'onchain') {
+      // On-chain ownership fallback allows session-only redownloads when receipts are missing/legacy.
+    } else if (entitlementSource !== 'receipt') {
+        return res.status(401).json({
+          error: 'Unsupported entitlement source'
+        });
+      }
 
     const content = await loadSoulContent(soulId);
     if (!content) {
@@ -149,12 +229,22 @@ export default async function handler(req, res) {
     cacheEntitlement({
       wallet: authWallet,
       soulId,
-      transaction: receiptCheck.transaction || 'prior-entitlement'
+      transaction: entitlementTransaction
     });
     if (usedSignedAuth) {
       try {
         const sessionToken = createRedownloadSessionToken({ wallet: authWallet });
         res.setHeader('Set-Cookie', buildRedownloadSessionSetCookie({ token: sessionToken, reqHost: req.headers.host }));
+      } catch (_) {}
+    }
+    if (entitlementSource === 'creator') {
+      try {
+        const receiptToken = createPurchaseReceipt({
+          wallet: authWallet,
+          soulId,
+          transaction: entitlementTransaction
+        });
+        res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
       } catch (_) {}
     }
 
@@ -165,10 +255,10 @@ export default async function handler(req, res) {
       Buffer.from(
         JSON.stringify({
           success: true,
-          transaction: receiptCheck.transaction || 'prior-entitlement',
+          transaction: entitlementTransaction,
           network: 'eip155:8453',
           soulDelivered: soulId,
-          entitlementSource: 'receipt'
+          entitlementSource
         })
       ).toString('base64')
     );
@@ -409,6 +499,139 @@ function cacheEntitlement({ wallet, soulId, transaction }) {
     transaction: transaction || 'prior-entitlement',
     expiresAt: Date.now() + ENTITLEMENT_CACHE_TTL_MS
   });
+}
+
+function onchainEntitlementKey(wallet, soulId, sellerAddress) {
+  return `${String(wallet || '').toLowerCase()}::${String(soulId || '')}::${String(sellerAddress || '').toLowerCase()}`;
+}
+
+function getCachedOnchainEntitlement(wallet, soulId, sellerAddress) {
+  const key = onchainEntitlementKey(wallet, soulId, sellerAddress);
+  const hit = onchainEntitlementCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    onchainEntitlementCache.delete(key);
+    return null;
+  }
+  return hit;
+}
+
+function cacheOnchainEntitlement({ wallet, soulId, sellerAddress, ok, transaction, reason }) {
+  if (!wallet || !soulId || !sellerAddress) return;
+  onchainEntitlementCache.set(onchainEntitlementKey(wallet, soulId, sellerAddress), {
+    ok: Boolean(ok),
+    transaction: transaction || null,
+    reason: reason || null,
+    expiresAt: Date.now() + (ok ? ONCHAIN_ENTITLEMENT_POSITIVE_TTL_MS : ONCHAIN_ENTITLEMENT_NEGATIVE_TTL_MS)
+  });
+}
+
+function isAddress(value) {
+  return /^0x[a-fA-F0-9]{40}$/.test(String(value || ''));
+}
+
+async function resolveOnchainEntitlement({ wallet, soulId, soul, sellerAddress }) {
+  const normalizedWallet = String(wallet || '').toLowerCase();
+  const normalizedSeller = String(sellerAddress || '').toLowerCase();
+  const fromCache = getCachedOnchainEntitlement(normalizedWallet, soulId, normalizedSeller);
+  if (fromCache) {
+    return { ok: Boolean(fromCache.ok), transaction: fromCache.transaction || null, reason: fromCache.reason || null, cached: true };
+  }
+
+  if (!isAddress(normalizedWallet) || !isAddress(normalizedSeller)) {
+    const reason = 'invalid_wallet_or_seller_address';
+    cacheOnchainEntitlement({ wallet: normalizedWallet, soulId, sellerAddress: normalizedSeller, ok: false, reason });
+    return { ok: false, reason };
+  }
+
+  let requiredAmount;
+  try {
+    requiredAmount = BigInt(String(soul?.priceMicroUsdc || '0'));
+  } catch (_) {
+    requiredAmount = 0n;
+  }
+  if (requiredAmount <= 0n) {
+    const reason = 'invalid_soul_price';
+    cacheOnchainEntitlement({ wallet: normalizedWallet, soulId, sellerAddress: normalizedSeller, ok: false, reason });
+    return { ok: false, reason };
+  }
+
+  const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
+  const provider = new ethers.JsonRpcProvider(rpcUrl, 8453);
+  const transferIface = new ethers.Interface(['event Transfer(address indexed from, address indexed to, uint256 value)']);
+
+  try {
+    const latest = await provider.getBlockNumber();
+    const startBlock = Number.isFinite(ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK) && ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK >= 0
+      ? ONCHAIN_ENTITLEMENT_SCAN_FROM_BLOCK
+      : 0;
+    const chunkSize = Number.isFinite(ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE) && ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE > 0
+      ? Math.floor(ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE)
+      : 2_000_000;
+    const fromTopic = ethers.zeroPadValue(normalizedWallet, 32);
+    const toTopic = ethers.zeroPadValue(normalizedSeller, 32);
+
+    for (let fromBlock = startBlock; fromBlock <= latest; fromBlock += chunkSize) {
+      const toBlock = Math.min(latest, fromBlock + chunkSize - 1);
+      const logs = await provider.getLogs({
+        address: BASE_MAINNET_USDC,
+        fromBlock,
+        toBlock,
+        topics: [ERC20_TRANSFER_TOPIC, fromTopic, toTopic]
+      });
+
+      for (const log of logs) {
+        let value = 0n;
+        try {
+          const parsed = transferIface.parseLog({ topics: log.topics, data: log.data });
+          value = BigInt(String(parsed?.args?.value ?? '0'));
+        } catch (_) {
+          try {
+            value = BigInt(String(log?.data || '0x0'));
+          } catch {
+            value = 0n;
+          }
+        }
+        if (value >= requiredAmount) {
+          const transaction = log.transactionHash || null;
+          cacheOnchainEntitlement({
+            wallet: normalizedWallet,
+            soulId,
+            sellerAddress: normalizedSeller,
+            ok: true,
+            transaction
+          });
+          return { ok: true, transaction, reason: null, cached: false };
+        }
+      }
+    }
+
+    const reason = 'no_matching_payment_transfer_found';
+    cacheOnchainEntitlement({
+      wallet: normalizedWallet,
+      soulId,
+      sellerAddress: normalizedSeller,
+      ok: false,
+      reason
+    });
+    return { ok: false, reason, cached: false };
+  } catch (error) {
+    const reason = `onchain_query_failed:${error instanceof Error ? error.message : String(error)}`;
+    cacheOnchainEntitlement({
+      wallet: normalizedWallet,
+      soulId,
+      sellerAddress: normalizedSeller,
+      ok: false,
+      reason
+    });
+    return { ok: false, reason, cached: false };
+  }
+}
+
+function isCreatorWalletForSoul({ wallet, soul }) {
+  const creator = String(soul?.publishedBy || '').toLowerCase();
+  const candidate = String(wallet || '').toLowerCase();
+  return Boolean(creator && candidate && creator === candidate);
 }
 
 function decodePaymentRequiredHeader(headers = {}) {

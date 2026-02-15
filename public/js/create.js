@@ -1,5 +1,4 @@
 const API_BASE = '/api/mcp/tools/creator_marketplace';
-const DEFAULT_SELLER = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
@@ -153,8 +152,6 @@ async function connectWithProviderInternal(rawProvider, walletType, silent) {
     saveWalletSession();
     setWalletButton();
     updateModeratorNavLinkVisibility();
-    const seller = document.getElementById('sellerAddress');
-    if (seller && !seller.value.trim()) seller.value = DEFAULT_SELLER;
     if (!silent) toast('Wallet connected', 'success');
   } catch (error) {
     if (!silent) {
@@ -324,55 +321,28 @@ async function creatorAuth(action) {
   };
 }
 
-function splitTags(input) {
-  return String(input || '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function collectDraft() {
+  const name = document.getElementById('name').value.trim();
+  const description = document.getElementById('description').value.trim();
+  const price = Number(document.getElementById('priceUsdc').value);
+  const soulMarkdown = document.getElementById('soulMarkdown').value;
+
   return {
-    listing: {
-      soul_id: document.getElementById('soulId').value.trim(),
-      name: document.getElementById('name').value.trim(),
-      description: document.getElementById('description').value.trim(),
-      long_description: document.getElementById('longDescription').value.trim(),
-      category: document.getElementById('category').value.trim(),
-      soul_type: document.getElementById('soulType').value.trim(),
-      icon: document.getElementById('icon').value.trim(),
-      tags: splitTags(document.getElementById('tags').value),
-      price_usdc: Number(document.getElementById('priceUsdc').value),
-      seller_address: document.getElementById('sellerAddress').value.trim() || DEFAULT_SELLER,
-      creator_royalty_bps: Number(document.getElementById('creatorRoyaltyBps').value || 9900),
-      platform_fee_bps: Number(document.getElementById('platformFeeBps').value || 100)
-    },
-    assets: {
-      soul_markdown: document.getElementById('soulMarkdown').value,
-      source_url: document.getElementById('sourceUrl').value.trim(),
-      source_label: document.getElementById('sourceLabel').value.trim()
-    }
+    name,
+    price_usdc: Number.isFinite(price) ? price : 0,
+    description,
+    soul_markdown: soulMarkdown
   };
 }
 
 function applyDraft(draft) {
-  const listing = draft?.listing || {};
-  const assets = draft?.assets || {};
-  document.getElementById('soulId').value = listing.soul_id || '';
+  const payload = draft && typeof draft === 'object' ? draft : {};
+  const listing = payload.listing && typeof payload.listing === 'object' ? payload.listing : payload;
+  const assets = payload.assets && typeof payload.assets === 'object' ? payload.assets : payload;
   document.getElementById('name').value = listing.name || '';
   document.getElementById('description').value = listing.description || '';
-  document.getElementById('longDescription').value = listing.long_description || '';
-  document.getElementById('category').value = listing.category || '';
-  document.getElementById('soulType').value = listing.soul_type || 'hybrid';
-  document.getElementById('icon').value = listing.icon || '';
-  document.getElementById('tags').value = Array.isArray(listing.tags) ? listing.tags.join(', ') : '';
   document.getElementById('priceUsdc').value = listing.price_usdc || '';
-  document.getElementById('sellerAddress').value = listing.seller_address || DEFAULT_SELLER;
-  document.getElementById('creatorRoyaltyBps').value = listing.creator_royalty_bps ?? 9900;
-  document.getElementById('platformFeeBps').value = listing.platform_fee_bps ?? 100;
   document.getElementById('soulMarkdown').value = assets.soul_markdown || '';
-  document.getElementById('sourceUrl').value = assets.source_url || '';
-  document.getElementById('sourceLabel').value = assets.source_label || '';
 }
 
 async function api(action, { method = 'GET', body, headers = {} } = {}) {
@@ -573,9 +543,6 @@ function bindEvents() {
 }
 
 function initDefaults() {
-  document.getElementById('sellerAddress').value = DEFAULT_SELLER;
-  document.getElementById('creatorRoyaltyBps').value = '9900';
-  document.getElementById('platformFeeBps').value = '100';
   setWalletButton();
 }
 

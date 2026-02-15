@@ -199,6 +199,11 @@ Then provide one auth mode:
 If receipt and wallet auth/session are valid, response is `200` with soul file.
 If re-download headers are present, server prioritizes entitlement delivery over purchase processing, even if a payment header is also present.
 
+Session-only recovery mode (receipt unavailable):
+- `X-WALLET-ADDRESS`
+- `X-REDOWNLOAD-SESSION` (or signed fallback `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`)
+- Server checks creator ownership and prior on-chain buyer payment history for entitlement recovery.
+
 Auth verifier compatibility:
 - Server accepts message signatures over canonical variants:
 `address:` line in lowercase or checksummed form, and either `LF` or `CRLF` line endings.
@@ -245,6 +250,8 @@ use `accepted_copy_paste` exactly as top-level `accepted`, then fill `copy_paste
 you sent partial entitlement headers, so server blocked purchase fallback to prevent accidental repay.
 Re-download requires:
 `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
+Recovery (receipt unavailable):
+`X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
 - `flow_hint: Payment header was detected but could not be verified/settled`:
 header parsed but signature/authorization failed verification.
 Re-sign from latest requirements and verify method-specific shape.

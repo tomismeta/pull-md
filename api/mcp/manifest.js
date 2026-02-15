@@ -43,7 +43,9 @@ export default function handler(req, res) {
       ],
       redownload_modes: {
         session_preferred: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SESSION'],
-        signed_fallback: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
+        signed_fallback: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+        session_only_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
+        signed_only_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       },
       redownload_session_endpoint: '/api/auth/session',
       redownload_session_bootstrap_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
@@ -246,7 +248,7 @@ export default function handler(req, res) {
       first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
       claim_request: 'Include PAYMENT-SIGNATURE (or PAYMENT/X-PAYMENT) with base64-encoded x402 payload to claim entitlement and download',
       redownload_request:
-        'Include X-WALLET-ADDRESS + X-PURCHASE-RECEIPT and either X-REDOWNLOAD-SESSION (preferred) or X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP (fallback).',
+        'Preferred: include X-WALLET-ADDRESS + X-PURCHASE-RECEIPT and either X-REDOWNLOAD-SESSION or X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP. Recovery: session/signed mode without receipt is allowed for prior on-chain buyers and creators.',
       redownload_session_bootstrap:
         'Bootstrap session at GET /api/auth/session with X-WALLET-ADDRESS + X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP to obtain X-REDOWNLOAD-SESSION.',
       anti_poisoning_rule:

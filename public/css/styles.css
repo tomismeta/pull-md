@@ -75,7 +75,7 @@ body {
   justify-content: center;
   background: linear-gradient(135deg, #2f7cff, #5aa2ff);
   color: #fff;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.72rem;
   letter-spacing: 0.03em;
 }
@@ -144,7 +144,7 @@ main {
   border: 1px solid #c8daf3;
   background: #edf4ff;
   color: #315789;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.72rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -192,7 +192,7 @@ main {
   display: block;
   color: var(--brand-ink);
   text-transform: uppercase;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   margin-bottom: 2px;
@@ -289,7 +289,7 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.76rem;
   letter-spacing: 0.05em;
   color: #20457c;
@@ -314,7 +314,7 @@ main {
   margin-bottom: 12px;
   text-decoration: none;
   color: #2c63c8;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.72rem;
 }
 
@@ -340,7 +340,7 @@ main {
   width: fit-content;
   border-radius: 999px;
   border: 1px solid currentColor;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -381,7 +381,7 @@ main {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.8rem;
   transition: transform 0.16s ease, filter 0.16s ease, border-color 0.16s ease;
 }
@@ -581,7 +581,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.68rem;
   color: var(--text-soft);
 }
@@ -600,7 +600,7 @@ main {
   min-height: 420px;
   overflow: auto;
   padding: 12px;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.74rem;
 }
 
@@ -650,7 +650,7 @@ main {
   border-radius: 999px;
   color: var(--text-soft);
   padding: 4px 9px;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.68rem;
 }
 
@@ -689,7 +689,7 @@ main {
 }
 
 .file-name {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.78rem;
 }
 
@@ -710,7 +710,7 @@ main {
   background: #f9fbff;
   padding: 14px;
   color: var(--text-soft);
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.76rem;
 }
 
@@ -741,7 +741,7 @@ main {
   padding: 8px;
   margin-bottom: 12px;
   color: var(--text-soft);
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.7rem;
 }
 
@@ -904,7 +904,7 @@ main {
   color: var(--text-soft);
   box-shadow: var(--shadow-sm);
   padding: 10px 12px;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: 'Manrope', sans-serif;
   font-size: 0.75rem;
   opacity: 0;
   transform: translateY(8px);

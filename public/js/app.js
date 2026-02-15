@@ -32,6 +32,7 @@ const RECEIPT_PREFIX = 'soulstarter.receipt.';
 const REDOWNLOAD_SESSION_PREFIX = 'soulstarter.redownload.session.';
 const sellerAddressCache = new Map();
 const entitlementCacheByWallet = new Map();
+const createdSoulCacheByWallet = new Map();
 let moderatorAllowlist = new Set();
 let soulCatalogCache = [];
 
@@ -84,6 +85,7 @@ function disconnectWallet() {
   walletType = null;
   clearWalletSession();
   entitlementCacheByWallet.clear();
+  createdSoulCacheByWallet.clear();
   updateWalletUI();
   updateModeratorNavLinkVisibility();
   loadSouls();
@@ -144,7 +146,7 @@ async function connectWithProviderInternal(rawProvider, type, silent) {
   walletType = type;
   await ensureBaseNetwork();
   saveWalletSession();
-  await refreshEntitlementsForWallet(walletAddress);
+  await Promise.all([refreshEntitlementsForWallet(walletAddress), refreshCreatedSoulsForWallet(walletAddress)]);
   updateWalletUI();
   updateModeratorNavLinkVisibility();
   loadSouls();
@@ -267,10 +269,23 @@ function ownedSoulSetForCurrentWallet() {
   return entitlementCacheByWallet.get(walletAddress) || new Set();
 }
 
-function isSoulOwned(soulId) {
+function createdSoulSetForCurrentWallet() {
+  if (!walletAddress) return new Set();
+  return createdSoulCacheByWallet.get(walletAddress) || new Set();
+}
+
+function isSoulCreated(soulId) {
+  if (!walletAddress || !soulId) return false;
+  const created = createdSoulSetForCurrentWallet();
+  return created.has(soulId);
+}
+
+function isSoulAccessible(soulId) {
   if (!walletAddress || !soulId) return false;
   const owned = ownedSoulSetForCurrentWallet();
-  return owned.has(soulId);
+  if (owned.has(soulId)) return true;
+  const created = createdSoulSetForCurrentWallet();
+  return created.has(soulId);
 }
 
 function parseSoulIdFromReceiptKey(key, wallet) {
@@ -327,6 +342,32 @@ async function refreshEntitlementsForWallet(wallet) {
   updateSoulPagePurchaseState();
 }
 
+async function refreshCreatedSoulsForWallet(wallet) {
+  if (!wallet) return;
+  try {
+    const response = await fetchWithTimeout(
+      `${CONFIG.apiBase}/mcp/tools/creator_marketplace?action=list_published_listings`,
+      {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      }
+    );
+    if (!response.ok) throw new Error('published listing lookup failed');
+    const payload = await response.json();
+    const created = new Set(
+      (Array.isArray(payload?.listings) ? payload.listings : [])
+        .filter((entry) => String(entry?.wallet_address || '').toLowerCase() === wallet.toLowerCase())
+        .map((entry) => String(entry?.soul_id || '').trim())
+        .filter(Boolean)
+    );
+    createdSoulCacheByWallet.set(wallet.toLowerCase(), created);
+  } catch (_) {
+    createdSoulCacheByWallet.set(wallet.toLowerCase(), new Set());
+  }
+  renderOwnedSouls();
+  updateSoulPagePurchaseState();
+}
+
 function updateSoulPagePurchaseState() {
   const btn = document.getElementById('buyBtn');
   if (!btn) return;
@@ -334,7 +375,7 @@ function updateSoulPagePurchaseState() {
   const match = onclick.match(/purchaseSoul\(['"]([^'"]+)['"]\)/);
   const soulId = match?.[1];
   if (!soulId) return;
-  const owned = isSoulOwned(soulId);
+  const owned = isSoulAccessible(soulId);
   btn.textContent = owned ? 'Download Soul' : 'Purchase Soul';
 }
 
@@ -343,31 +384,45 @@ function renderOwnedSouls() {
   if (!grid) return;
 
   if (!walletAddress) {
-    grid.innerHTML = '<p class="admin-empty">Connect your wallet to view owned souls.</p>';
+    grid.innerHTML = '<p class="admin-empty">Connect your wallet to view your purchased and created souls.</p>';
     return;
   }
 
   const owned = ownedSoulSetForCurrentWallet();
-  if (!owned.size) {
-    grid.innerHTML = '<p class="admin-empty">No purchased souls found for this wallet yet.</p>';
+  const created = createdSoulSetForCurrentWallet();
+  const allSoulIds = new Set([...owned, ...created]);
+  if (!allSoulIds.size) {
+    grid.innerHTML = '<p class="admin-empty">No purchased or created souls found for this wallet yet.</p>';
     return;
   }
 
   const byId = new Map((Array.isArray(soulCatalogCache) ? soulCatalogCache : []).map((soul) => [soul.id, soul]));
-  const cards = [...owned].map((soulId) => {
-    const soul = byId.get(soulId) || { id: soulId, name: soulId, description: 'Purchased soul' };
+  const cards = [...allSoulIds].map((soulId) => {
+    const soul = byId.get(soulId) || { id: soulId, name: soulId, description: 'Soul access available' };
+    const isOwned = owned.has(soulId);
+    const isCreated = created.has(soulId);
+    const sourceLabel = isOwned && isCreated ? 'Purchased and created' : isCreated ? 'Creator access' : 'Wallet entitlement';
     return `
       <article class="soul-card" data-owned-soul-id="${escapeHtml(soul.id)}">
         <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
         <h3>${escapeHtml(soul.name || soul.id)}</h3>
-        <p>${escapeHtml(soul.description || 'Purchased soul')}</p>
+        <p>${escapeHtml(soul.description || 'Soul access available')}</p>
         <div class="soul-card-meta">
           <div class="soul-lineage">
-            <span class="badge badge-organic">Owned</span>
-            <span style="font-size: 0.75rem; color: var(--text-muted);">Wallet entitlement</span>
+            ${
+              isOwned
+                ? '<span class="badge badge-organic">Owned</span>'
+                : ''
+            }
+            ${
+              isCreated
+                ? '<span class="badge badge-synthetic">Created</span>'
+                : ''
+            }
+            <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(sourceLabel)}</span>
           </div>
           <div>
-            <span class="price">Purchased</span>
+            <span class="price">${escapeHtml(isOwned ? 'Accessible' : 'Creator Access')}</span>
           </div>
         </div>
         <button class="btn btn-primary btn-full" onclick="downloadOwnedSoul('${escapeHtml(soul.id)}')">Download Soul File</button>
@@ -607,13 +662,14 @@ async function tryRedownload(soulId) {
   if (!walletAddress || !signer) return { ok: false, requiresPayment: true };
 
   const receipt = getStoredReceipt(soulId, walletAddress);
-  if (!receipt) return { ok: false, requiresPayment: true };
+  const createdAccess = isSoulCreated(soulId);
+  if (!receipt && !createdAccess) return { ok: false, requiresPayment: true };
   const activeSession = getStoredRedownloadSession(walletAddress);
   const passiveHeaders = {
     'X-WALLET-ADDRESS': walletAddress,
-    'X-PURCHASE-RECEIPT': receipt,
     Accept: 'text/markdown'
   };
+  if (receipt) passiveHeaders['X-PURCHASE-RECEIPT'] = receipt;
   if (activeSession?.token) passiveHeaders['X-REDOWNLOAD-SESSION'] = activeSession.token;
 
   const passive = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
@@ -635,14 +691,14 @@ async function tryRedownload(soulId) {
     throw new Error(error || 'Re-download failed');
   }
 
-  // One-time wallet session bootstrap, then retry receipt-based download.
+  // One-time wallet session bootstrap, then retry wallet entitlement download.
   await ensureRedownloadSession();
   const refreshedSession = getStoredRedownloadSession(walletAddress);
   const retryHeaders = {
     'X-WALLET-ADDRESS': walletAddress,
-    'X-PURCHASE-RECEIPT': receipt,
     Accept: 'text/markdown'
   };
+  if (receipt) retryHeaders['X-PURCHASE-RECEIPT'] = receipt;
   if (refreshedSession?.token) retryHeaders['X-REDOWNLOAD-SESSION'] = refreshedSession.token;
 
   const signed = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
@@ -766,7 +822,7 @@ async function downloadOwnedSoul(soulId) {
       showToast('Download restored from your entitlement.', 'success');
       return;
     }
-    showToast('No valid entitlement found for this soul on this wallet.', 'warning');
+    showToast('No purchase or creator entitlement found for this soul on this wallet.', 'warning');
   } catch (error) {
     showToast(`Download failed: ${error.message || 'Unknown error'}`, 'error');
   }
@@ -961,7 +1017,7 @@ async function loadSouls() {
     grid.innerHTML = souls
       .map(
         (soul) => {
-          const owned = isSoulOwned(soul.id);
+          const owned = isSoulAccessible(soul.id);
           const cta = owned ? 'Download Soul' : 'Purchase Soul';
           return `
       <article class="soul-card ${soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : ''}" data-soul-id="${escapeHtml(soul.id)}">
@@ -1089,6 +1145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateWalletUI();
   await restoreWalletSession();
   await refreshEntitlementsForWallet(walletAddress);
+  await refreshCreatedSoulsForWallet(walletAddress);
   loadSouls();
   updateSoulPagePurchaseState();
 });

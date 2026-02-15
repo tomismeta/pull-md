@@ -25,7 +25,7 @@ Use this skill for agent workflows against a deployed SoulStarter instance.
 
 1. Discover capabilities.
 2. Select a soul.
-3. Attempt receipt-based re-download first.
+3. Attempt session/receipt re-download first.
 4. If not entitled, run strict x402 purchase flow.
 5. Persist purchase receipt for future re-download.
 
@@ -59,6 +59,21 @@ Call:
 
 If `200`, save returned content and update stored receipt from `X-PURCHASE-RECEIPT` if present.
 If `401` or `402`, continue to purchase flow.
+
+Preferred session mode:
+
+1. Bootstrap session:
+- `GET {base_url}/api/auth/session`
+- Headers: `X-WALLET-ADDRESS`, `X-AUTH-SIGNATURE`, `X-AUTH-TIMESTAMP`
+2. Re-download:
+- `GET {base_url}/api/souls/{soul_id}/download`
+- Headers:
+  - Preferred: `X-WALLET-ADDRESS`, `X-PURCHASE-RECEIPT`, `X-REDOWNLOAD-SESSION`
+  - Recovery if receipt unavailable: `X-WALLET-ADDRESS`, `X-REDOWNLOAD-SESSION`
+
+Server behavior:
+- Receipt mode is primary.
+- Session-only recovery is accepted for prior on-chain buyers and creator-owned souls.
 
 ## 3. Purchase Flow (Strict x402)
 

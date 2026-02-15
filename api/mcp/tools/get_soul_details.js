@@ -36,6 +36,8 @@ export default function handler(req, res) {
         purchase: ['PAYMENT-SIGNATURE'],
         redownload: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SESSION'],
         redownload_signed_fallback: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+        redownload_session_only_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
+        redownload_signed_only_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
         redownload_session_bootstrap: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       },
       redownload_session_endpoint: '/api/auth/session',

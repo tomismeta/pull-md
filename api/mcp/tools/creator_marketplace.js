@@ -70,8 +70,9 @@ export default async function handler(req, res) {
     return res.status(200).json({
       template: getMarketplaceDraftTemplate(),
       notes: [
-        'This endpoint validates contract shape only; no on-chain listing is created yet.',
-        'Use validate_listing_draft before any creator onboarding workflow.'
+        'Minimal creator contract: name, price_usdc, description, soul_markdown.',
+        'Technical listing fields are auto-derived server-side.',
+        'Platform fee policy is server-defined and not client-provided.'
       ]
     });
   }
@@ -86,7 +87,11 @@ export default async function handler(req, res) {
   if (action === 'validate_listing_draft' && req.method === 'POST') {
     const payload = req.body && typeof req.body === 'object' ? req.body : {};
     const draftPayload =
-      payload.draft && typeof payload.draft === 'object' ? payload.draft : { listing: payload.listing, assets: payload.assets };
+      payload.draft && typeof payload.draft === 'object'
+        ? payload.draft
+        : payload.listing || payload.assets
+          ? { listing: payload.listing, assets: payload.assets }
+          : payload;
     const result = validateMarketplaceDraft(draftPayload);
     return res.status(result.ok ? 200 : 400).json({
       ok: result.ok,
@@ -106,9 +111,21 @@ export default async function handler(req, res) {
     const auth = verifyCreatorAuth({ wallet, signature, timestamp, action });
     if (!auth.ok) return res.status(401).json(creatorAuthError(action, auth));
 
-    const draftPayload =
-      body.draft && typeof body.draft === 'object' ? body.draft : { listing: body.listing, assets: body.assets };
-    const result = validateMarketplaceDraft(draftPayload);
+    const submittedDraft =
+      body.draft && typeof body.draft === 'object'
+        ? body.draft
+        : body.listing || body.assets
+          ? { listing: body.listing, assets: body.assets }
+          : body;
+    const draftPayload = {
+      ...(submittedDraft && typeof submittedDraft === 'object' ? submittedDraft : {}),
+      seller_address: auth.wallet,
+      listing: {
+        ...(submittedDraft?.listing && typeof submittedDraft.listing === 'object' ? submittedDraft.listing : {}),
+        seller_address: auth.wallet
+      }
+    };
+    const result = validateMarketplaceDraft(draftPayload, { walletAddress: auth.wallet });
     if (!result.ok) {
       return res.status(400).json({
         ok: false,

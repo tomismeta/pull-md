@@ -32,23 +32,19 @@ test('marketplace draft validation, moderation, and publish promotion flow', asy
   try {
     const { getSoul, listSouls } = await import(`../api/_lib/catalog.js?test=${Date.now()}`);
 
+    const wallet = ethers.Wallet.createRandom();
     const template = getMarketplaceDraftTemplate();
-    template.listing.soul_id = 'creator-alpha-v1';
-    template.listing.name = 'Creator Alpha';
-    template.listing.description = 'Focused assistant for product launch execution.';
-    template.listing.long_description = 'Structured planning + decisive execution + concise reporting.';
-    template.listing.category = 'operations';
-    template.listing.soul_type = 'hybrid';
-    template.listing.price_usdc = 0.31;
-    template.listing.seller_address = '0x1111111111111111111111111111111111111111';
-    template.assets.soul_markdown = '# SOUL\n\nAct decisively.\nShip clearly.';
+    template.name = 'Creator Alpha';
+    template.description = 'Focused assistant for product launch execution.';
+    template.price_usdc = 0.31;
+    template.soul_markdown = '# SOUL\n\nAct decisively.\nShip clearly.';
 
-    const validated = validateMarketplaceDraft(template);
+    const validated = validateMarketplaceDraft(template, { walletAddress: wallet.address });
     assert.equal(validated.ok, true);
     assert.ok(validated.draft_id.startsWith('draft_'));
     assert.equal(validated.normalized.listing.price_micro_usdc, '310000');
+    assert.equal(validated.normalized.listing.seller_address, wallet.address.toLowerCase());
 
-    const wallet = ethers.Wallet.createRandom();
     const ts = Date.now();
     const authMsg = buildCreatorAuthMessage({
       wallet: wallet.address,
@@ -121,7 +117,7 @@ test('marketplace draft validation, moderation, and publish promotion flow', asy
 
     const promoted = getSoul('creator-alpha-v1');
     assert.ok(promoted);
-    assert.equal(promoted.sellerAddress, '0x1111111111111111111111111111111111111111');
+    assert.equal(promoted.sellerAddress, wallet.address.toLowerCase());
     const listed = listSouls().find((item) => item.id === 'creator-alpha-v1');
     assert.ok(listed);
     assert.equal(listed.price.amount, '0.31');

@@ -11,6 +11,7 @@ const MODERATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 const REVIEW_AUDIT_FILE = 'review-audit.jsonl';
 const PUBLISHED_CATALOG_FILE = 'published-catalog.json';
 const DEFAULT_MODERATOR_WALLETS = ['0x7F46aCB709cd8DF5879F84915CA431fB740989E4'];
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 function asString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -43,6 +44,97 @@ function validateEthAddress(value) {
 
 function validateSoulId(value) {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(value || ''));
+}
+
+function normalizePlatformFeeBps() {
+  const raw = Number(process.env.PLATFORM_FEE_BPS || '100');
+  if (!Number.isFinite(raw)) return 100;
+  if (raw < 0) return 0;
+  if (raw > 10000) return 10000;
+  return Math.round(raw);
+}
+
+function slugifySoulId(name) {
+  const base = String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')
+    .slice(0, 48);
+  const slug = base || 'creator-soul';
+  return /-v\d+$/.test(slug) ? slug : `${slug}-v1`;
+}
+
+function deriveIconFromName(name) {
+  const clean = String(name || '')
+    .replace(/[^a-zA-Z0-9 ]/g, ' ')
+    .trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+  if (parts.length === 1 && parts[0].length === 1) return `${parts[0].toUpperCase()}S`;
+  return 'SS';
+}
+
+function buildDraftInput(input, options = {}) {
+  const payload = input && typeof input === 'object' ? input : {};
+  const listing = payload.listing && typeof payload.listing === 'object' ? payload.listing : {};
+  const assets = payload.assets && typeof payload.assets === 'object' ? payload.assets : {};
+
+  const name = asString(listing.name || payload.name);
+  const description = asString(listing.description || payload.description);
+  const longDescription = asString(listing.long_description || payload.long_description || description);
+  const category = asString(listing.category || payload.category).toLowerCase() || 'creator';
+  const soulType = asString(listing.soul_type || payload.soul_type).toLowerCase() || 'hybrid';
+  const icon = asString(listing.icon || payload.icon) || deriveIconFromName(name);
+  const tags = normalizeTags(listing.tags || payload.tags);
+  const priceUsdc =
+    typeof listing.price_usdc === 'number'
+      ? listing.price_usdc
+      : typeof payload.price_usdc === 'number'
+        ? payload.price_usdc
+        : Number(listing.price_usdc ?? payload.price_usdc ?? payload.price);
+
+  const walletSeller = asString(options.walletAddress || '');
+  const configuredSeller = asString(process.env.SELLER_ADDRESS || '');
+  const sellerAddress = asString(listing.seller_address || payload.seller_address || walletSeller || configuredSeller || ZERO_ADDRESS);
+  const sourceUrl = asString(assets.source_url || payload.source_url);
+  const sourceLabel = asString(assets.source_label || payload.source_label);
+  const soulMarkdown =
+    typeof assets.soul_markdown === 'string'
+      ? assets.soul_markdown
+      : typeof payload.soul_markdown === 'string'
+        ? payload.soul_markdown
+        : typeof payload.soul_md === 'string'
+          ? payload.soul_md
+          : '';
+
+  const soulId = asString(listing.soul_id || payload.soul_id).toLowerCase() || slugifySoulId(name);
+  const platformFeeBps = normalizePlatformFeeBps();
+  const creatorRoyaltyBps = 10000 - platformFeeBps;
+
+  return {
+    schema_version: 'marketplace-draft-v1',
+    listing: {
+      soul_id: soulId,
+      name,
+      description,
+      long_description: longDescription,
+      category,
+      soul_type: soulType,
+      icon,
+      tags,
+      price_usdc: priceUsdc,
+      seller_address: sellerAddress,
+      creator_royalty_bps: creatorRoyaltyBps,
+      platform_fee_bps: platformFeeBps
+    },
+    assets: {
+      soul_markdown: soulMarkdown,
+      source_url: sourceUrl,
+      source_label: sourceLabel
+    }
+  };
 }
 
 function getMarketplaceDraftsDir() {
@@ -218,24 +310,18 @@ async function loadAllWalletDraftStores() {
 export function getMarketplaceDraftTemplate() {
   return {
     schema_version: 'marketplace-draft-v1',
-    listing: {
-      soul_id: 'example-soul-v1',
-      name: 'Example Soul',
-      description: 'One-sentence summary for buyers.',
-      long_description: 'Longer details about behavior, strengths, and target use cases.',
-      category: 'starter',
-      soul_type: 'hybrid',
-      icon: 'spark',
-      tags: ['clear', 'pragmatic', 'tooling'],
-      price_usdc: 0.49,
-      seller_address: '0x0000000000000000000000000000000000000000',
-      creator_royalty_bps: 9900,
-      platform_fee_bps: 100
-    },
-    assets: {
-      soul_markdown: '# SOUL\\n\\nYour soul content goes here.',
-      source_url: '',
-      source_label: ''
+    name: 'Example Soul',
+    description: 'One-sentence summary for buyers.',
+    price_usdc: 0.49,
+    soul_markdown: '# SOUL\\n\\nYour soul content goes here.',
+    notes: {
+      auto_fields: [
+        'soul_id (derived from name)',
+        'seller_address (set to connected creator wallet on save)',
+        'category, soul_type, icon, tags',
+        'creator_royalty_bps + platform_fee_bps'
+      ],
+      platform_fee_bps: normalizePlatformFeeBps()
     }
   };
 }
@@ -283,12 +369,12 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
   };
 }
 
-export function validateMarketplaceDraft(input) {
+export function validateMarketplaceDraft(input, options = {}) {
   const errors = [];
   const warnings = [];
-
-  const listing = input && typeof input.listing === 'object' ? input.listing : {};
-  const assets = input && typeof input.assets === 'object' ? input.assets : {};
+  const prepared = buildDraftInput(input, options);
+  const listing = prepared.listing || {};
+  const assets = prepared.assets || {};
 
   const soulId = asString(listing.soul_id).toLowerCase();
   const name = asString(listing.name);
@@ -316,14 +402,16 @@ export function validateMarketplaceDraft(input) {
   if (Buffer.byteLength(soulMarkdown, 'utf8') > MAX_SOUL_MD_BYTES)
     errors.push(`assets.soul_markdown exceeds ${MAX_SOUL_MD_BYTES} bytes.`);
 
-  const priceMicroUsdc = normalizeUsdPriceToMicroUsdc(listing.price_usdc);
+  const priceMicroUsdc = normalizeUsdPriceToMicroUsdc(Number(listing.price_usdc));
   if (!priceMicroUsdc) errors.push('listing.price_usdc must be a positive number.');
   if (tags.length === 0) warnings.push('listing.tags is empty; discovery quality may be poor.');
   if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) errors.push('assets.source_url must be http(s) if set.');
   if (sourceLabel && !sourceUrl) warnings.push('assets.source_label provided without assets.source_url.');
 
-  const creatorRoyaltyBps = Number.isFinite(listing.creator_royalty_bps) ? Number(listing.creator_royalty_bps) : 9900;
-  const platformFeeBps = Number.isFinite(listing.platform_fee_bps) ? Number(listing.platform_fee_bps) : 100;
+  const creatorRoyaltyBps = Number.isFinite(Number(listing.creator_royalty_bps)) ? Number(listing.creator_royalty_bps) : 0;
+  const platformFeeBps = Number.isFinite(Number(listing.platform_fee_bps))
+    ? Number(listing.platform_fee_bps)
+    : normalizePlatformFeeBps();
   if (creatorRoyaltyBps < 0 || creatorRoyaltyBps > 10000) errors.push('listing.creator_royalty_bps must be 0..10000.');
   if (platformFeeBps < 0 || platformFeeBps > 10000) errors.push('listing.platform_fee_bps must be 0..10000.');
   if (creatorRoyaltyBps + platformFeeBps !== 10000) {

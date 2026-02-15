@@ -11,6 +11,9 @@ SoulStarter is an agent-focused marketplace for purchasing and re-downloading AI
 `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` plus either:
 `X-REDOWNLOAD-SESSION` (preferred after session bootstrap) or
 `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP` (signed fallback)
+- Session-only recovery mode:
+`X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`)
+is accepted for prior on-chain buyers and creator-owned souls (receipt optional in recovery mode).
 - Facilitator resiliency includes:
 preflight checks, multi-endpoint failover, timeout, circuit breaker
 - Agent-discoverable API via WebMCP manifest at `/api/mcp/manifest`
@@ -157,6 +160,7 @@ Re-download auth compatibility note:
 - Human UX optimization:
 Bootstrap once with `GET /api/auth/session` using wallet signature (`action: session`), then re-download with
 `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SESSION` without repeated soul-specific signing.
+If receipt is unavailable, session-only recovery can still re-download for prior on-chain buyers/creators.
 
 Multi-spend guardrails:
 - In-flight settlement submissions are idempotent by payer+soul+nonce to reduce duplicate settlement attempts.
@@ -180,6 +184,8 @@ Re-fetch paywall and copy `accepts[0]` exactly (including `maxTimeoutSeconds` an
 - `Incomplete re-download header set`:
 you sent partial entitlement headers. For no-repay re-download, send:
 `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
+Recovery (receipt unavailable):
+`X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
 - `flow_hint: "Payment header was detected but could not be verified/settled..."`:
 header exists but signature/shape failed verification.
 Re-sign using the latest `PAYMENT-REQUIRED` and confirm method-specific payload shape.

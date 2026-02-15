@@ -4,7 +4,9 @@ import { ethers } from 'ethers';
 
 import {
   buildAuthMessage,
+  createPurchaseReceipt,
   createRedownloadSessionToken,
+  verifyPurchaseReceipt,
   verifyRedownloadSessionToken,
   verifyWalletAuth
 } from '../api/_lib/payments.js';
@@ -50,5 +52,28 @@ test('redownload session token binds to wallet and expires', async () => {
   } finally {
     if (originalSecret === undefined) delete process.env.PURCHASE_RECEIPT_SECRET;
     else process.env.PURCHASE_RECEIPT_SECRET = originalSecret;
+  }
+});
+
+test('purchase receipt verifies with legacy secret fallback', () => {
+  const originalSecret = process.env.PURCHASE_RECEIPT_SECRET;
+  const originalPrevious = process.env.PURCHASE_RECEIPT_SECRET_PREVIOUS;
+  process.env.PURCHASE_RECEIPT_SECRET = 'current-secret-value';
+  process.env.PURCHASE_RECEIPT_SECRET_PREVIOUS = '';
+  try {
+    const wallet = ethers.Wallet.createRandom().address.toLowerCase();
+    const soulId = 'sassy-starter-v1';
+    const receipt = createPurchaseReceipt({ wallet, soulId, transaction: '0xtest' });
+
+    process.env.PURCHASE_RECEIPT_SECRET = 'new-secret-after-rotation';
+    process.env.PURCHASE_RECEIPT_SECRET_PREVIOUS = 'current-secret-value';
+
+    const checked = verifyPurchaseReceipt({ receipt, wallet, soulId });
+    assert.equal(checked.ok, true);
+  } finally {
+    if (originalSecret === undefined) delete process.env.PURCHASE_RECEIPT_SECRET;
+    else process.env.PURCHASE_RECEIPT_SECRET = originalSecret;
+    if (originalPrevious === undefined) delete process.env.PURCHASE_RECEIPT_SECRET_PREVIOUS;
+    else process.env.PURCHASE_RECEIPT_SECRET_PREVIOUS = originalPrevious;
   }
 });

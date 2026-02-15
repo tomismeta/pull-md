@@ -149,9 +149,19 @@ function base64UrlDecode(input) {
   return Buffer.from(normalized + '='.repeat(padLen), 'base64').toString('utf8');
 }
 
+function receiptSecrets() {
+  const primary = process.env.PURCHASE_RECEIPT_SECRET?.trim();
+  const legacy = String(process.env.PURCHASE_RECEIPT_SECRET_PREVIOUS || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const merged = [primary, ...legacy].filter(Boolean);
+  return [...new Set(merged)];
+}
+
 function receiptSecret() {
-  const secret = process.env.PURCHASE_RECEIPT_SECRET?.trim();
-  return secret || null;
+  const [primary] = receiptSecrets();
+  return primary || null;
 }
 
 function sessionSecret() {
@@ -182,8 +192,8 @@ export function createPurchaseReceipt({ wallet, soulId, transaction }) {
 }
 
 export function verifyPurchaseReceipt({ receipt, wallet, soulId }) {
-  const secret = receiptSecret();
-  if (!secret) {
+  const secrets = receiptSecrets();
+  if (secrets.length === 0) {
     return { ok: false, error: 'Server configuration error: PURCHASE_RECEIPT_SECRET is required' };
   }
 
@@ -192,15 +202,17 @@ export function verifyPurchaseReceipt({ receipt, wallet, soulId }) {
   }
 
   const [payloadB64, sigB64] = receipt.split('.');
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(payloadB64)
-    .digest('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-
-  if (sigB64 !== expected) {
+  const signatureMatches = secrets.some((secret) => {
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(payloadB64)
+      .digest('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '');
+    return sigB64 === expected;
+  });
+  if (!signatureMatches) {
     return { ok: false, error: 'Invalid purchase receipt signature' };
   }
 
@@ -238,20 +250,23 @@ export function createRedownloadSessionToken({ wallet }) {
 }
 
 export function verifyRedownloadSessionToken({ token, wallet }) {
-  const secret = sessionSecret();
-  if (!secret) return { ok: false, error: 'Server configuration error: PURCHASE_RECEIPT_SECRET is required' };
+  const secrets = receiptSecrets();
+  if (secrets.length === 0) return { ok: false, error: 'Server configuration error: PURCHASE_RECEIPT_SECRET is required' };
   if (!token || typeof token !== 'string' || !token.includes('.')) {
     return { ok: false, error: 'Missing re-download session token' };
   }
   const [payloadB64, sigB64] = token.split('.');
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(payloadB64)
-    .digest('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-  if (sigB64 !== expected) return { ok: false, error: 'Invalid re-download session signature' };
+  const signatureMatches = secrets.some((secret) => {
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(payloadB64)
+      .digest('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '');
+    return sigB64 === expected;
+  });
+  if (!signatureMatches) return { ok: false, error: 'Invalid re-download session signature' };
 
   let payload;
   try {
