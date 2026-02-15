@@ -140,6 +140,7 @@ export default async function handler(req, res) {
     receipt,
     redownloadSessionToken,
     paymentSignature,
+    legacyPaymentHeader,
     hasAnyRedownloadHeaders,
     hasReceiptRedownloadHeaders,
     hasSessionRecoveryHeaders,
