@@ -3,8 +3,6 @@ import assert from 'node:assert/strict';
 import { ethers } from 'ethers';
 
 import {
-  buildAuthTypedData,
-  buildAuthMessage,
   buildSiweAuthMessage,
   createPurchaseReceipt,
   createRedownloadSessionToken,
@@ -16,12 +14,13 @@ import {
 test('wallet session auth plain message is rejected (SIWE-only)', async () => {
   const wallet = ethers.Wallet.createRandom();
   const timestamp = Date.now();
-  const message = buildAuthMessage({
-    wallet: wallet.address,
-    soulId: '*',
-    action: 'session',
-    timestamp
-  });
+  const message = [
+    'SoulStarter Wallet Authentication',
+    `address:${wallet.address.toLowerCase()}`,
+    'soul:*',
+    'action:session',
+    `timestamp:${timestamp}`
+  ].join('\n');
   const signature = await wallet.signMessage(message);
 
   const checked = verifyWalletAuth({
@@ -39,12 +38,25 @@ test('wallet session auth plain message is rejected (SIWE-only)', async () => {
 test('wallet session auth typed-data signature is rejected (SIWE-only)', async () => {
   const wallet = ethers.Wallet.createRandom();
   const timestamp = Date.now();
-  const typed = buildAuthTypedData({
-    wallet: wallet.address,
-    soulId: '*',
-    action: 'session',
-    timestamp
-  });
+  const typed = {
+    domain: { name: 'SoulStarter Authentication', version: '1' },
+    types: {
+      SoulStarterAuth: [
+        { name: 'wallet', type: 'address' },
+        { name: 'soul', type: 'string' },
+        { name: 'action', type: 'string' },
+        { name: 'timestamp', type: 'uint256' },
+        { name: 'statement', type: 'string' }
+      ]
+    },
+    message: {
+      wallet: ethers.getAddress(wallet.address),
+      soul: '*',
+      action: 'session',
+      timestamp: Number(timestamp),
+      statement: 'Authentication only. No token transfer or approval.'
+    }
+  };
   const signature = await wallet.signTypedData(typed.domain, typed.types, typed.message);
 
   const checked = verifyWalletAuth({
@@ -83,10 +95,32 @@ test('wallet session auth SIWE signature verifies with action=session', async ()
   assert.equal(checked.auth_format, 'siwe');
 });
 
-test('redownload auth still accepts legacy plain message for strict agent compatibility', async () => {
+test('redownload auth plain message is rejected (SIWE-only)', async () => {
   const wallet = ethers.Wallet.createRandom();
   const timestamp = Date.now();
-  const message = buildAuthMessage({
+  const message = [
+    'SoulStarter Wallet Authentication',
+    `address:${wallet.address.toLowerCase()}`,
+    'soul:sassy-starter-v1',
+    'action:redownload',
+    `timestamp:${timestamp}`
+  ].join('\n');
+  const signature = await wallet.signMessage(message);
+  const checked = verifyWalletAuth({
+    wallet: wallet.address,
+    soulId: 'sassy-starter-v1',
+    action: 'redownload',
+    timestamp,
+    signature
+  });
+  assert.equal(checked.ok, false);
+  assert.match(String(checked.error || ''), /SIWE/i);
+});
+
+test('redownload auth SIWE signature verifies', async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const timestamp = Date.now();
+  const message = buildSiweAuthMessage({
     wallet: wallet.address,
     soulId: 'sassy-starter-v1',
     action: 'redownload',
@@ -101,6 +135,7 @@ test('redownload auth still accepts legacy plain message for strict agent compat
     signature
   });
   assert.equal(checked.ok, true);
+  assert.equal(checked.auth_format, 'siwe');
 });
 
 test('redownload session token binds to wallet and expires', async () => {

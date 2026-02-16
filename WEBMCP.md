@@ -132,7 +132,7 @@ Important:
 - If `accepted` is missing or altered, server returns `No matching payment requirements`.
 - Keep `scheme` and `network` at top level (not nested under `payload`).
 - For `eip3009`, signature must be `payload.signature` (not `payload.authorization.signature`).
-- Ownership/auth signatures (creator/moderator/session/re-download challenge) use SIWE (EIP-4361) message signing and are non-spending (`Authentication only. No token transfer or approval.`). Strict headless agent re-download challenge keeps legacy canonical message verification for compatibility.
+- Ownership/auth signatures (creator/moderator/session/re-download challenge) use SIWE (EIP-4361) message signing and are non-spending (`Authentication only. No token transfer or approval.`).
 - Before signing, verify `accepted.payTo` matches trusted seller metadata exactly (full address, checksum comparison).
 - Ignore tiny unsolicited transfers and never copy destination addresses from transfer history.
 
@@ -201,13 +201,23 @@ headers:
 `X-PURCHASE-RECEIPT`
 
 6. Strict no-repay re-download:
-Sign message exactly:
+Sign SIWE message content equivalent to:
 ```text
-SoulStarter Wallet Authentication
-address:<wallet_lowercase>
-soul:<SOUL_ID>
-action:redownload
-timestamp:<UNIX_MS>
+<domain> wants you to sign in with your Ethereum account:
+<wallet_lowercase>
+
+Authenticate wallet ownership for SoulStarter. No token transfer or approval.
+
+URI: <origin_uri>
+Version: 1
+Chain ID: 8453
+Nonce: <deterministic_nonce>
+Issued At: <iso_timestamp>
+Expiration Time: <iso_timestamp_plus_5m>
+Request ID: redownload:<SOUL_ID>
+Resources:
+- urn:soulstarter:action:redownload
+- urn:soulstarter:soul:<SOUL_ID>
 ```
 Then call:
 `GET /api/souls/<SOUL_ID>/download`
@@ -247,9 +257,8 @@ Human/creator recovery mode (receipt unavailable):
 - `X-REDOWNLOAD-SESSION` (or signed fallback `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`)
 - Server checks creator ownership and prior on-chain buyer payment history for entitlement recovery.
 
-Auth verifier compatibility:
-- Server accepts message signatures over canonical variants:
-`address:` line in lowercase or checksummed form, and either `LF` or `CRLF` line endings.
+Auth verifier behavior:
+- Server requires SIWE-format ownership signatures for session/recovery/creator/moderator/agent re-download challenges.
 
 ### Session Bootstrap Endpoint (Human/Hybrid Clients)
 
@@ -260,14 +269,24 @@ Headers:
 - `X-AUTH-SIGNATURE`
 - `X-AUTH-TIMESTAMP`
 
-Sign message:
+Sign SIWE message content equivalent to:
 
 ```text
-SoulStarter Wallet Authentication
-address:<wallet_lowercase>
-soul:*
-action:session
-timestamp:<unix_ms>
+<domain> wants you to sign in with your Ethereum account:
+<wallet_lowercase>
+
+Authenticate wallet ownership for SoulStarter. No token transfer or approval.
+
+URI: <origin_uri>
+Version: 1
+Chain ID: 8453
+Nonce: <deterministic_nonce>
+Issued At: <iso_timestamp>
+Expiration Time: <iso_timestamp_plus_5m>
+Request ID: session:*
+Resources:
+- urn:soulstarter:action:session
+- urn:soulstarter:soul:*
 ```
 
 Success response includes:
@@ -319,7 +338,7 @@ top-level payload `network` must be `eip155:8453`.
 agent-signed payload remains CAIP-2 (`eip155:8453`).
 SoulStarter remaps facilitator-bound network fields to CDP enum (`base`) internally.
 
-## Re-download Auth Message
+## Re-download Auth Message (SIWE / EIP-4361)
 
 Strict headless agent re-download headers:
 - `X-CLIENT-MODE: agent`
@@ -328,14 +347,24 @@ Strict headless agent re-download headers:
 - `X-REDOWNLOAD-SIGNATURE`
 - `X-REDOWNLOAD-TIMESTAMP`
 
-Clients sign exactly:
+Clients sign SIWE message content equivalent to:
 
 ```text
-SoulStarter Wallet Authentication
-address:<wallet_lowercase>
-soul:<soul_id>
-action:redownload
-timestamp:<unix_ms>
+<domain> wants you to sign in with your Ethereum account:
+<wallet_lowercase>
+
+Authenticate wallet ownership for SoulStarter. No token transfer or approval.
+
+URI: <origin_uri>
+Version: 1
+Chain ID: 8453
+Nonce: <deterministic_nonce>
+Issued At: <iso_timestamp>
+Expiration Time: <iso_timestamp_plus_5m>
+Request ID: redownload:<soul_id>
+Resources:
+- urn:soulstarter:action:redownload
+- urn:soulstarter:soul:<soul_id>
 ```
 
 ## Creator Publish Auth Message
@@ -348,10 +377,21 @@ Creator publish tools require wallet-auth headers:
 Signing format: SIWE (EIP-4361) message.
 
 ```text
-SoulStarter Creator Authentication
-address:<wallet_lowercase>
-action:<tool_action>
-timestamp:<unix_ms>
+<domain> wants you to sign in with your Ethereum account:
+<wallet_lowercase>
+
+Authenticate wallet ownership for SoulStarter. No token transfer or approval.
+
+URI: <origin_uri>
+Version: 1
+Chain ID: 8453
+Nonce: <deterministic_nonce>
+Issued At: <iso_timestamp>
+Expiration Time: <iso_timestamp_plus_5m>
+Request ID: <tool_action>:creator
+Resources:
+- urn:soulstarter:action:<tool_action>
+- urn:soulstarter:scope:creator
 ```
 
 Where `<tool_action>` is one of:
@@ -368,10 +408,21 @@ Moderation tools require wallet-auth headers:
 Signing format: SIWE (EIP-4361) message.
 
 ```text
-SoulStarter Moderator Authentication
-address:<wallet_lowercase>
-action:<tool_action>
-timestamp:<unix_ms>
+<domain> wants you to sign in with your Ethereum account:
+<wallet_lowercase>
+
+Authenticate wallet ownership for SoulStarter. No token transfer or approval.
+
+URI: <origin_uri>
+Version: 1
+Chain ID: 8453
+Nonce: <deterministic_nonce>
+Issued At: <iso_timestamp>
+Expiration Time: <iso_timestamp_plus_5m>
+Request ID: <tool_action>:moderator
+Resources:
+- urn:soulstarter:action:<tool_action>
+- urn:soulstarter:scope:moderator
 ```
 
 Where `<tool_action>` is one of:

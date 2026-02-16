@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import {
   buildPurchaseReceiptSetCookie,
   buildRedownloadSessionSetCookie,
-  buildAuthMessage,
+  buildSiweAuthMessage,
   createRedownloadSessionToken,
   createPurchaseReceipt,
   getSellerAddress,
@@ -199,7 +199,7 @@ export default async function handler(req, res) {
         flow_hint:
           'Strict agent redownload now requires proof-of-wallet-control: send X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP with X-WALLET-ADDRESS + X-PURCHASE-RECEIPT.',
         required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP'],
-        auth_message_template: buildAuthMessage({
+        auth_message_template: buildSiweAuthMessage({
           wallet: wallet || '0x<your-wallet>',
           soulId,
           action: 'redownload',
@@ -221,7 +221,7 @@ export default async function handler(req, res) {
           code: 'invalid_agent_redownload_signature',
           flow_hint: 'Re-sign the redownload auth message with the same wallet and retry.',
           required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP'],
-          auth_message_template: buildAuthMessage({
+          auth_message_template: buildSiweAuthMessage({
             wallet: wallet || '0x<your-wallet>',
             soulId,
             action: 'redownload',
@@ -267,14 +267,14 @@ export default async function handler(req, res) {
       redownload_session_bootstrap: {
         endpoint: '/api/auth/session',
         headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
-        auth_message_template: buildAuthMessage({
+        auth_message_template: buildSiweAuthMessage({
           wallet: walletForTemplate,
           soulId: '*',
           action: 'session',
           timestamp: Date.now()
         })
       },
-      auth_message_template: buildAuthMessage({
+      auth_message_template: buildSiweAuthMessage({
         wallet: walletForTemplate,
         soulId,
         action: 'redownload',
@@ -499,7 +499,7 @@ export default async function handler(req, res) {
               disallowed_headers: ['X-REDOWNLOAD-SESSION', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
             };
           } else {
-            result.response.body.auth_message_template = buildAuthMessage({
+            result.response.body.auth_message_template = buildSiweAuthMessage({
               wallet: '0x<your-wallet>',
               soulId,
               action: 'redownload',

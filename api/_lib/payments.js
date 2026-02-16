@@ -1,21 +1,7 @@
 import crypto from 'crypto';
 import { ethers } from 'ethers';
 
-const AUTH_STATEMENT = 'Authentication only. No token transfer or approval.';
 const SIWE_STATEMENT = 'Authenticate wallet ownership for SoulStarter. No token transfer or approval.';
-const AUTH_TYPED_DOMAIN = {
-  name: 'SoulStarter Authentication',
-  version: '1'
-};
-const AUTH_TYPED_TYPES = {
-  SoulStarterAuth: [
-    { name: 'wallet', type: 'address' },
-    { name: 'soul', type: 'string' },
-    { name: 'action', type: 'string' },
-    { name: 'timestamp', type: 'uint256' },
-    { name: 'statement', type: 'string' }
-  ]
-};
 const SIWE_DOMAIN = String(process.env.SIWE_DOMAIN || 'soulstarter.vercel.app').trim();
 const SIWE_URI = String(process.env.SIWE_URI || `https://${SIWE_DOMAIN}`).trim();
 const SIWE_CHAIN_ID = Number(process.env.SIWE_CHAIN_ID || '8453');
@@ -48,16 +34,6 @@ export function getSellerAddress() {
   return sellerAddress || null;
 }
 
-export function buildAuthMessage({ wallet, soulId, action, timestamp }) {
-  return [
-    'SoulStarter Wallet Authentication',
-    `address:${wallet.toLowerCase()}`,
-    `soul:${soulId}`,
-    `action:${action}`,
-    `timestamp:${timestamp}`
-  ].join('\n');
-}
-
 export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature }) {
   if (!wallet || !signature || !timestamp) {
     return { ok: false, error: 'Missing wallet authentication headers' };
@@ -78,8 +54,6 @@ export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature 
     return { ok: false, error: 'Authentication message expired' };
   }
 
-  const allowLegacy = String(action || '').trim().toLowerCase() === 'redownload';
-
   const siweCandidates = buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp: ts });
   for (const candidate of siweCandidates) {
     try {
@@ -90,56 +64,9 @@ export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature 
     } catch (_) {}
   }
 
-  if (!allowLegacy) {
-    return {
-      ok: false,
-      error: 'Signature does not match SIWE wallet authentication format'
-    };
-  }
-
-  const candidates = buildAuthMessageCandidates({ wallet, soulId, action, timestamp: ts });
-  const recoveredMatches = [];
-  for (const candidate of candidates) {
-    try {
-      const recovered = ethers.verifyMessage(candidate.message, signature);
-      if (typeof recovered === 'string' && recovered.toLowerCase() === wallet.toLowerCase()) {
-        return { ok: true, wallet: wallet.toLowerCase(), auth_format: 'personal_sign' };
-      }
-      recoveredMatches.push({
-        variant: candidate.variant,
-        recovered: recovered || null
-      });
-    } catch (_) {
-      recoveredMatches.push({
-        variant: candidate.variant,
-        recovered: null
-      });
-    }
-  }
-
   return {
     ok: false,
-    error: 'Signature does not match wallet address',
-    auth_debug: {
-      tried_variants: candidates.map((candidate) => candidate.variant),
-      recovered: recoveredMatches
-    }
-  };
-}
-
-export function buildAuthTypedData({ wallet, soulId, action, timestamp }) {
-  const checksummed = ethers.getAddress(String(wallet || '').trim());
-  return {
-    domain: AUTH_TYPED_DOMAIN,
-    types: AUTH_TYPED_TYPES,
-    primaryType: 'SoulStarterAuth',
-    message: {
-      wallet: checksummed,
-      soul: String(soulId || ''),
-      action: String(action || ''),
-      timestamp: Number(timestamp),
-      statement: AUTH_STATEMENT
-    }
+    error: 'Signature does not match SIWE wallet authentication format'
   };
 }
 
@@ -184,44 +111,6 @@ export function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
     `- urn:soulstarter:action:${String(action || '').trim()}`,
     `- urn:soulstarter:soul:${String(soulId || '*').trim()}`
   ].join('\n');
-}
-
-function buildAuthMessageCandidates({ wallet, soulId, action, timestamp }) {
-  const rawWallet = String(wallet || '').trim();
-  const walletLower = rawWallet.toLowerCase();
-  const checksummed = safeChecksumAddress(rawWallet);
-  const walletVariants = [walletLower, checksummed].filter(Boolean);
-  const uniqueWallets = [...new Set(walletVariants)];
-  const newlineVariants = ['\n', '\r\n'];
-  const candidates = [];
-
-  for (const walletVariant of uniqueWallets) {
-    for (const newline of newlineVariants) {
-      const message = buildAuthMessageWithNewline({
-        wallet: walletVariant,
-        soulId,
-        action,
-        timestamp,
-        newline
-      });
-      candidates.push({
-        variant: `${walletVariant === walletLower ? 'lowercase' : 'checksummed'}-${newline === '\n' ? 'lf' : 'crlf'}`,
-        message
-      });
-    }
-  }
-
-  return candidates;
-}
-
-function buildAuthMessageWithNewline({ wallet, soulId, action, timestamp, newline }) {
-  return [
-    'SoulStarter Wallet Authentication',
-    `address:${wallet}`,
-    `soul:${soulId}`,
-    `action:${action}`,
-    `timestamp:${timestamp}`
-  ].join(newline);
 }
 
 function safeChecksumAddress(address) {

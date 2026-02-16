@@ -1,5 +1,5 @@
 import { getSoulResolved, listSoulsResolved, soulIdsResolved } from '../../_lib/catalog.js';
-import { buildAuthMessage, getSellerAddress, setCors } from '../../_lib/payments.js';
+import { buildSiweAuthMessage, getSellerAddress, setCors } from '../../_lib/payments.js';
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -62,13 +62,13 @@ export default async function handler(req, res) {
         note: 'Use accepted exactly as returned in PAYMENT-REQUIRED.accepts[0]. Keep scheme/network at top level.'
       },
       auth_message_examples: {
-        redownload: buildAuthMessage({
+        redownload: buildSiweAuthMessage({
           wallet: '0x<your-wallet>',
           soulId: id,
           action: 'redownload',
           timestamp: Date.now()
         }),
-        session: buildAuthMessage({
+        session: buildSiweAuthMessage({
           wallet: '0x<your-wallet>',
           soulId: '*',
           action: 'session',

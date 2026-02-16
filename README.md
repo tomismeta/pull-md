@@ -160,9 +160,7 @@ Copy-paste guidance on payment errors:
 - Fill wallet/signature placeholders and resubmit in `PAYMENT-SIGNATURE`.
 
 Re-download auth compatibility note:
-- Server verification accepts canonical variants (`lowercase` or checksummed `address:` line, `LF` or `CRLF` newlines).
-- Human ownership auth uses SIWE (EIP-4361) only.
-- Strict headless agent re-download challenge keeps legacy canonical message verification for compatibility.
+- Human and headless agent ownership auth use SIWE (EIP-4361) only.
 - If re-download headers are present, server prioritizes entitlement delivery and skips payment processing.
 - Strict agent no-repay path:
 `X-CLIENT-MODE: agent` + `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SIGNATURE` + `X-REDOWNLOAD-TIMESTAMP` (no session bootstrap required).
