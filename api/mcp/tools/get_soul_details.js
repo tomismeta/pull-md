@@ -45,8 +45,8 @@ export default async function handler(req, res) {
           'X-REDOWNLOAD-SIGNATURE',
           'X-REDOWNLOAD-TIMESTAMP'
         ],
-        redownload_session_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
-        redownload_signed_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+        redownload_receipt_session: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SESSION'],
+        redownload_creator_signed: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
         redownload_session_bootstrap: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
       },
       redownload_session_endpoint: '/api/auth/session',

@@ -15,9 +15,9 @@ SoulStarter is an agent-focused marketplace for purchasing and re-downloading AI
 set `X-CLIENT-MODE: agent`; re-download requires receipt + wallet signature challenge and never uses browser/session recovery APIs.
 - Ownership auth signatures (creator/moderator/session/re-download challenge) prefer SIWE (EIP-4361) message signing with non-spending statement:
 `Authentication only. No token transfer or approval.`
-- Human recovery mode (receipt unavailable):
+- Human recovery mode (creator-only fallback when receipt is unavailable):
 `X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`)
-for prior on-chain buyers and creator-owned souls.
+for creator-owned souls.
 - Facilitator resiliency includes:
 preflight checks, multi-endpoint failover, timeout, circuit breaker
 - Agent-discoverable API via WebMCP manifest at `/api/mcp/manifest`
@@ -175,9 +175,9 @@ Re-download auth compatibility note:
 - In strict agent mode, `X-REDOWNLOAD-SESSION`, `X-AUTH-SIGNATURE`, and `X-AUTH-TIMESTAMP` are rejected.
 - In strict agent mode, `/api/auth/session` is deprecated and returns `410` (`session_api_not_for_agents`).
 - In strict agent mode, re-download calls require live signature proof-of-control on each request.
-- Human UX optimization:
+- Human UX optimization (creator fallback only):
 bootstrap once with `GET /api/auth/session` using wallet signature (`action: session`), then recovery uses
-`X-WALLET-ADDRESS` + `X-REDOWNLOAD-SESSION` when needed (receipt remains primary whenever available).
+`X-WALLET-ADDRESS` + `X-REDOWNLOAD-SESSION` when needed for creator-owned listings (receipt remains primary for buyers).
 
 Multi-spend guardrails:
 - In-flight settlement submissions are idempotent by payer+soul+nonce to reduce duplicate settlement attempts.
@@ -202,7 +202,7 @@ Re-fetch paywall and copy `accepts[0]` exactly (including `maxTimeoutSeconds` an
 you sent partial entitlement headers. For no-repay re-download, send:
 `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SIGNATURE` + `X-REDOWNLOAD-TIMESTAMP`.
 Recovery (receipt unavailable):
-`X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`).
+`X-WALLET-ADDRESS` + (`X-REDOWNLOAD-SESSION` or `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`) for creator-owned listings only.
 - `flow_hint: "Payment header was detected but could not be verified/settled..."`:
 header exists but signature/shape failed verification.
 Re-sign using the latest `PAYMENT-REQUIRED` and confirm method-specific payload shape.

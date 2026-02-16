@@ -878,7 +878,11 @@ async function tryRedownload(soulId) {
     throw new Error(error || 'Re-download failed');
   }
 
-  // One-time wallet session bootstrap, then retry wallet entitlement download.
+  if (!createdAccess) {
+    return { ok: false, requiresPayment: true };
+  }
+
+  // Creator fallback: bootstrap session once, then retry creator entitlement download.
   await ensureRedownloadSession();
   const refreshedSession = getStoredRedownloadSession(walletAddress);
   const retryHeaders = {
