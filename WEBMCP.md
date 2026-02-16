@@ -94,9 +94,11 @@ Authoritative purchase flow:
 1. First request without payment headers:
 - Response `402`
 - Header `PAYMENT-REQUIRED` (base64 JSON payment requirements)
+- Strict agent mode requires `X-WALLET-ADDRESS` (or `wallet_address` query) on this quote request.
 
 2. Paid retry:
 - Include `X-CLIENT-MODE: agent` for strict headless behavior
+- Include `X-WALLET-ADDRESS` (same wallet used for quote/signing)
 - Header `PAYMENT-SIGNATURE` only
 - Value format:
 base64(JSON x402 payload)
@@ -318,6 +320,9 @@ Refresh `PAYMENT-REQUIRED` and copy `accepts[0]` exactly, unchanged.
 use `accepted_copy_paste` exactly as top-level `accepted`, then fill `copy_paste_payment_payload.payload` signer fields and resubmit.
 - `payment_signing_instructions` is authoritative for method-specific payload shape:
 `transfer_method`, required/forbidden fields, and expected EIP-712 primary type.
+- `x402_method_mismatch`:
+submitted payment method does not match wallet quote method.
+Refresh `PAYMENT-REQUIRED` and re-sign with the expected transfer method.
 - `Incomplete re-download header set`:
 you sent partial entitlement headers, so server blocked purchase fallback to prevent accidental repay.
 Re-download requires:

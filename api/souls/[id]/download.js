@@ -172,6 +172,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required' });
   }
   const { rawMode: clientModeRaw, strictAgentMode } = classifyClientMode({ headers: req.headers, query: req.query });
+  const walletHintForQuote = String(req.headers['x-wallet-address'] || req.query?.wallet_address || '').trim();
 
   // Re-download path: wallet re-auth + signed purchase receipt.
   const {
@@ -207,6 +208,26 @@ export default async function handler(req, res) {
   }
 
   if (strictAgentMode) {
+    if (!paymentSignature && !hasAnyRedownloadHeaders && !walletHintForQuote) {
+      return res.status(400).json({
+        error: 'Wallet hint required for strict agent purchase quote',
+        code: 'agent_wallet_hint_required',
+        flow_hint:
+          'Strict agent purchase quotes require X-WALLET-ADDRESS (or wallet_address query) so server can select the correct transfer method.',
+        required_headers: ['X-CLIENT-MODE: agent', 'X-WALLET-ADDRESS'],
+        optional_headers: ['X-ASSET-TRANSFER-METHOD']
+      });
+    }
+    if (paymentSignature && !hasAnyRedownloadHeaders && !walletHintForQuote) {
+      return res.status(400).json({
+        error: 'Wallet hint required for strict agent paid retry',
+        code: 'agent_wallet_hint_required_paid_retry',
+        flow_hint:
+          'Strict agent paid retries require X-WALLET-ADDRESS (or wallet_address query) to avoid transfer-method mismatches.',
+        required_headers: ['X-CLIENT-MODE: agent', 'X-WALLET-ADDRESS', 'PAYMENT-SIGNATURE'],
+        optional_headers: ['X-ASSET-TRANSFER-METHOD']
+      });
+    }
     if (hasSessionRecoveryHeaders || hasSignedRecoveryHeaders) {
       return res.status(400).json({
         error: 'Unsupported headers for strict agent mode',
@@ -506,17 +527,44 @@ export default async function handler(req, res) {
 
   try {
     rewriteIncomingPaymentHeader(req);
+    const context = createRequestContext(req);
+    const submittedPayment = context.paymentHeader ? decodeSubmittedPayment(req) : null;
     const transferMethodSelection = await resolveAssetTransferMethodForRequest(req, {
       strictAgentMode,
       wallet
     });
+    if (strictAgentMode && !hasAnyRedownloadHeaders && !transferMethodSelection.method) {
+      return res.status(400).json({
+        error: 'Unable to resolve transfer method for strict agent flow',
+        code: 'agent_transfer_method_unresolved',
+        flow_hint:
+          'Provide X-WALLET-ADDRESS and retry. If wallet-type detection is unavailable, set X-ASSET-TRANSFER-METHOD explicitly to eip3009 or permit2.',
+        required_headers: ['X-CLIENT-MODE: agent', 'X-WALLET-ADDRESS'],
+        optional_headers: ['X-ASSET-TRANSFER-METHOD'],
+        transfer_method_selection: transferMethodSelection
+      });
+    }
+    if (strictAgentMode && submittedPayment && transferMethodSelection.method) {
+      const submittedMethod = getTransferMethodFromSubmittedPayment(submittedPayment);
+      if (submittedMethod !== transferMethodSelection.method) {
+        return res.status(402).json({
+          error: 'Payment transfer method mismatch',
+          code: 'x402_method_mismatch',
+          flow_hint:
+            'The submitted PAYMENT-SIGNATURE method does not match this wallet quote. Refresh PAYMENT-REQUIRED and re-sign with the selected method.',
+          expected_transfer_method: transferMethodSelection.method,
+          submitted_transfer_method: submittedMethod,
+          transfer_method_selection: transferMethodSelection,
+          payment_signing_instructions: buildPaymentSigningInstructionsForMethod(transferMethodSelection.method)
+        });
+      }
+    }
     const httpServer = await getX402HTTPServer({
       soulId,
       soul,
       sellerAddress,
       assetTransferMethod: transferMethodSelection.method
     });
-    const context = createRequestContext(req);
     const result = await httpServer.processHTTPRequest(context);
     const includeDebug = shouldIncludeDebug(req);
 
@@ -530,6 +578,7 @@ export default async function handler(req, res) {
         }
 
         if (!context.paymentHeader) {
+          result.response.body.transfer_method_selection = transferMethodSelection;
           if (strictAgentMode) {
             result.response.body.flow_hint =
               'Strict agent mode purchase step: send PAYMENT-SIGNATURE with base64-encoded x402 payload.';
@@ -1370,6 +1419,37 @@ function buildPaymentSigningInstructions(paymentRequired) {
   const transferMethod = String(accepted?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
   const base = {
     x402_version: paymentRequired?.x402Version ?? 2,
+    transfer_method: transferMethod,
+    required_top_level_fields: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
+    required_header: 'PAYMENT-SIGNATURE',
+    header_format: 'base64(JSON.stringify(x402_payload))',
+    accepted_must_match: 'accepted must exactly equal PAYMENT-REQUIRED.accepts[0]',
+    wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests for wallet-type-aware method selection.',
+    method_rules: {
+      eip3009: {
+        typed_data_primary_type: 'TransferWithAuthorization',
+        required_payload_fields: ['payload.authorization', 'payload.signature'],
+        forbidden_payload_fields: ['payload.authorization.signature', 'payload.permit2Authorization', 'payload.transaction'],
+        authorization_fields: ['from', 'to', 'value', 'validAfter', 'validBefore', 'nonce']
+      },
+      permit2: {
+        typed_data_primary_type: 'PermitWitnessTransferFrom',
+        required_payload_fields: ['payload.from', 'payload.permit2Authorization', 'payload.transaction', 'payload.signature'],
+        forbidden_payload_fields: ['payload.authorization', 'payload.permit2'],
+        permit2_authorization_fields: ['from', 'permitted.token', 'permitted.amount', 'spender', 'nonce', 'deadline', 'witness.to', 'witness.validAfter', 'witness.extra']
+      }
+    }
+  };
+  return {
+    ...base,
+    selected_rule: transferMethod === 'permit2' ? base.method_rules.permit2 : base.method_rules.eip3009
+  };
+}
+
+function buildPaymentSigningInstructionsForMethod(method) {
+  const transferMethod = String(method || 'eip3009').toLowerCase() === 'permit2' ? 'permit2' : 'eip3009';
+  const base = {
+    x402_version: 2,
     transfer_method: transferMethod,
     required_top_level_fields: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
     required_header: 'PAYMENT-SIGNATURE',
