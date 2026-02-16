@@ -5,6 +5,26 @@ const SIWE_STATEMENT = 'Authenticate wallet ownership for SoulStarter. No token 
 const SIWE_DOMAIN = String(process.env.SIWE_DOMAIN || 'soulstarter.vercel.app').trim();
 const SIWE_URI = String(process.env.SIWE_URI || `https://${SIWE_DOMAIN}`).trim();
 const SIWE_CHAIN_ID = Number(process.env.SIWE_CHAIN_ID || '8453');
+const EIP1271_MAGIC_VALUE = '0x1626ba7e';
+const EIP1271_MAGIC_VALUE_BYTES = '0x20c13b0b';
+const EIP1271_IFACE_32 = new ethers.Interface(['function isValidSignature(bytes32,bytes) view returns (bytes4)']);
+const EIP1271_IFACE_BYTES = new ethers.Interface(['function isValidSignature(bytes,bytes) view returns (bytes4)']);
+let authProvider = null;
+
+function authRpcUrl() {
+  return (
+    String(process.env.AUTH_RPC_URL || '').trim() ||
+    String(process.env.BASE_RPC_URL || '').trim() ||
+    String(process.env.RPC_URL || '').trim() ||
+    'https://mainnet.base.org'
+  );
+}
+
+function getAuthProvider() {
+  if (authProvider) return authProvider;
+  authProvider = new ethers.JsonRpcProvider(authRpcUrl());
+  return authProvider;
+}
 
 export function setCors(res, origin) {
   const allowedOrigins = [
@@ -34,7 +54,7 @@ export function getSellerAddress() {
   return sellerAddress || null;
 }
 
-export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature }) {
+export async function verifyWalletAuth({ wallet, soulId, action, timestamp, signature }) {
   if (!wallet || !signature || !timestamp) {
     return { ok: false, error: 'Missing wallet authentication headers' };
   }
@@ -56,18 +76,82 @@ export function verifyWalletAuth({ wallet, soulId, action, timestamp, signature 
 
   const siweCandidates = buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp: ts });
   for (const candidate of siweCandidates) {
-    try {
-      const recovered = ethers.verifyMessage(candidate.message, signature);
-      if (typeof recovered === 'string' && recovered.toLowerCase() === wallet.toLowerCase()) {
-        return { ok: true, wallet: wallet.toLowerCase(), auth_format: 'siwe', matched_variant: candidate.variant };
-      }
-    } catch (_) {}
+    const checked = await verifySiweCandidate({ wallet, signature, message: candidate.message });
+    if (checked.ok) {
+      return {
+        ok: true,
+        wallet: wallet.toLowerCase(),
+        auth_format: 'siwe',
+        matched_variant: candidate.variant,
+        signature_type: checked.signature_type
+      };
+    }
   }
 
   return {
     ok: false,
     error: 'Signature does not match SIWE wallet authentication format'
   };
+}
+
+async function verifySiweCandidate({ wallet, signature, message }) {
+  const normalizedWallet = String(wallet || '').toLowerCase();
+  try {
+    const recovered = ethers.verifyMessage(message, signature);
+    if (typeof recovered === 'string' && recovered.toLowerCase() === normalizedWallet) {
+      return { ok: true, signature_type: 'eoa' };
+    }
+  } catch (_) {}
+  return verifyEip1271Signature({ wallet, signature, message });
+}
+
+async function verifyEip1271Signature({ wallet, signature, message }) {
+  const normalizedWallet = String(wallet || '').toLowerCase();
+  const provider = getAuthProvider();
+  let code;
+  try {
+    code = await provider.getCode(normalizedWallet);
+  } catch (_) {
+    return { ok: false };
+  }
+  if (!code || code === '0x') return { ok: false };
+
+  const digest = ethers.hashMessage(message);
+  const magic32 = await call1271({
+    provider,
+    to: normalizedWallet,
+    iface: EIP1271_IFACE_32,
+    fn: 'isValidSignature',
+    args: [digest, signature]
+  });
+  if (magic32 === EIP1271_MAGIC_VALUE) {
+    return { ok: true, signature_type: 'eip1271_bytes32' };
+  }
+
+  const messageBytes = ethers.toUtf8Bytes(message);
+  const magicBytes = await call1271({
+    provider,
+    to: normalizedWallet,
+    iface: EIP1271_IFACE_BYTES,
+    fn: 'isValidSignature',
+    args: [messageBytes, signature]
+  });
+  if (magicBytes === EIP1271_MAGIC_VALUE || magicBytes === EIP1271_MAGIC_VALUE_BYTES) {
+    return { ok: true, signature_type: 'eip1271_bytes' };
+  }
+
+  return { ok: false };
+}
+
+async function call1271({ provider, to, iface, fn, args }) {
+  try {
+    const data = iface.encodeFunctionData(fn, args);
+    const response = await provider.call({ to, data });
+    const [magic] = iface.decodeFunctionResult(fn, response);
+    return String(magic || '').toLowerCase();
+  } catch (_) {
+    return null;
+  }
 }
 
 function buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp }) {

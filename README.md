@@ -161,6 +161,7 @@ Copy-paste guidance on payment errors:
 
 Re-download auth compatibility note:
 - Human and headless agent ownership auth use SIWE (EIP-4361) only.
+- SIWE verification supports both EOAs and EIP-1271 smart contract wallets.
 - If re-download headers are present, server prioritizes entitlement delivery and skips payment processing.
 - Strict agent no-repay path:
 `X-CLIENT-MODE: agent` + `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SIGNATURE` + `X-REDOWNLOAD-TIMESTAMP` (no session bootstrap required).

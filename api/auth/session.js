@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const auth = verifyWalletAuth({
+  const auth = await verifyWalletAuth({
     wallet,
     soulId: '*',
     action: 'session',

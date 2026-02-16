@@ -208,7 +208,7 @@ export default async function handler(req, res) {
       });
     }
     if (hasReceiptRedownloadHeaders && hasAgentRedownloadChallengeHeaders) {
-      const verify = verifyWalletAuth({
+      const verify = await verifyWalletAuth({
         wallet,
         soulId,
         action: 'redownload',
@@ -345,7 +345,7 @@ export default async function handler(req, res) {
       }
     } else {
       if (authSignature && authTimestamp) {
-        const authCheck = verifyWalletAuth({
+        const authCheck = await verifyWalletAuth({
           wallet,
           soulId,
           action: 'redownload',

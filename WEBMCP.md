@@ -259,6 +259,7 @@ Human/creator recovery mode (receipt unavailable):
 
 Auth verifier behavior:
 - Server requires SIWE-format ownership signatures for session/recovery/creator/moderator/agent re-download challenges.
+- Server verifies SIWE for both EOAs and EIP-1271 smart contract wallets.
 
 ### Session Bootstrap Endpoint (Human/Hybrid Clients)
 

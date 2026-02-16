@@ -23,7 +23,7 @@ test('wallet session auth plain message is rejected (SIWE-only)', async () => {
   ].join('\n');
   const signature = await wallet.signMessage(message);
 
-  const checked = verifyWalletAuth({
+  const checked = await verifyWalletAuth({
     wallet: wallet.address,
     soulId: '*',
     action: 'session',
@@ -59,7 +59,7 @@ test('wallet session auth typed-data signature is rejected (SIWE-only)', async (
   };
   const signature = await wallet.signTypedData(typed.domain, typed.types, typed.message);
 
-  const checked = verifyWalletAuth({
+  const checked = await verifyWalletAuth({
     wallet: wallet.address,
     soulId: '*',
     action: 'session',
@@ -82,7 +82,7 @@ test('wallet session auth SIWE signature verifies with action=session', async ()
   });
   const signature = await wallet.signMessage(message);
 
-  const checked = verifyWalletAuth({
+  const checked = await verifyWalletAuth({
     wallet: wallet.address,
     soulId: '*',
     action: 'session',
@@ -106,7 +106,7 @@ test('redownload auth plain message is rejected (SIWE-only)', async () => {
     `timestamp:${timestamp}`
   ].join('\n');
   const signature = await wallet.signMessage(message);
-  const checked = verifyWalletAuth({
+  const checked = await verifyWalletAuth({
     wallet: wallet.address,
     soulId: 'sassy-starter-v1',
     action: 'redownload',
@@ -127,7 +127,7 @@ test('redownload auth SIWE signature verifies', async () => {
     timestamp
   });
   const signature = await wallet.signMessage(message);
-  const checked = verifyWalletAuth({
+  const checked = await verifyWalletAuth({
     wallet: wallet.address,
     soulId: 'sassy-starter-v1',
     action: 'redownload',
