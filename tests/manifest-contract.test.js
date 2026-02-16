@@ -39,13 +39,10 @@ test('manifest exposes strict agent guardrails and facilitator capability flags'
 
   assert.equal(body.download_contract?.method, 'GET');
   assert.match(String(body.download_contract?.first_request || ''), /X-WALLET-ADDRESS/);
-  assert.equal(body.facilitator_capabilities?.cdp_only_contract_wallet_purchase, 'unsupported');
-  assert.equal(
-    body.facilitator_capabilities?.cdp_only_contract_wallet_purchase_code,
-    'contract_wallet_not_supported_by_facilitator'
-  );
+  assert.equal(body.facilitator_capabilities?.strict_agent_default_transfer_method, 'eip3009');
+  assert.match(String(body.facilitator_capabilities?.note || ''), /permit2/i);
   assert.ok(body.error_codes?.x402_method_mismatch);
-  assert.ok(body.error_codes?.contract_wallet_not_supported_by_facilitator);
+  assert.equal(body.error_codes?.contract_wallet_not_supported_by_facilitator, undefined);
   assert.equal(
     Array.isArray(body.tools) && body.tools.some((tool) => String(tool?.endpoint || '') === '/api/mcp/tools/purchase_soul'),
     false

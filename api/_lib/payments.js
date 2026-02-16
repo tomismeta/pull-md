@@ -82,7 +82,7 @@ export async function verifyWalletAuth({ wallet, soulId, action, timestamp, sign
     return { ok: false, error: 'Invalid wallet address' };
   }
 
-  const ts = Number(timestamp);
+  const ts = parseAuthTimestamp(timestamp);
   if (!Number.isFinite(ts)) {
     return { ok: false, error: 'Invalid auth timestamp' };
   }
@@ -184,22 +184,45 @@ async function call1271({ provider, to, iface, fn, args }) {
 }
 
 function buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp }) {
+  const normalizedTimestamps = buildTimestampCandidates(timestamp);
   const rawWallet = String(wallet || '').trim();
   const walletLower = rawWallet.toLowerCase();
   const checksummed = safeChecksumAddress(rawWallet);
   const walletVariants = [walletLower, checksummed].filter(Boolean);
   const uniqueWallets = [...new Set(walletVariants)];
   const candidates = [];
-  for (const walletVariant of uniqueWallets) {
-    const baseVariant = walletVariant === walletLower ? 'siwe-lowercase' : 'siwe-checksummed';
-    const baseMessage = buildSiweAuthMessage({ wallet: walletVariant, soulId, action, timestamp });
-    candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
-    candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
-    const crlf = baseMessage.replace(/\n/g, '\r\n');
-    candidates.push({ variant: `${baseVariant}-crlf`, message: crlf });
-    candidates.push({ variant: `${baseVariant}-crlf-trailing`, message: `${crlf}\r\n` });
+  for (const ts of normalizedTimestamps) {
+    for (const walletVariant of uniqueWallets) {
+      const walletVariantLabel = walletVariant === walletLower ? 'siwe-lowercase' : 'siwe-checksummed';
+      const tsLabel = ts === Number(timestamp) ? 'ts-ms' : 'ts-sec';
+      const baseVariant = `${walletVariantLabel}-${tsLabel}`;
+      const baseMessage = buildSiweAuthMessage({ wallet: walletVariant, soulId, action, timestamp: ts });
+      candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
+      candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
+      const crlf = baseMessage.replace(/\n/g, '\r\n');
+      candidates.push({ variant: `${baseVariant}-crlf`, message: crlf });
+      candidates.push({ variant: `${baseVariant}-crlf-trailing`, message: `${crlf}\r\n` });
+    }
   }
   return candidates;
+}
+
+function parseAuthTimestamp(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const raw = String(value || '').trim();
+  if (!raw) return Number.NaN;
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) return numeric;
+  const iso = Date.parse(raw);
+  if (Number.isFinite(iso)) return iso;
+  return Number.NaN;
+}
+
+function buildTimestampCandidates(ts) {
+  const base = Number(ts);
+  if (!Number.isFinite(base)) return [];
+  const sec = Math.floor(base / 1000) * 1000;
+  return [...new Set([base, sec])];
 }
 
 function buildSiweNonce({ soulId, action, timestamp }) {
