@@ -520,6 +520,10 @@ main {
   overflow: auto;
 }
 
+.agent-api-actions {
+  margin-top: 12px;
+}
+
 .footer {
   border-top: 1px solid var(--line);
   padding: 22px 0;
