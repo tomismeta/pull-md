@@ -11,7 +11,8 @@ const STATE = {
   provider: null,
   signer: null,
   wallet: null,
-  walletType: null
+  walletType: null,
+  connecting: false
 };
 
 function toast(message, type = 'info') {
@@ -176,6 +177,13 @@ function closeWalletModal() {
   if (modal) modal.style.display = 'none';
 }
 
+function setWalletOptionsDisabled(disabled) {
+  document.querySelectorAll('.wallet-option').forEach((option) => {
+    if (!(option instanceof HTMLButtonElement)) return;
+    option.disabled = disabled;
+  });
+}
+
 async function ensureBaseNetwork(provider) {
   const network = await provider.getNetwork();
   if (Number(network.chainId) === BASE_CHAIN_DEC) return;
@@ -218,7 +226,7 @@ async function connectWithProviderInternal(rawProvider, walletType, silent) {
   updateModeratorNavLinkVisibility();
 }
 
-async function connectMetaMask() {
+async function connectMetaMaskProvider() {
   const metamaskProvider = findProviderByKind('metamask');
   if (metamaskProvider) return connectWithProviderInternal(metamaskProvider, 'metamask', false);
   const fallback = fallbackInjectedProvider();
@@ -227,7 +235,7 @@ async function connectMetaMask() {
   return connectWithProviderInternal(fallback, 'metamask', false);
 }
 
-async function connectRabby() {
+async function connectRabbyProvider() {
   const rabbyProvider = findProviderByKind('rabby');
   if (rabbyProvider) return connectWithProviderInternal(rabbyProvider, 'rabby', false);
   const fallback = fallbackInjectedProvider();
@@ -236,7 +244,7 @@ async function connectRabby() {
   return connectWithProviderInternal(fallback, 'rabby', false);
 }
 
-async function connectBankr() {
+async function connectBankrProvider() {
   const bankrProvider = findProviderByKind('bankr');
   if (bankrProvider) return connectWithProviderInternal(bankrProvider, 'bankr', false);
   const fallback = fallbackInjectedProvider();
@@ -578,34 +586,30 @@ initDefaults();
 bindEvents();
 loadModeratorAllowlist().then(() => restoreWalletSession());
 
+async function handleWalletConnect(connectFn) {
+  if (STATE.connecting) return;
+  STATE.connecting = true;
+  setWalletOptionsDisabled(true);
+  try {
+    await connectFn();
+    toast('Wallet connected', 'success');
+    renderPublishedList([]);
+    setStatus('Wallet connected. Publish now, or click Refresh to load your private listing view.');
+  } catch (error) {
+    toast(error.message, 'error');
+  } finally {
+    setWalletOptionsDisabled(false);
+    STATE.connecting = false;
+  }
+}
+
 window.closeWalletModal = closeWalletModal;
 window.connectMetaMask = async () => {
-  try {
-    await connectMetaMask();
-    toast('Wallet connected', 'success');
-    renderPublishedList([]);
-    setStatus('Wallet connected. Publish now, or click Refresh to load your private listing view.');
-  } catch (error) {
-    toast(error.message, 'error');
-  }
+  await handleWalletConnect(connectMetaMaskProvider);
 };
 window.connectRabby = async () => {
-  try {
-    await connectRabby();
-    toast('Wallet connected', 'success');
-    renderPublishedList([]);
-    setStatus('Wallet connected. Publish now, or click Refresh to load your private listing view.');
-  } catch (error) {
-    toast(error.message, 'error');
-  }
+  await handleWalletConnect(connectRabbyProvider);
 };
 window.connectBankr = async () => {
-  try {
-    await connectBankr();
-    toast('Wallet connected', 'success');
-    renderPublishedList([]);
-    setStatus('Wallet connected. Publish now, or click Refresh to load your private listing view.');
-  } catch (error) {
-    toast(error.message, 'error');
-  }
+  await handleWalletConnect(connectBankrProvider);
 };

@@ -11,7 +11,8 @@ const state = {
   signer: null,
   wallet: null,
   walletType: null,
-  moderators: []
+  moderators: [],
+  connecting: false
 };
 
 function showToast(message, type = 'info') {
@@ -161,6 +162,13 @@ function closeWalletModal() {
   if (modal) modal.style.display = 'none';
 }
 
+function setWalletOptionsDisabled(disabled) {
+  document.querySelectorAll('.wallet-option').forEach((option) => {
+    if (!(option instanceof HTMLButtonElement)) return;
+    option.disabled = disabled;
+  });
+}
+
 async function ensureBaseNetwork(provider) {
   const network = await provider.getNetwork();
   if (Number(network.chainId) === BASE_CHAIN_DEC) return;
@@ -235,7 +243,7 @@ async function connectWithProviderInternal(rawProvider, walletType, silent) {
   setConnectButton();
 }
 
-async function connectMetaMask() {
+async function connectMetaMaskProvider() {
   const metamaskProvider = findProviderByKind('metamask');
   if (metamaskProvider) return connectWithProviderInternal(metamaskProvider, 'metamask', false);
   const fallback = fallbackInjectedProvider();
@@ -243,7 +251,7 @@ async function connectMetaMask() {
   return connectWithProviderInternal(fallback, 'metamask', false);
 }
 
-async function connectRabby() {
+async function connectRabbyProvider() {
   const rabbyProvider = findProviderByKind('rabby');
   if (rabbyProvider) return connectWithProviderInternal(rabbyProvider, 'rabby', false);
   const fallback = fallbackInjectedProvider();
@@ -251,7 +259,7 @@ async function connectRabby() {
   return connectWithProviderInternal(fallback, 'rabby', false);
 }
 
-async function connectBankr() {
+async function connectBankrProvider() {
   const bankrProvider = findProviderByKind('bankr');
   if (bankrProvider) return connectWithProviderInternal(bankrProvider, 'bankr', false);
   const fallback = fallbackInjectedProvider();
@@ -500,11 +508,19 @@ function bindEvents() {
 }
 
 async function connectFromChoice(kind) {
-  if (kind === 'metamask') await connectMetaMask();
-  else if (kind === 'rabby') await connectRabby();
-  else if (kind === 'bankr') await connectBankr();
-  if (!state.signer || !state.wallet) throw new Error('Wallet connection did not complete. Please try again.');
-  await connectWallet();
+  if (state.connecting) return;
+  state.connecting = true;
+  setWalletOptionsDisabled(true);
+  try {
+    if (kind === 'metamask') await connectMetaMaskProvider();
+    else if (kind === 'rabby') await connectRabbyProvider();
+    else if (kind === 'bankr') await connectBankrProvider();
+    if (!state.signer || !state.wallet) throw new Error('Wallet connection did not complete. Please try again.');
+    await connectWallet();
+  } finally {
+    setWalletOptionsDisabled(false);
+    state.connecting = false;
+  }
 }
 
 function bindWalletChoiceHandlers() {
