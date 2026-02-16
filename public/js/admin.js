@@ -1,6 +1,8 @@
 const API_BASE = '/api/mcp/tools/creator_marketplace';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
+const SIWE_DOMAIN = 'soulstarter.vercel.app';
+const SIWE_URI = 'https://soulstarter.vercel.app';
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 const providerMetadata = new WeakMap();
 let providerDiscoveryInitialized = false;
@@ -257,30 +259,32 @@ async function connectBankr() {
   return connectWithProviderInternal(fallback, 'bankr', false);
 }
 
-function moderatorSiweMessage(action, timestamp) {
+async function sha256Hex(input) {
+  const enc = new TextEncoder().encode(String(input));
+  const digest = await crypto.subtle.digest('SHA-256', enc);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function moderatorSiweMessage(action, timestamp) {
   const ts = Number(timestamp);
-  const nonceSeed = `${String(action || '')}|${String(ts)}`;
-  let hash = 0;
-  for (let i = 0; i < nonceSeed.length; i += 1) {
-    hash = (hash * 31 + nonceSeed.charCodeAt(i)) >>> 0;
-  }
-  const nonce = `ss${String(hash.toString(16)).padStart(8, '0')}`;
+  const nonceSeed = `moderator|${String(action || '')}|${String(ts)}`;
+  const nonce = (await sha256Hex(nonceSeed)).slice(0, 16);
   return [
-    `${window.location.host} wants you to sign in with your Ethereum account:`,
+    `${SIWE_DOMAIN} wants you to sign in with your Ethereum account:`,
     String(state.wallet || '').toLowerCase(),
     '',
     'Authenticate wallet ownership for SoulStarter. No token transfer or approval.',
     '',
-    `URI: ${window.location.origin}`,
+    `URI: ${SIWE_URI}`,
     'Version: 1',
     `Chain ID: ${BASE_CHAIN_DEC}`,
     `Nonce: ${nonce}`,
     `Issued At: ${new Date(ts).toISOString()}`,
     `Expiration Time: ${new Date(ts + 5 * 60 * 1000).toISOString()}`,
-    `Request ID: ${String(action || 'moderator')}:*`,
+    `Request ID: ${String(action || 'moderator')}:moderator`,
     'Resources:',
     `- urn:soulstarter:action:${String(action || '')}`,
-    '- urn:soulstarter:soul:*'
+    '- urn:soulstarter:scope:moderator'
   ].join('\n');
 }
 
@@ -288,7 +292,7 @@ async function signModeratorHeaders(action) {
   if (!state.wallet || !state.signer) throw new Error('Connect wallet first');
   if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
   const timestamp = Date.now();
-  const signature = await state.signer.signMessage(moderatorSiweMessage(action, timestamp));
+  const signature = await state.signer.signMessage(await moderatorSiweMessage(action, timestamp));
   return {
     'X-MODERATOR-ADDRESS': state.wallet,
     'X-MODERATOR-SIGNATURE': signature,

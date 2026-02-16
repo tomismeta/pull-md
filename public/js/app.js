@@ -11,6 +11,8 @@ const CONFIG = {
     blockExplorerUrls: ['https://basescan.org']
   }
 };
+const SIWE_DOMAIN = 'soulstarter.vercel.app';
+const SIWE_URI = 'https://soulstarter.vercel.app';
 
 const TRANSFER_WITH_AUTHORIZATION_TYPE = {
   TransferWithAuthorization: [
@@ -643,21 +645,23 @@ async function restoreWalletSession() {
   }
 }
 
-function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
+async function sha256Hex(input) {
+  const enc = new TextEncoder().encode(String(input));
+  const digest = await crypto.subtle.digest('SHA-256', enc);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
   const ts = Number(timestamp);
   const nonceSeed = `${String(soulId || '*')}|${String(action || '')}|${String(ts)}`;
-  let hash = 0;
-  for (let i = 0; i < nonceSeed.length; i += 1) {
-    hash = (hash * 31 + nonceSeed.charCodeAt(i)) >>> 0;
-  }
-  const nonce = `ss${String(hash.toString(16)).padStart(8, '0')}`;
+  const nonce = (await sha256Hex(nonceSeed)).slice(0, 16);
   return [
-    `${window.location.host} wants you to sign in with your Ethereum account:`,
+    `${SIWE_DOMAIN} wants you to sign in with your Ethereum account:`,
     String(wallet || '').toLowerCase(),
     '',
     'Authenticate wallet ownership for SoulStarter. No token transfer or approval.',
     '',
-    `URI: ${window.location.origin}`,
+    `URI: ${SIWE_URI}`,
     'Version: 1',
     `Chain ID: ${CONFIG.baseChainIdDec}`,
     `Nonce: ${nonce}`,
@@ -715,7 +719,7 @@ async function ensureRedownloadSession() {
   if (existing) return existing;
 
   const timestamp = Date.now();
-  const siwe = buildSiweAuthMessage({
+  const siwe = await buildSiweAuthMessage({
     wallet: walletAddress,
     soulId: '*',
     action: 'session',
