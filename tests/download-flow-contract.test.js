@@ -46,9 +46,9 @@ test('classifyRedownloadHeaders accepts receipt cookie fallback for browser redo
 test('classifyRedownloadHeaders supports session recovery mode', () => {
   const result = classifyRedownloadHeaders({
     headers: {
-      'x-wallet-address': WALLET
-    },
-    cookieHeader: 'soulstarter_redownload_session=session-token'
+      'x-wallet-address': WALLET,
+      'x-redownload-session': 'session-token'
+    }
   });
   assert.equal(result.mode, 'human_recovery_session');
   assert.equal(result.hasAnyValidEntitlementHeaders, true);

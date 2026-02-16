@@ -94,12 +94,12 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
   const redownloadTimestamp = headers['x-redownload-timestamp'];
   const receiptCookie = cookies[purchaseReceiptCookieName(soulId)] || null;
   const receipt = headers['x-purchase-receipt'] || receiptCookie;
-  const redownloadSessionToken = headers['x-redownload-session'] || cookies.soulstarter_redownload_session || null;
+  const redownloadSessionToken = headers['x-redownload-session'] || null;
   const paymentSignature = headers['payment-signature'] || headers['PAYMENT-SIGNATURE'];
   const legacyPaymentHeader = headers.payment || headers['x-payment'] || headers['PAYMENT'] || headers['X-PAYMENT'];
 
-  // Session token alone (from cookie) is not enough to enter re-download flow.
-  // It must be bound to an explicit wallet header, otherwise fresh purchase requests get blocked.
+  // Session recovery should be explicit via header to avoid accidental purchase-flow interception
+  // from stale session cookies on fresh buy attempts.
   const hasAnyRedownloadHeaders = Boolean(
     (wallet && receipt) ||
       (wallet && redownloadSessionToken) ||
