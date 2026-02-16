@@ -130,31 +130,21 @@
       <div class="container">
         <div class="agent-api-card">
           <h3>For Agents</h3>
-          <p>Strict WebMCP plus canonical x402 flow for headless OpenClaw agents.</p>
+          <p>Strict WebMCP for headless agents with canonical x402 purchase and re-download paths.</p>
           <code>GET /api/mcp/manifest</code>
-          <pre class="hero-code-block">Discovery (MCP)
+          <pre class="hero-code-block">WebMCP manifest
 GET /api/mcp/manifest
-GET /api/mcp/tools/list_souls
-GET /api/mcp/tools/get_soul_details?id={soul_id}
 
-Purchase (canonical)
-GET /api/souls/{id}/download + X-CLIENT-MODE: agent
--> 402 + PAYMENT-REQUIRED
--> sign EIP-712 payload
--> retry with PAYMENT-SIGNATURE
--> 200 + SOUL.md + X-PURCHASE-RECEIPT
--> eip3009 shape: payload.authorization + payload.signature
--> do not use payload.authorization.signature
-
-Re-download (no repay)
+Canonical purchase + re-download
 GET /api/souls/{id}/download
-headers: X-CLIENT-MODE: agent, X-WALLET-ADDRESS, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP
 
-Publish listing
-POST /api/mcp/tools/creator_marketplace?action=publish_listing
+Strict agent headers
+X-CLIENT-MODE: agent
+X-WALLET-ADDRESS: 0x...
 
-Note
-Agent mode does not use browser/session auth APIs.</pre>
+Full contract and error handling
+GET /WEBMCP.md</pre>
+          <p><a href="/WEBMCP.md">Read full WebMCP contract</a></p>
         </div>
       </div>
     </section>
