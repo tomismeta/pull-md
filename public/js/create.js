@@ -327,7 +327,7 @@ async function creatorSiweMessage(action, timestamp) {
 }
 
 async function creatorAuth(action) {
-  if (!STATE.signer || !STATE.wallet) throw new Error('Connect wallet first');
+  if (!STATE.signer || !STATE.wallet) throw new Error('Connect your wallet first');
   const authTimestamp = Date.now();
   const authSignature = await STATE.signer.signMessage(await creatorSiweMessage(action, authTimestamp));
   return {
@@ -577,8 +577,8 @@ function initDefaults() {
   initProviderDiscovery();
   initMobileNav();
   setWalletButton();
-  setStatus('Ready.');
-  setOutput('No publish yet.');
+  setStatus('Ready to publish.');
+  setOutput('No publish response yet.');
   renderPublishedList([]);
 }
 

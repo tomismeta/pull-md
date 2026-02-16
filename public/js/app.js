@@ -1573,8 +1573,8 @@ async function loadSouls() {
     renderOwnedSouls();
   } catch (error) {
     console.error('Catalog load failed:', error);
-    grid.innerHTML = '<p>Catalog is temporarily unavailable.</p>';
-    renderInventorySummary([], 'Catalog is temporarily unavailable.');
+    grid.innerHTML = '<p>Souls are temporarily unavailable. Please try again.</p>';
+    renderInventorySummary([], 'Souls are temporarily unavailable.');
     renderOwnedSouls();
   }
 }

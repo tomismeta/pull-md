@@ -127,7 +127,7 @@ function setConnectButton() {
       btn.textContent = `${state.wallet.slice(0, 6)}...${state.wallet.slice(-4)}${suffix}`;
       btn.classList.add('connected');
     } else {
-      btn.textContent = btn.id === 'connectWalletBtn' ? 'connect moderator wallet' : 'Connect Wallet';
+      btn.textContent = 'Connect Wallet';
       btn.classList.remove('connected');
     }
   }
@@ -297,7 +297,7 @@ async function moderatorSiweMessage(action, timestamp) {
 }
 
 async function signModeratorHeaders(action) {
-  if (!state.wallet || !state.signer) throw new Error('Connect wallet first');
+  if (!state.wallet || !state.signer) throw new Error('Connect your wallet first');
   if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
   const timestamp = Date.now();
   const signature = await state.signer.signMessage(await moderatorSiweMessage(action, timestamp));
@@ -396,7 +396,7 @@ function disconnectWallet() {
   state.walletType = null;
   clearWalletSession();
   setConnectButton();
-  setStatus('Wallet not connected.');
+  setStatus('Connect wallet to continue.');
   renderEmpty('visibleContainer', 'Connect an allowlisted moderator wallet.');
   renderEmpty('hiddenContainer', 'Connect an allowlisted moderator wallet.');
   showToast('Wallet disconnected', 'info');
@@ -582,7 +582,7 @@ async function init() {
   bindWalletChoiceHandlers();
   await loadModerators();
   setConnectButton();
-  setStatus('Wallet not connected.');
+  setStatus('Connect wallet to continue.');
   renderEmpty('visibleContainer', 'Connect an allowlisted moderator wallet.');
   renderEmpty('hiddenContainer', 'Connect an allowlisted moderator wallet.');
   await restoreWalletSession();
