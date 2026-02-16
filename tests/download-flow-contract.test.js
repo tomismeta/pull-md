@@ -30,7 +30,7 @@ test('classifyRedownloadHeaders detects strict agent challenge headers', () => {
   assert.equal(result.hasAgentRedownloadChallengeHeaders, true);
 });
 
-test('classifyRedownloadHeaders accepts receipt cookie fallback for browser redownloads', () => {
+test('classifyRedownloadHeaders requires explicit receipt header for browser redownloads', () => {
   const result = classifyRedownloadHeaders({
     headers: {
       'x-wallet-address': WALLET
@@ -38,9 +38,9 @@ test('classifyRedownloadHeaders accepts receipt cookie fallback for browser redo
     soulId: 'sassy-starter-v1',
     cookieHeader: 'soulstarter_receipt_sassy-starter-v1=receipt-cookie-token'
   });
-  assert.equal(result.mode, 'agent_primary_receipt');
-  assert.equal(result.hasAnyValidEntitlementHeaders, true);
-  assert.equal(result.receipt, 'receipt-cookie-token');
+  assert.equal(result.mode, 'none');
+  assert.equal(result.hasAnyValidEntitlementHeaders, false);
+  assert.equal(result.receipt, null);
 });
 
 test('classifyRedownloadHeaders supports session recovery mode', () => {

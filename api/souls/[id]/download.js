@@ -93,7 +93,7 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
   const redownloadSignature = headers['x-redownload-signature'];
   const redownloadTimestamp = headers['x-redownload-timestamp'];
   const receiptCookie = cookies[purchaseReceiptCookieName(soulId)] || null;
-  const receipt = headers['x-purchase-receipt'] || receiptCookie;
+  const receipt = headers['x-purchase-receipt'] || null;
   const redownloadSessionToken = headers['x-redownload-session'] || null;
   const paymentSignature = headers['payment-signature'] || headers['PAYMENT-SIGNATURE'];
   const legacyPaymentHeader = headers.payment || headers['x-payment'] || headers['PAYMENT'] || headers['X-PAYMENT'];
