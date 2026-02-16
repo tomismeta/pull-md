@@ -6,7 +6,6 @@ import {
   buildSiweAuthMessage,
   createRedownloadSessionToken,
   createPurchaseReceipt,
-  detectWalletType,
   getSellerAddress,
   parseCookieHeader,
   purchaseReceiptCookieName,
@@ -19,7 +18,6 @@ import {
   applyInstructionResponse,
   buildCdpRequestDebug,
   createRequestContext,
-  getFacilitatorRuntimeInfo,
   getX402HTTPServer,
   inspectFacilitatorVerify
 } from '../../_lib/x402.js';
@@ -58,15 +56,8 @@ async function resolveAssetTransferMethodForRequest(req, { strictAgentMode, wall
     normalizeAssetTransferMethod(req.query?.asset_transfer_method);
   if (explicit) return { method: explicit, source: 'explicit' };
 
-  const walletHint = String(wallet || req.headers['x-wallet-address'] || req.query?.wallet_address || '').trim();
-  if (!walletHint) return { method: null, source: 'default' };
-
-  const walletType = await detectWalletType(walletHint);
-  if (walletType === 'contract') {
-    return { method: 'permit2', source: strictAgentMode ? 'wallet_type_contract_agent' : 'wallet_type_contract' };
-  }
-  if (walletType === 'eoa') {
-    return { method: 'eip3009', source: 'wallet_type_eoa' };
+  if (strictAgentMode) {
+    return { method: 'eip3009', source: 'strict_agent_default' };
   }
   return { method: null, source: 'default' };
 }
@@ -535,20 +526,6 @@ export default async function handler(req, res) {
       strictAgentMode,
       wallet
     });
-    const facilitatorInfo = getFacilitatorRuntimeInfo();
-    if (transferMethodSelection.method === 'permit2' && facilitatorInfo.cdp_only) {
-      return res.status(422).json({
-        error: 'Contract wallet purchases are temporarily unavailable on current facilitator',
-        code: 'contract_wallet_not_supported_by_facilitator',
-        flow_hint:
-          'Current facilitator routing is CDP-only and permit2 contract-wallet settle is failing upstream. Use an EOA wallet for purchase, then re-download with your receipt.',
-        transfer_method_selection: transferMethodSelection,
-        facilitator: {
-          cdp_only: facilitatorInfo.cdp_only,
-          urls: facilitatorInfo.urls
-        }
-      });
-    }
     if (strictAgentMode && !hasAnyRedownloadHeaders && !transferMethodSelection.method) {
       return res.status(400).json({
         error: 'Unable to resolve transfer method for strict agent flow',
