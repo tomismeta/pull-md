@@ -63,10 +63,9 @@ export default function handler(req, res) {
     },
     facilitator_capabilities: {
       runtime_source: 'server-configured facilitator URLs',
-      cdp_only_contract_wallet_purchase: 'unsupported',
-      cdp_only_contract_wallet_purchase_code: 'contract_wallet_not_supported_by_facilitator',
+      strict_agent_default_transfer_method: 'eip3009',
       note:
-        'When facilitator routing is CDP-only, contract-wallet purchase attempts are blocked before settlement. EOA purchase flow remains available.'
+        'Current deployment defaults strict agent purchases to eip3009. permit2 can be requested explicitly but may fail upstream depending on facilitator policy.'
     },
     error_codes: {
       agent_wallet_hint_required:
@@ -75,8 +74,6 @@ export default function handler(req, res) {
         'Strict agent paid retry missing X-WALLET-ADDRESS (or wallet_address query).',
       x402_method_mismatch:
         'Submitted payment method branch does not match wallet-quote transfer method.',
-      contract_wallet_not_supported_by_facilitator:
-        'Contract-wallet purchase blocked in CDP-only facilitator routing.',
       invalid_agent_redownload_signature:
         'Strict agent redownload SIWE signature invalid or timestamp format mismatch.',
       receipt_required_agent_mode:
@@ -219,7 +216,7 @@ export default function handler(req, res) {
       },
       canonical_purchase_flow: 'GET /api/souls/{id}/download is the authoritative x402 flow for payment requirements and paid retry.',
       first_request:
-        'No payment headers -> returns 402 + PAYMENT-REQUIRED. Include X-WALLET-ADDRESS on this first request so server can select best transfer method for EOA vs contract wallet.',
+        'No payment headers -> returns 402 + PAYMENT-REQUIRED. Include X-WALLET-ADDRESS on this first request for strict wallet binding and deterministic retries.',
       claim_request: 'Include PAYMENT-SIGNATURE with base64-encoded x402 payload to claim entitlement and download',
       signing_instructions_field:
         '402 response bodies include payment_signing_instructions with transfer-method-specific required/forbidden fields and typed-data primary type.',
@@ -248,9 +245,9 @@ export default function handler(req, res) {
       method_discipline:
         'Submit exactly one payload method branch. eip3009 => authorization+signature only. permit2 => permit2Authorization(+transaction)+signature only.',
       transfer_method_selection:
-        'Server selects eip3009 for EOAs and permit2 for contract wallets when X-WALLET-ADDRESS is provided. Optional override: X-ASSET-TRANSFER-METHOD (eip3009|permit2).',
-      cdp_contract_wallet_note:
-        'When facilitator routing is CDP-only, contract-wallet purchase is blocked with contract_wallet_not_supported_by_facilitator. Use EOA wallet for purchase in this environment.',
+        'Strict agent mode defaults to eip3009. Optional explicit override: X-ASSET-TRANSFER-METHOD (eip3009|permit2).',
+      facilitator_note:
+        'permit2 may fail upstream depending on facilitator policy. eip3009 is the stable default in this deployment.',
       duplicate_settlement_protection:
         'Server applies single-flight settlement idempotency by payer+soul+nonce to reduce duplicate charge attempts from repeated submissions.',
       wallet_runtime_note:

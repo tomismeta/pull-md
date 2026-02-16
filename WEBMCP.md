@@ -141,7 +141,8 @@ Read `accepted.extra.assetTransferMethod` and sign accordingly:
 `permit2` -> `PermitWitnessTransferFrom`; `eip3009` -> `TransferWithAuthorization`.
 - CDP/Base production default:
 If no wallet hint is provided, SoulStarter defaults to `eip3009`.
-When `X-WALLET-ADDRESS` is provided on paywall request, SoulStarter selects `eip3009` for EOAs and `permit2` for contract wallets.
+In strict headless agent mode (`X-CLIENT-MODE: agent`), SoulStarter defaults to `eip3009`.
+Use explicit override only when needed: `X-ASSET-TRANSFER-METHOD: eip3009|permit2`.
 Always follow the latest `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`.
 - Bankr wallet:
 Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` only.
@@ -188,11 +189,10 @@ Use placeholders only:
 `GET /api/souls/<SOUL_ID>/download`
 headers:
 - `X-CLIENT-MODE: agent`
-- `X-WALLET-ADDRESS: <WALLET_ADDRESS>` (recommended for wallet-type method selection)
+- `X-WALLET-ADDRESS: <WALLET_ADDRESS>` (wallet binding for strict flow)
 
 3. Parse `PAYMENT-REQUIRED`, copy `accepts[0]` into top-level `accepted` unchanged.
-   The returned `accepts[0].extra.assetTransferMethod` is wallet-type aware when wallet header is present:
-   EOA -> `eip3009`, contract wallet -> `permit2`.
+   In strict agent mode, method defaults to `eip3009`.
    Optional explicit override on request: `X-ASSET-TRANSFER-METHOD: eip3009|permit2`.
 
 4. Submit paid retry:
@@ -319,9 +319,9 @@ use `accepted_copy_paste` exactly as top-level `accepted`, then fill `copy_paste
 - `x402_method_mismatch`:
 submitted payment method does not match wallet quote method.
 Refresh `PAYMENT-REQUIRED` and re-sign with the expected transfer method.
-- `contract_wallet_not_supported_by_facilitator`:
-current deployment is routed to CDP-only facilitator endpoints and contract-wallet permit2 settle is blocked upstream.
-Use an EOA wallet for purchase in this environment.
+- permit2 settle policy errors:
+current deployment is routed to CDP-only facilitator endpoints and permit2 settlement may fail upstream.
+Default to `eip3009` unless you intentionally override transfer method.
 - `Incomplete re-download header set`:
 you sent partial entitlement headers, so server blocked purchase fallback to prevent accidental repay.
 Re-download requires:

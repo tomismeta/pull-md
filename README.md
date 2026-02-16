@@ -122,7 +122,7 @@ Paid retry headers:
 - Preferred:
 `PAYMENT-SIGNATURE: <base64(JSON x402 payload)>`
 - Strongly recommended on both initial and paid retry calls:
-`X-WALLET-ADDRESS: <buyer_wallet>` so server can select eip3009 (EOA) or permit2 (contract wallet).
+`X-WALLET-ADDRESS: <buyer_wallet>` for wallet binding and redownload continuity.
 - Optional explicit override:
 `X-ASSET-TRANSFER-METHOD: eip3009|permit2`
 - Deprecated and rejected:
@@ -145,7 +145,8 @@ Bankr API keys and signer secrets stay in the agent/Bankr runtime only and must 
 top-level `network` must be `eip155:8453` (not `base`), use `payload.permit2Authorization` (not `payload.permit2`), do not include `payload.authorization` in permit2 mode, send permit2 numeric fields as strings, and set non-empty approve calldata in `payload.transaction.data`.
 - CDP/Base production default:
 If no wallet hint is provided, `eip3009` is the default transfer method in this deployment.
-When `X-WALLET-ADDRESS` is provided, server selects `eip3009` for EOAs and `permit2` for contract wallets.
+In strict headless agent mode (`X-CLIENT-MODE: agent`), server defaults to `eip3009`.
+Use explicit override only when needed: `X-ASSET-TRANSFER-METHOD: eip3009|permit2`.
 Always follow the latest `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`.
 For eip3009 submit only `payload.authorization` + `payload.signature`.
 For eip3009, do not place signature in `payload.authorization.signature`.
@@ -216,9 +217,9 @@ agents must still submit CAIP-2 `eip155:8453` in x402 payloads.
 SoulStarter normalizes facilitator-bound requests to CDP enum `base` server-side.
 - CDP error `permit2 payments are disabled`:
 set `X402_ASSET_TRANSFER_METHOD=eip3009` (or leave unset; default is `eip3009`).
-- `contract_wallet_not_supported_by_facilitator`:
-current deployment is CDP-only for facilitator routing, and contract-wallet permit2 settle is blocked upstream.
-Use an EOA wallet for purchase in this environment.
+- permit2 settle policy errors:
+current deployment is CDP-only for facilitator routing, and permit2 settlement may fail upstream.
+Default to `eip3009` unless you intentionally override transfer method.
 
 ## Local Run
 
