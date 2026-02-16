@@ -1465,6 +1465,33 @@ function formatSoulPriceLabel(soul) {
   return fallback || '$0.00';
 }
 
+function renderInventorySummary(souls, errorMessage = '') {
+  const container = document.getElementById('liveInventorySummary');
+  if (!container) return;
+  const copy = container.querySelector('.hero-inventory-copy span');
+  if (!copy) return;
+  if (errorMessage) {
+    copy.textContent = errorMessage;
+    return;
+  }
+  if (!Array.isArray(souls) || souls.length === 0) {
+    copy.textContent = 'No public souls listed yet.';
+    return;
+  }
+  const topNames = souls
+    .slice(0, 3)
+    .map((soul) => String(soul?.name || '').trim())
+    .filter(Boolean)
+    .join(', ');
+  const minPrice = souls.reduce((min, soul) => {
+    const amount = Number(soul?.price?.amount);
+    if (!Number.isFinite(amount)) return min;
+    return Math.min(min, amount);
+  }, Number.POSITIVE_INFINITY);
+  const minPriceLabel = Number.isFinite(minPrice) ? `$${minPrice.toFixed(2)}` : null;
+  copy.textContent = `${souls.length} public soul${souls.length === 1 ? '' : 's'}${minPriceLabel ? ` · from ${minPriceLabel} USDC` : ''}${topNames ? ` · ${topNames}` : ''}`;
+}
+
 function getSoulGlyph(soul) {
   const name = String(soul?.name || soul?.id || 'Soul').trim();
   const clean = name.replace(/[^a-zA-Z0-9 ]/g, '');
@@ -1494,6 +1521,7 @@ async function loadSouls() {
     const payload = await response.json();
     const souls = payload.souls || [];
     soulCatalogCache = souls;
+    renderInventorySummary(souls);
 
     if (!souls.length) {
       grid.innerHTML =
@@ -1546,6 +1574,7 @@ async function loadSouls() {
   } catch (error) {
     console.error('Catalog load failed:', error);
     grid.innerHTML = '<p>Catalog is temporarily unavailable.</p>';
+    renderInventorySummary([], 'Catalog is temporarily unavailable.');
     renderOwnedSouls();
   }
 }

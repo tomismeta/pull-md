@@ -191,6 +191,35 @@ main {
   flex-wrap: wrap;
 }
 
+.hero-inventory {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.hero-inventory-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hero-inventory-copy strong {
+  font-size: 0.78rem;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.hero-inventory-copy span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
 .hero-metrics {
   margin-top: 24px;
   display: grid;
@@ -531,6 +560,18 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.agent-quickstart {
+  margin: 10px 0 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.agent-quickstart p {
+  margin: 0;
 }
 
 .webmcp-contract-view {
@@ -1209,6 +1250,11 @@ main {
 
   .hero-actions .btn {
     width: 100%;
+  }
+
+  .hero-inventory {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .hero-metrics,

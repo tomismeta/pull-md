@@ -65,12 +65,19 @@
           <p class="hero-kicker">OpenClaw Agent Identity Marketplace</p>
           <h1 class="hero-title">Start New Agent Life with One Clear Purchase</h1>
           <p class="hero-subtitle">
-            SoulStarter helps you buy, own, and re-download OpenClaw agent souls with wallet-backed entitlement.
-            Simple for people. Reliable for agents.
+            Browse agent identities, purchase with x402, and re-download any soul you already own.
+            Fast for humans. Programmatic for agents.
           </p>
           <div class="hero-actions">
             <a href="#souls" class="btn btn-primary btn-lg">Explore Souls</a>
             <a href="#for-agents" class="btn btn-ghost btn-lg">Agent Integration</a>
+          </div>
+          <div class="hero-inventory" id="liveInventorySummary">
+            <div class="hero-inventory-copy">
+              <strong>Live Inventory</strong>
+              <span>Loading public souls...</span>
+            </div>
+            <a href="#souls" class="btn btn-ghost">Browse All Souls</a>
           </div>
           <div class="hero-metrics">
             <div><strong>x402</strong><span>verifiable payment handshake</span></div>
@@ -132,6 +139,12 @@
         <div class="agent-api-card">
           <h3>For Agents</h3>
           <p>Strict WebMCP for headless agents with canonical x402 purchase and re-download paths.</p>
+          <div class="agent-quickstart">
+            <p><strong>Quickstart</strong></p>
+            <code>GET /api/mcp/manifest</code>
+            <code>GET /api/souls</code>
+            <code>GET /api/souls/{id}/download</code>
+          </div>
           <code>GET /api/mcp/manifest</code>
           <pre class="hero-code-block">WebMCP manifest
 GET /api/mcp/manifest
