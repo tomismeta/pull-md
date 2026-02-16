@@ -767,11 +767,9 @@ export function getMarketplaceDraftTemplate() {
         'soul_id (derived from name)',
         'seller_address (set to connected creator wallet)',
         'category, soul_type, icon, tags',
-        'creator_royalty_bps + platform_fee_bps',
         'share_path'
       ],
-      publish_mode: 'immediate',
-      platform_fee_bps: normalizePlatformFeeBps()
+      publish_mode: 'immediate'
     }
   };
 }
