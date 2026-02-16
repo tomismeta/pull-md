@@ -1456,6 +1456,15 @@ function formatCardDescription(value, fallback) {
   return cleaned || fallback;
 }
 
+function formatSoulPriceLabel(soul) {
+  const numericAmount = Number(soul?.price?.amount);
+  if (Number.isFinite(numericAmount) && numericAmount >= 0) {
+    return `$${numericAmount.toFixed(2)}`;
+  }
+  const fallback = String(soul?.price?.display || soul?.priceDisplay || '').replace(/\s*USDC$/i, '').trim();
+  return fallback || '$0.00';
+}
+
 function getSoulGlyph(soul) {
   const name = String(soul?.name || soul?.id || 'Soul').trim();
   const clean = name.replace(/[^a-zA-Z0-9 ]/g, '');
@@ -1480,11 +1489,18 @@ async function loadSouls() {
   }
 
   try {
-    const response = await fetchWithTimeout('/api/mcp/tools/list_souls');
+    const response = await fetchWithTimeout('/api/souls');
     if (!response.ok) throw new Error('Failed to load soul catalog');
     const payload = await response.json();
     const souls = payload.souls || [];
     soulCatalogCache = souls;
+
+    if (!souls.length) {
+      grid.innerHTML =
+        '<p class="admin-empty">No public souls are listed yet. Use <a href="/create.html">Create</a> to publish the first listing.</p>';
+      renderOwnedSouls();
+      return;
+    }
 
     grid.innerHTML = souls
       .map(
@@ -1494,6 +1510,7 @@ async function loadSouls() {
           const lineageLabel = formatCreatorLabel(soul.provenance?.raised_by || '');
           const type = String((soul.provenance?.type || 'hybrid')).toLowerCase();
           const cardDescription = formatCardDescription(soul.description, 'Soul listing available.');
+          const priceLabel = formatSoulPriceLabel(soul);
           return `
       <article class="soul-card ${soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : ''}" data-soul-id="${escapeHtml(soul.id)}">
         <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
@@ -1512,7 +1529,7 @@ async function loadSouls() {
             <span class="lineage-mini">${escapeHtml(lineageLabel || 'Unknown lineage')}</span>
           </div>
           <div>
-            <span class="price">${escapeHtml(soul.price?.display || '$0.00 USDC')}</span>
+            <span class="price">${escapeHtml(priceLabel)}</span>
             <span class="currency">USDC</span>
           </div>
         </div>
