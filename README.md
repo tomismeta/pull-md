@@ -144,7 +144,9 @@ Bankr API keys and signer secrets stay in the agent/Bankr runtime only and must 
 - Common permit2 pitfalls to avoid:
 top-level `network` must be `eip155:8453` (not `base`), use `payload.permit2Authorization` (not `payload.permit2`), do not include `payload.authorization` in permit2 mode, send permit2 numeric fields as strings, and set non-empty approve calldata in `payload.transaction.data`.
 - CDP/Base production default:
-`eip3009` is the default transfer method in this deployment.
+If no wallet hint is provided, `eip3009` is the default transfer method in this deployment.
+When `X-WALLET-ADDRESS` is provided, server selects `eip3009` for EOAs and `permit2` for contract wallets.
+Always follow the latest `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`.
 For eip3009 submit only `payload.authorization` + `payload.signature`.
 For eip3009, do not place signature in `payload.authorization.signature`.
 Never submit both `payload.authorization` and `payload.permit2Authorization` in one payload.

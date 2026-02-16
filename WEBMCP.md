@@ -142,7 +142,9 @@ Important:
 Read `accepted.extra.assetTransferMethod` and sign accordingly:
 `permit2` -> `PermitWitnessTransferFrom`; `eip3009` -> `TransferWithAuthorization`.
 - CDP/Base production default:
-SoulStarter defaults to `eip3009`. Treat this as the primary path unless the latest `PAYMENT-REQUIRED` explicitly sets `permit2`.
+If no wallet hint is provided, SoulStarter defaults to `eip3009`.
+When `X-WALLET-ADDRESS` is provided on paywall request, SoulStarter selects `eip3009` for EOAs and `permit2` for contract wallets.
+Always follow the latest `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`.
 - Bankr wallet:
 Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` only.
 Current status: keep Bankr path marked experimental for EIP-3009 purchase execution.
