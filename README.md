@@ -216,6 +216,9 @@ agents must still submit CAIP-2 `eip155:8453` in x402 payloads.
 SoulStarter normalizes facilitator-bound requests to CDP enum `base` server-side.
 - CDP error `permit2 payments are disabled`:
 set `X402_ASSET_TRANSFER_METHOD=eip3009` (or leave unset; default is `eip3009`).
+- `contract_wallet_not_supported_by_facilitator`:
+current deployment is CDP-only for facilitator routing, and contract-wallet permit2 settle is blocked upstream.
+Use an EOA wallet for purchase in this environment.
 
 ## Local Run
 

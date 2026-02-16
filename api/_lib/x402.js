@@ -66,6 +66,17 @@ let preflight = {
 
 const serverCache = new Map();
 
+export function getFacilitatorRuntimeInfo() {
+  const urls = [...FACILITATOR_URLS];
+  const cdpUrls = urls.filter((u) => isCdpFacilitatorUrl(u));
+  return {
+    urls,
+    cdp_enabled: cdpUrls.length > 0,
+    cdp_only: urls.length > 0 && cdpUrls.length === urls.length,
+    cdp_urls: cdpUrls
+  };
+}
+
 function nowMs() {
   return Date.now();
 }

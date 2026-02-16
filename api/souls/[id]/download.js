@@ -19,6 +19,7 @@ import {
   applyInstructionResponse,
   buildCdpRequestDebug,
   createRequestContext,
+  getFacilitatorRuntimeInfo,
   getX402HTTPServer,
   inspectFacilitatorVerify
 } from '../../_lib/x402.js';
@@ -534,6 +535,20 @@ export default async function handler(req, res) {
       strictAgentMode,
       wallet
     });
+    const facilitatorInfo = getFacilitatorRuntimeInfo();
+    if (transferMethodSelection.method === 'permit2' && facilitatorInfo.cdp_only) {
+      return res.status(422).json({
+        error: 'Contract wallet purchases are temporarily unavailable on current facilitator',
+        code: 'contract_wallet_not_supported_by_facilitator',
+        flow_hint:
+          'Current facilitator routing is CDP-only and permit2 contract-wallet settle is failing upstream. Use an EOA wallet for purchase, then re-download with your receipt.',
+        transfer_method_selection: transferMethodSelection,
+        facilitator: {
+          cdp_only: facilitatorInfo.cdp_only,
+          urls: facilitatorInfo.urls
+        }
+      });
+    }
     if (strictAgentMode && !hasAnyRedownloadHeaders && !transferMethodSelection.method) {
       return res.status(400).json({
         error: 'Unable to resolve transfer method for strict agent flow',

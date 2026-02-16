@@ -323,6 +323,9 @@ use `accepted_copy_paste` exactly as top-level `accepted`, then fill `copy_paste
 - `x402_method_mismatch`:
 submitted payment method does not match wallet quote method.
 Refresh `PAYMENT-REQUIRED` and re-sign with the expected transfer method.
+- `contract_wallet_not_supported_by_facilitator`:
+current deployment is routed to CDP-only facilitator endpoints and contract-wallet permit2 settle is blocked upstream.
+Use an EOA wallet for purchase in this environment.
 - `Incomplete re-download header set`:
 you sent partial entitlement headers, so server blocked purchase fallback to prevent accidental repay.
 Re-download requires:
