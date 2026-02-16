@@ -194,7 +194,7 @@ main {
 .hero-metrics {
   margin-top: 24px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
 }
 
@@ -237,6 +237,12 @@ main {
 
 .section-head p {
   color: var(--text-soft);
+}
+
+.section-head p + p {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 .workflow-grid {
