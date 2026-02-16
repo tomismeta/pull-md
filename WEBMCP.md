@@ -257,10 +257,10 @@ Strict agent mode rules:
 - No `/api/auth/session` call is required for headless agents.
 - If `/api/auth/session` is called with `X-CLIENT-MODE: agent`, server returns `410` (`session_api_not_for_agents`).
 
-Human/creator recovery mode (creator-only fallback when receipt is unavailable):
+Human/creator recovery mode (receipt unavailable):
 - `X-WALLET-ADDRESS`
 - `X-REDOWNLOAD-SESSION` (or signed fallback `X-AUTH-SIGNATURE` + `X-AUTH-TIMESTAMP`)
-- Server checks creator ownership only in this fallback mode.
+- Server checks creator ownership and prior on-chain buyer payment history for entitlement recovery.
 
 Auth verifier behavior:
 - Server requires SIWE-format ownership signatures for session/recovery/creator/moderator/agent re-download challenges.

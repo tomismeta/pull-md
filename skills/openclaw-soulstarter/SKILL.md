@@ -69,11 +69,11 @@ Preferred session mode:
 - `GET {base_url}/api/souls/{soul_id}/download`
 - Headers:
   - Preferred: `X-WALLET-ADDRESS`, `X-PURCHASE-RECEIPT`, `X-REDOWNLOAD-SESSION`
-  - Creator fallback if receipt unavailable: `X-WALLET-ADDRESS`, `X-REDOWNLOAD-SESSION`
+  - Recovery if receipt unavailable: `X-WALLET-ADDRESS`, `X-REDOWNLOAD-SESSION`
 
 Server behavior:
 - Receipt mode is primary.
-- Session-only recovery is accepted only for creator-owned souls.
+- Session-only recovery is accepted for prior on-chain buyers and creator-owned souls.
 
 ## 3. Purchase Flow (Strict x402)
 
