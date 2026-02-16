@@ -316,6 +316,8 @@ your `accepted` object is stale or mutated.
 Refresh `PAYMENT-REQUIRED` and copy `accepts[0]` exactly, unchanged.
 - Payment 402 with copy-paste scaffold:
 use `accepted_copy_paste` exactly as top-level `accepted`, then fill `copy_paste_payment_payload.payload` signer fields and resubmit.
+- `payment_signing_instructions` is authoritative for method-specific payload shape:
+`transfer_method`, required/forbidden fields, and expected EIP-712 primary type.
 - `Incomplete re-download header set`:
 you sent partial entitlement headers, so server blocked purchase fallback to prevent accidental repay.
 Re-download requires:

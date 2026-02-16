@@ -162,6 +162,7 @@ It does **not** replace the purchase flow.
 Copy-paste guidance on payment errors:
 - When payment verification fails, `GET /api/souls/{id}/download` `402` bodies now include:
 `accepted_copy_paste` and `copy_paste_payment_payload`.
+- `402` bodies also include `payment_signing_instructions` with method-specific required/forbidden payload fields and expected EIP-712 primary type.
 - Use `accepted_copy_paste` unchanged as top-level `accepted`.
 - Fill wallet/signature placeholders and resubmit in `PAYMENT-SIGNATURE`.
 

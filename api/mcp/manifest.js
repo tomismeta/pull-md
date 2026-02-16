@@ -213,6 +213,8 @@ export default function handler(req, res) {
       first_request:
         'No payment headers -> returns 402 + PAYMENT-REQUIRED. Include X-WALLET-ADDRESS on this first request so server can select best transfer method for EOA vs contract wallet.',
       claim_request: 'Include PAYMENT-SIGNATURE with base64-encoded x402 payload to claim entitlement and download',
+      signing_instructions_field:
+        '402 response bodies include payment_signing_instructions with transfer-method-specific required/forbidden fields and typed-data primary type.',
       payment_payload_contract: {
         top_level_required: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
         eip3009_payload_required: ['payload.authorization', 'payload.signature'],

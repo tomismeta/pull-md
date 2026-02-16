@@ -61,6 +61,37 @@ export default async function handler(req, res) {
         eip3009_forbidden: ['payload.authorization.signature', 'payload.permit2Authorization', 'payload.transaction'],
         note: 'Use accepted exactly as returned in PAYMENT-REQUIRED.accepts[0]. Keep scheme/network at top level. Include X-WALLET-ADDRESS in request so server can select eip3009 (EOA) vs permit2 (contract wallet).'
       },
+      payment_signing_instructions: {
+        required_header: 'PAYMENT-SIGNATURE',
+        header_format: 'base64(JSON.stringify(x402_payload))',
+        required_top_level_fields: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
+        accepted_must_match: 'accepted must exactly equal PAYMENT-REQUIRED.accepts[0]',
+        wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests for wallet-type-aware method selection.',
+        method_rules: {
+          eip3009: {
+            typed_data_primary_type: 'TransferWithAuthorization',
+            required_payload_fields: ['payload.authorization', 'payload.signature'],
+            forbidden_payload_fields: ['payload.authorization.signature', 'payload.permit2Authorization', 'payload.transaction'],
+            authorization_fields: ['from', 'to', 'value', 'validAfter', 'validBefore', 'nonce']
+          },
+          permit2: {
+            typed_data_primary_type: 'PermitWitnessTransferFrom',
+            required_payload_fields: ['payload.from', 'payload.permit2Authorization', 'payload.transaction', 'payload.signature'],
+            forbidden_payload_fields: ['payload.authorization', 'payload.permit2'],
+            permit2_authorization_fields: [
+              'from',
+              'permitted.token',
+              'permitted.amount',
+              'spender',
+              'nonce',
+              'deadline',
+              'witness.to',
+              'witness.validAfter',
+              'witness.extra'
+            ]
+          }
+        }
+      },
       auth_message_examples: {
         redownload: buildSiweAuthMessage({
           wallet: '0x<your-wallet>',

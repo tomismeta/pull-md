@@ -523,7 +523,11 @@ export default async function handler(req, res) {
     if (result.type === 'payment-error') {
       if (result.response?.body && typeof result.response.body === 'object') {
         const paymentRequired = decodePaymentRequiredHeader(result.response?.headers);
+        const paymentSigningInstructions = buildPaymentSigningInstructions(paymentRequired);
         const paymentDebug = includeDebug ? buildPaymentDebug(req, paymentRequired) : null;
+        if (paymentSigningInstructions) {
+          result.response.body.payment_signing_instructions = paymentSigningInstructions;
+        }
 
         if (!context.paymentHeader) {
           if (strictAgentMode) {
@@ -584,6 +588,7 @@ export default async function handler(req, res) {
         code: payloadContractCheck.code,
         flow_hint: payloadContractCheck.flowHint,
         contract_requirements: payloadContractCheck.required || null,
+        payment_signing_instructions: buildPaymentSigningInstructions({ accepts: [result.paymentRequirements], x402Version: 2 }),
         mismatch_hints: payloadContractCheck.mismatchHints || [],
         ...(shouldIncludeDebug(req)
           ? {
@@ -1357,6 +1362,39 @@ function buildPaymentDebug(req, paymentRequired) {
   }
 
   return info;
+}
+
+function buildPaymentSigningInstructions(paymentRequired) {
+  const accepted = paymentRequired?.accepts?.[0];
+  if (!accepted) return null;
+  const transferMethod = String(accepted?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
+  const base = {
+    x402_version: paymentRequired?.x402Version ?? 2,
+    transfer_method: transferMethod,
+    required_top_level_fields: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
+    required_header: 'PAYMENT-SIGNATURE',
+    header_format: 'base64(JSON.stringify(x402_payload))',
+    accepted_must_match: 'accepted must exactly equal PAYMENT-REQUIRED.accepts[0]',
+    wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests for wallet-type-aware method selection.',
+    method_rules: {
+      eip3009: {
+        typed_data_primary_type: 'TransferWithAuthorization',
+        required_payload_fields: ['payload.authorization', 'payload.signature'],
+        forbidden_payload_fields: ['payload.authorization.signature', 'payload.permit2Authorization', 'payload.transaction'],
+        authorization_fields: ['from', 'to', 'value', 'validAfter', 'validBefore', 'nonce']
+      },
+      permit2: {
+        typed_data_primary_type: 'PermitWitnessTransferFrom',
+        required_payload_fields: ['payload.from', 'payload.permit2Authorization', 'payload.transaction', 'payload.signature'],
+        forbidden_payload_fields: ['payload.authorization', 'payload.permit2'],
+        permit2_authorization_fields: ['from', 'permitted.token', 'permitted.amount', 'spender', 'nonce', 'deadline', 'witness.to', 'witness.validAfter', 'witness.extra']
+      }
+    }
+  };
+  return {
+    ...base,
+    selected_rule: transferMethod === 'permit2' ? base.method_rules.permit2 : base.method_rules.eip3009
+  };
 }
 
 function buildCopyPastePaymentPayloadTemplate(paymentRequired) {
