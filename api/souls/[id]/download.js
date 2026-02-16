@@ -100,11 +100,12 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
   // Session token alone (from cookie) is not enough to enter re-download flow.
   // It must be bound to an explicit wallet header, otherwise fresh purchase requests get blocked.
   const hasAnyRedownloadHeaders = Boolean(
-    wallet ||
-      authSignature ||
-      authTimestamp ||
-      (wallet && receipt) ||
-      (wallet && redownloadSessionToken)
+    (wallet && receipt) ||
+      (wallet && redownloadSessionToken) ||
+      (wallet && authSignature) ||
+      (wallet && authTimestamp) ||
+      (wallet && redownloadSignature) ||
+      (wallet && redownloadTimestamp)
   );
   const hasReceiptRedownloadHeaders = Boolean(wallet && receipt);
   const hasSessionRecoveryHeaders = Boolean(wallet && !receipt && redownloadSessionToken && !authSignature && !authTimestamp);

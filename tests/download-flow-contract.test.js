@@ -71,7 +71,8 @@ test('classifyRedownloadHeaders supports signed recovery mode', () => {
 test('classifyRedownloadHeaders rejects incomplete redownload headers', () => {
   const result = classifyRedownloadHeaders({
     headers: {
-      'x-wallet-address': WALLET
+      'x-wallet-address': WALLET,
+      'x-auth-signature': '0xsignature'
     }
   });
   assert.equal(result.mode, 'invalid');
