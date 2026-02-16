@@ -94,8 +94,16 @@ export async function verifyWalletAuth({ wallet, soulId, action, timestamp, sign
   }
 
   const siweCandidates = buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp: ts });
+  const authDebug = {
+    mode: 'siwe-only',
+    tried_variants: siweCandidates.map((candidate) => candidate.variant),
+    eoa_recovered: []
+  };
   for (const candidate of siweCandidates) {
     const checked = await verifySiweCandidate({ wallet, signature, message: candidate.message });
+    if (checked?.recovered) {
+      authDebug.eoa_recovered.push({ variant: candidate.variant, recovered: checked.recovered });
+    }
     if (checked.ok) {
       return {
         ok: true,
@@ -109,7 +117,8 @@ export async function verifyWalletAuth({ wallet, soulId, action, timestamp, sign
 
   return {
     ok: false,
-    error: 'Signature does not match SIWE wallet authentication format'
+    error: 'Signature does not match SIWE wallet authentication format',
+    auth_debug: authDebug
   };
 }
 
@@ -120,6 +129,7 @@ async function verifySiweCandidate({ wallet, signature, message }) {
     if (typeof recovered === 'string' && recovered.toLowerCase() === normalizedWallet) {
       return { ok: true, signature_type: 'eoa' };
     }
+    return { ok: false, recovered: typeof recovered === 'string' ? recovered.toLowerCase() : null };
   } catch (_) {}
   return verifyEip1271Signature({ wallet, signature, message });
 }
@@ -179,10 +189,17 @@ function buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp }) {
   const checksummed = safeChecksumAddress(rawWallet);
   const walletVariants = [walletLower, checksummed].filter(Boolean);
   const uniqueWallets = [...new Set(walletVariants)];
-  return uniqueWallets.map((walletVariant) => ({
-    variant: walletVariant === walletLower ? 'siwe-lowercase' : 'siwe-checksummed',
-    message: buildSiweAuthMessage({ wallet: walletVariant, soulId, action, timestamp })
-  }));
+  const candidates = [];
+  for (const walletVariant of uniqueWallets) {
+    const baseVariant = walletVariant === walletLower ? 'siwe-lowercase' : 'siwe-checksummed';
+    const baseMessage = buildSiweAuthMessage({ wallet: walletVariant, soulId, action, timestamp });
+    candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
+    candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
+    const crlf = baseMessage.replace(/\n/g, '\r\n');
+    candidates.push({ variant: `${baseVariant}-crlf`, message: crlf });
+    candidates.push({ variant: `${baseVariant}-crlf-trailing`, message: `${crlf}\r\n` });
+  }
+  return candidates;
 }
 
 function buildSiweNonce({ soulId, action, timestamp }) {

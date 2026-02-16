@@ -138,6 +138,26 @@ test('redownload auth SIWE signature verifies', async () => {
   assert.equal(checked.auth_format, 'siwe');
 });
 
+test('redownload auth SIWE with CRLF line-endings verifies', async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const timestamp = Date.now();
+  const message = buildSiweAuthMessage({
+    wallet: wallet.address,
+    soulId: 'sassy-starter-v1',
+    action: 'redownload',
+    timestamp
+  }).replace(/\n/g, '\r\n');
+  const signature = await wallet.signMessage(message);
+  const checked = await verifyWalletAuth({
+    wallet: wallet.address,
+    soulId: 'sassy-starter-v1',
+    action: 'redownload',
+    timestamp,
+    signature
+  });
+  assert.equal(checked.ok, true);
+});
+
 test('redownload session token binds to wallet and expires', async () => {
   const originalSecret = process.env.PURCHASE_RECEIPT_SECRET;
   process.env.PURCHASE_RECEIPT_SECRET = 'test-secret-value-1';
