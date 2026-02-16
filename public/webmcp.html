@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SoulStarter WebMCP Contract</title>
+  <meta name="description" content="Human-readable WebMCP contract view sourced from /api/mcp/manifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/" class="logo">
+          <span class="logo-mark">SS</span>
+          <span>SoulStarter</span>
+        </a>
+        <nav class="nav">
+          <a href="/" class="nav-link">Home</a>
+          <a href="/api/mcp/manifest" class="btn btn-ghost">Open Raw Manifest</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="agent-api-section">
+    <div class="container">
+      <div class="agent-api-card">
+        <h3>WebMCP Contract</h3>
+        <p>This page is rendered from the live manifest. Single source of truth: <code>GET /api/mcp/manifest</code>.</p>
+        <div id="webmcpContractView" class="webmcp-contract-view">
+          <p>Loading contract...</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>SoulStarter · WebMCP Contract · Live Manifest View</p>
+    </div>
+  </footer>
+
+  <script src="js/webmcp.js"></script>
+</body>
+</html>

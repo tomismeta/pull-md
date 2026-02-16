@@ -524,6 +524,46 @@ main {
   margin-top: 12px;
 }
 
+.webmcp-contract-view {
+  margin-top: 14px;
+}
+
+.webmcp-section {
+  margin-top: 18px;
+}
+
+.webmcp-section h4 {
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+}
+
+.webmcp-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.webmcp-kv-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f9fbff;
+  padding: 10px;
+}
+
+.webmcp-kv-grid strong {
+  display: block;
+  font-size: 0.77rem;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.webmcp-kv-grid span {
+  display: block;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  word-break: break-word;
+}
+
 .footer {
   border-top: 1px solid var(--line);
   padding: 22px 0;

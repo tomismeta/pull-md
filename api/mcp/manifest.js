@@ -61,6 +61,27 @@ export default function handler(req, res) {
       agent_key_boundary:
         'Never send Bankr API keys or signer secrets to SoulStarter. SoulStarter accepts only signed x402 payment headers.'
     },
+    facilitator_capabilities: {
+      runtime_source: 'server-configured facilitator URLs',
+      cdp_only_contract_wallet_purchase: 'unsupported',
+      cdp_only_contract_wallet_purchase_code: 'contract_wallet_not_supported_by_facilitator',
+      note:
+        'When facilitator routing is CDP-only, contract-wallet purchase attempts are blocked before settlement. EOA purchase flow remains available.'
+    },
+    error_codes: {
+      agent_wallet_hint_required:
+        'Strict agent purchase quote missing X-WALLET-ADDRESS (or wallet_address query).',
+      agent_wallet_hint_required_paid_retry:
+        'Strict agent paid retry missing X-WALLET-ADDRESS (or wallet_address query).',
+      x402_method_mismatch:
+        'Submitted payment method branch does not match wallet-quote transfer method.',
+      contract_wallet_not_supported_by_facilitator:
+        'Contract-wallet purchase blocked in CDP-only facilitator routing.',
+      invalid_agent_redownload_signature:
+        'Strict agent redownload SIWE signature invalid or timestamp format mismatch.',
+      receipt_required_agent_mode:
+        'Strict agent redownload requires receipt + challenge signature headers.'
+    },
     wallet_compatibility: {
       as_of: '2026-02-14',
       supported_browser_wallets: ['MetaMask', 'Rabby', 'Bankr Wallet'],
@@ -241,8 +262,8 @@ export default function handler(req, res) {
         'Submit exactly one payload method branch. eip3009 => authorization+signature only. permit2 => permit2Authorization(+transaction)+signature only.',
       transfer_method_selection:
         'Server selects eip3009 for EOAs and permit2 for contract wallets when X-WALLET-ADDRESS is provided. Optional override: X-ASSET-TRANSFER-METHOD (eip3009|permit2).',
-      cdp_default:
-        'CDP Base mainnet path defaults to eip3009 in this deployment. If permit2 is disabled by facilitator policy, re-sign as eip3009.',
+      cdp_contract_wallet_note:
+        'When facilitator routing is CDP-only, contract-wallet purchase is blocked with contract_wallet_not_supported_by_facilitator. Use EOA wallet for purchase in this environment.',
       duplicate_settlement_protection:
         'Server applies single-flight settlement idempotency by payer+soul+nonce to reduce duplicate charge attempts from repeated submissions.',
       wallet_runtime_note:
