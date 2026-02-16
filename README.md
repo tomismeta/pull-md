@@ -21,6 +21,7 @@ for prior on-chain buyers and creator-owned souls.
 - Facilitator resiliency includes:
 preflight checks, multi-endpoint failover, timeout, circuit breaker
 - Agent-discoverable API via WebMCP manifest at `/api/mcp/manifest`
+- Human-readable dynamic WebMCP markdown at `/WEBMCP.md` (generated from live manifest)
 
 ## Wallet Compatibility Status (2026-02-15)
 
@@ -41,7 +42,6 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `GET /api/mcp/manifest`
 - `GET /api/mcp/tools/list_souls`
 - `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
-- `POST /api/mcp/tools/purchase_soul` (deprecated: returns `410`; use canonical `/api/souls/{id}/download`)
 - `POST /api/mcp/tools/check_entitlements`
 - `GET /api/mcp/tools/creator_marketplace?action=get_listing_template`
 - `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (creator wallet auth, immediate publish)

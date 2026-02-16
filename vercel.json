@@ -31,7 +31,7 @@
     },
     {
       "src": "/WEBMCP\\.md",
-      "dest": "/webmcp.html"
+      "dest": "/api/mcp/webmcp_markdown.js"
     },
     {
       "src": "/(.*)",

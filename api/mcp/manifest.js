@@ -109,19 +109,6 @@ export default function handler(req, res) {
         returns: { type: 'object', description: 'Soul details and x402 interaction contract' }
       },
       {
-        name: 'purchase_soul',
-        description:
-          'Deprecated helper endpoint. Canonical runtime purchase is GET /api/souls/{id}/download with X-CLIENT-MODE: agent.',
-        deprecated: true,
-        endpoint: '/api/mcp/tools/purchase_soul',
-        method: 'POST',
-        parameters: {
-          soul_id: { type: 'string', required: true, description: 'Soul identifier to purchase' },
-          wallet_address: { type: 'string', required: true, description: 'Buyer wallet address' }
-        },
-        returns: { type: 'object', description: '402 response body + PAYMENT-REQUIRED header details' }
-      },
-      {
         name: 'check_entitlements',
         description: 'Verify receipt proofs for wallet re-download entitlement',
         endpoint: '/api/mcp/tools/check_entitlements',
