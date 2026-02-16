@@ -236,8 +236,7 @@ async function connectMetaMask() {
   const metamaskProvider = findProviderByKind('metamask');
   if (metamaskProvider) return connectWithProviderInternal(metamaskProvider, 'metamask', false);
   const fallback = fallbackInjectedProvider();
-  if (!fallback) return showToast('MetaMask not found', 'error');
-  showToast('MetaMask-specific provider not detected. Using current injected wallet.', 'warning');
+  if (!fallback) throw new Error('MetaMask not found');
   return connectWithProviderInternal(fallback, 'metamask', false);
 }
 
@@ -245,8 +244,7 @@ async function connectRabby() {
   const rabbyProvider = findProviderByKind('rabby');
   if (rabbyProvider) return connectWithProviderInternal(rabbyProvider, 'rabby', false);
   const fallback = fallbackInjectedProvider();
-  if (!fallback) return showToast('Rabby wallet not found', 'error');
-  showToast('Rabby-specific provider not detected. Using current injected wallet.', 'warning');
+  if (!fallback) throw new Error('Rabby wallet not found');
   return connectWithProviderInternal(fallback, 'rabby', false);
 }
 
@@ -254,8 +252,7 @@ async function connectBankr() {
   const bankrProvider = findProviderByKind('bankr');
   if (bankrProvider) return connectWithProviderInternal(bankrProvider, 'bankr', false);
   const fallback = fallbackInjectedProvider();
-  if (!fallback) return showToast('Bankr Wallet not found', 'error');
-  showToast('Bankr-specific provider not detected. Using current injected wallet.', 'warning');
+  if (!fallback) throw new Error('Bankr Wallet not found');
   return connectWithProviderInternal(fallback, 'bankr', false);
 }
 
@@ -501,6 +498,7 @@ async function connectFromChoice(kind) {
   if (kind === 'metamask') await connectMetaMask();
   else if (kind === 'rabby') await connectRabby();
   else if (kind === 'bankr') await connectBankr();
+  if (!state.signer || !state.wallet) throw new Error('Wallet connection did not complete. Please try again.');
   await connectWallet();
 }
 
