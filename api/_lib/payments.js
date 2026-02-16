@@ -10,6 +10,8 @@ const EIP1271_MAGIC_VALUE_BYTES = '0x20c13b0b';
 const EIP1271_IFACE_32 = new ethers.Interface(['function isValidSignature(bytes32,bytes) view returns (bytes4)']);
 const EIP1271_IFACE_BYTES = new ethers.Interface(['function isValidSignature(bytes,bytes) view returns (bytes4)']);
 let authProvider = null;
+const walletTypeCache = new Map();
+const WALLET_TYPE_CACHE_TTL_MS = Number(process.env.WALLET_TYPE_CACHE_TTL_MS || '300000');
 
 function authRpcUrl() {
   return (
@@ -24,6 +26,23 @@ function getAuthProvider() {
   if (authProvider) return authProvider;
   authProvider = new ethers.JsonRpcProvider(authRpcUrl());
   return authProvider;
+}
+
+export async function detectWalletType(wallet) {
+  const normalizedWallet = String(wallet || '').trim().toLowerCase();
+  if (!/^0x[a-fA-F0-9]{40}$/.test(normalizedWallet)) return 'unknown';
+  const now = Date.now();
+  const cached = walletTypeCache.get(normalizedWallet);
+  if (cached && cached.exp > now) return cached.type;
+  try {
+    const provider = getAuthProvider();
+    const code = await provider.getCode(normalizedWallet);
+    const type = code && code !== '0x' ? 'contract' : 'eoa';
+    walletTypeCache.set(normalizedWallet, { type, exp: now + WALLET_TYPE_CACHE_TTL_MS });
+    return type;
+  } catch (_) {
+    return 'unknown';
+  }
 }
 
 export function setCors(res, origin) {
@@ -41,7 +60,7 @@ export function setCors(res, origin) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type, PAYMENT-SIGNATURE, X-CLIENT-MODE, X-WALLET-ADDRESS, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SESSION, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP, X-REVIEWER, X-MODERATOR-ADDRESS, X-MODERATOR-SIGNATURE, X-MODERATOR-TIMESTAMP'
+    'Content-Type, PAYMENT-SIGNATURE, X-CLIENT-MODE, X-WALLET-ADDRESS, X-ASSET-TRANSFER-METHOD, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SESSION, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP, X-REVIEWER, X-MODERATOR-ADDRESS, X-MODERATOR-SIGNATURE, X-MODERATOR-TIMESTAMP'
   );
   res.setHeader(
     'Access-Control-Expose-Headers',

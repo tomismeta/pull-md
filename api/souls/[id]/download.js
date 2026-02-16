@@ -6,6 +6,7 @@ import {
   buildSiweAuthMessage,
   createRedownloadSessionToken,
   createPurchaseReceipt,
+  detectWalletType,
   getSellerAddress,
   parseCookieHeader,
   purchaseReceiptCookieName,
@@ -42,6 +43,32 @@ const ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE = Number(process.env.ONCHAIN_ENTITLEMEN
 const ONCHAIN_ENTITLEMENT_UNAVAILABLE_TTL_MS = Number(process.env.ONCHAIN_ENTITLEMENT_UNAVAILABLE_TTL_MS || '30000');
 const BASE_MAINNET_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const ERC20_TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
+
+function normalizeAssetTransferMethod(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'permit2') return 'permit2';
+  if (raw === 'eip3009') return 'eip3009';
+  return null;
+}
+
+async function resolveAssetTransferMethodForRequest(req, { strictAgentMode, wallet }) {
+  const explicit =
+    normalizeAssetTransferMethod(req.headers['x-asset-transfer-method']) ||
+    normalizeAssetTransferMethod(req.query?.asset_transfer_method);
+  if (explicit) return { method: explicit, source: 'explicit' };
+
+  const walletHint = String(wallet || req.headers['x-wallet-address'] || req.query?.wallet_address || '').trim();
+  if (!walletHint) return { method: null, source: 'default' };
+
+  const walletType = await detectWalletType(walletHint);
+  if (walletType === 'contract') {
+    return { method: 'permit2', source: strictAgentMode ? 'wallet_type_contract_agent' : 'wallet_type_contract' };
+  }
+  if (walletType === 'eoa') {
+    return { method: 'eip3009', source: 'wallet_type_eoa' };
+  }
+  return { method: null, source: 'default' };
+}
 
 function appendSetCookieHeader(res, cookieValue) {
   if (!cookieValue) return;
@@ -479,7 +506,16 @@ export default async function handler(req, res) {
 
   try {
     rewriteIncomingPaymentHeader(req);
-    const httpServer = await getX402HTTPServer({ soulId, soul, sellerAddress });
+    const transferMethodSelection = await resolveAssetTransferMethodForRequest(req, {
+      strictAgentMode,
+      wallet
+    });
+    const httpServer = await getX402HTTPServer({
+      soulId,
+      soul,
+      sellerAddress,
+      assetTransferMethod: transferMethodSelection.method
+    });
     const context = createRequestContext(req);
     const result = await httpServer.processHTTPRequest(context);
     const includeDebug = shouldIncludeDebug(req);
@@ -525,6 +561,7 @@ export default async function handler(req, res) {
               'PAYMENT-SIGNATURE: base64(JSON.stringify(copy_paste_payment_payload))';
             result.response.body.payment_debug = {
               ...paymentDebug,
+              transfer_method_selection: transferMethodSelection,
               facilitator_verify: facilitatorVerify
             };
           }

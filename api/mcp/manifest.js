@@ -31,7 +31,9 @@ export default function handler(req, res) {
         'PAYMENT-SIGNATURE',
         'PAYMENT-REQUIRED',
         'PAYMENT-RESPONSE',
-        'X-CLIENT-MODE'
+        'X-CLIENT-MODE',
+        'X-WALLET-ADDRESS',
+        'X-ASSET-TRANSFER-METHOD'
       ],
       deprecated_headers: ['PAYMENT', 'X-PAYMENT'],
       client_mode_headers: ['X-CLIENT-MODE'],
@@ -208,7 +210,8 @@ export default function handler(req, res) {
         }
       },
       canonical_purchase_flow: 'GET /api/souls/{id}/download is the authoritative x402 flow for payment requirements and paid retry.',
-      first_request: 'No payment headers -> returns 402 + PAYMENT-REQUIRED',
+      first_request:
+        'No payment headers -> returns 402 + PAYMENT-REQUIRED. Include X-WALLET-ADDRESS on this first request so server can select best transfer method for EOA vs contract wallet.',
       claim_request: 'Include PAYMENT-SIGNATURE with base64-encoded x402 payload to claim entitlement and download',
       payment_payload_contract: {
         top_level_required: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
@@ -234,6 +237,8 @@ export default function handler(req, res) {
       v2_requirement: 'Submitted payment JSON must include accepted matching PAYMENT-REQUIRED.accepts[0] exactly.',
       method_discipline:
         'Submit exactly one payload method branch. eip3009 => authorization+signature only. permit2 => permit2Authorization(+transaction)+signature only.',
+      transfer_method_selection:
+        'Server selects eip3009 for EOAs and permit2 for contract wallets when X-WALLET-ADDRESS is provided. Optional override: X-ASSET-TRANSFER-METHOD (eip3009|permit2).',
       cdp_default:
         'CDP Base mainnet path defaults to eip3009 in this deployment. If permit2 is disabled by facilitator policy, re-sign as eip3009.',
       duplicate_settlement_protection:

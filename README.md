@@ -121,6 +121,10 @@ Paid retry headers:
 
 - Preferred:
 `PAYMENT-SIGNATURE: <base64(JSON x402 payload)>`
+- Strongly recommended on both initial and paid retry calls:
+`X-WALLET-ADDRESS: <buyer_wallet>` so server can select eip3009 (EOA) or permit2 (contract wallet).
+- Optional explicit override:
+`X-ASSET-TRANSFER-METHOD: eip3009|permit2`
 - Deprecated and rejected:
 `PAYMENT`, `X-PAYMENT`
 

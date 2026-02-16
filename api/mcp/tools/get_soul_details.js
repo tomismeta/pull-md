@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       purchase_endpoint: `/api/souls/${id}/download`,
       payment_protocol: 'x402',
       auth_headers: {
-        purchase: ['PAYMENT-SIGNATURE'],
+        purchase: ['PAYMENT-SIGNATURE', 'X-WALLET-ADDRESS', 'X-ASSET-TRANSFER-METHOD'],
         deprecated_purchase_headers: ['PAYMENT', 'X-PAYMENT'],
         client_mode: ['X-CLIENT-MODE'],
         strict_agent_purchase: ['X-CLIENT-MODE', 'PAYMENT-SIGNATURE'],
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
         top_level_required: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
         eip3009_required: ['payload.authorization', 'payload.signature'],
         eip3009_forbidden: ['payload.authorization.signature', 'payload.permit2Authorization', 'payload.transaction'],
-        note: 'Use accepted exactly as returned in PAYMENT-REQUIRED.accepts[0]. Keep scheme/network at top level.'
+        note: 'Use accepted exactly as returned in PAYMENT-REQUIRED.accepts[0]. Keep scheme/network at top level. Include X-WALLET-ADDRESS in request so server can select eip3009 (EOA) vs permit2 (contract wallet).'
       },
       auth_message_examples: {
         redownload: buildSiweAuthMessage({

@@ -937,7 +937,10 @@ async function purchaseSoul(soulId) {
     if (btn) btn.textContent = 'Requesting x402 terms...';
     const initial = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
       method: 'GET',
-      headers: { Accept: 'application/json' }
+      headers: {
+        Accept: 'application/json',
+        'X-WALLET-ADDRESS': walletAddress
+      }
     });
 
     if (initial.status !== 402) {
@@ -958,6 +961,7 @@ async function purchaseSoul(soulId) {
       method: 'GET',
       headers: {
         'PAYMENT-SIGNATURE': btoa(JSON.stringify(paymentPayload)),
+        'X-WALLET-ADDRESS': walletAddress,
         Accept: 'text/markdown'
       }
     });

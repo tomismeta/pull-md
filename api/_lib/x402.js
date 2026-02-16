@@ -829,8 +829,8 @@ class NodeAdapter {
   }
 }
 
-function routeConfigForSoul({ soulId, soul, sellerAddress }) {
-  const assetTransferMethod = getAssetTransferMethod();
+function routeConfigForSoul({ soulId, soul, sellerAddress, assetTransferMethod }) {
+  const method = normalizeAssetTransferMethod(assetTransferMethod) || getAssetTransferMethod();
   return {
     accepts: {
       scheme: 'exact',
@@ -842,7 +842,7 @@ function routeConfigForSoul({ soulId, soul, sellerAddress }) {
         extra: {
           name: 'USD Coin',
           version: '2',
-          assetTransferMethod
+          assetTransferMethod: method
         }
       },
       maxTimeoutSeconds: 300
@@ -865,14 +865,22 @@ function getAssetTransferMethod() {
   return raw === 'permit2' ? 'permit2' : 'eip3009';
 }
 
-export async function getX402HTTPServer({ soulId, soul, sellerAddress }) {
+function normalizeAssetTransferMethod(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'permit2') return 'permit2';
+  if (raw === 'eip3009') return 'eip3009';
+  return null;
+}
+
+export async function getX402HTTPServer({ soulId, soul, sellerAddress, assetTransferMethod = null }) {
   await ensureFacilitatorReachable();
 
-  const key = `${soulId}:${sellerAddress}:${soul.priceDisplay}`;
+  const method = normalizeAssetTransferMethod(assetTransferMethod) || getAssetTransferMethod();
+  const key = `${soulId}:${sellerAddress}:${soul.priceDisplay}:${method}`;
   if (!serverCache.has(key)) {
     const resourceServer = new x402ResourceServer(facilitatorClient).register('eip155:*', new ExactEvmScheme());
     const httpServer = new x402HTTPResourceServer(resourceServer, {
-      '*': routeConfigForSoul({ soulId, soul, sellerAddress })
+      '*': routeConfigForSoul({ soulId, soul, sellerAddress, assetTransferMethod: method })
     });
     const initPromise = httpServer.initialize();
     serverCache.set(key, { httpServer, initPromise });

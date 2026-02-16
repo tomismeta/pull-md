@@ -186,15 +186,20 @@ Use placeholders only:
 
 2. Get paywall:
 `GET /api/souls/<SOUL_ID>/download`
-header:
-`X-CLIENT-MODE: agent`
+headers:
+- `X-CLIENT-MODE: agent`
+- `X-WALLET-ADDRESS: <WALLET_ADDRESS>` (recommended for wallet-type method selection)
 
 3. Parse `PAYMENT-REQUIRED`, copy `accepts[0]` into top-level `accepted` unchanged.
+   The returned `accepts[0].extra.assetTransferMethod` is wallet-type aware when wallet header is present:
+   EOA -> `eip3009`, contract wallet -> `permit2`.
+   Optional explicit override on request: `X-ASSET-TRANSFER-METHOD: eip3009|permit2`.
 
 4. Submit paid retry:
 `GET /api/souls/<SOUL_ID>/download`
 headers:
 - `X-CLIENT-MODE: agent`
+- `X-WALLET-ADDRESS: <WALLET_ADDRESS>`
 - `PAYMENT-SIGNATURE: <PAYMENT_SIGNATURE_B64>`
 
 5. Persist response header:
