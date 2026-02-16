@@ -948,7 +948,8 @@ async function purchaseSoul(soulId) {
     });
 
     if (initial.status !== 402) {
-      throw new Error('Expected 402 payment required');
+      const error = await readError(initial);
+      throw new Error(error || `Expected 402 payment required (got ${initial.status})`);
     }
 
     const paymentRequiredHeader = initial.headers.get('PAYMENT-REQUIRED');
