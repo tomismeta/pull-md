@@ -118,14 +118,17 @@ function setStatus(text) {
 }
 
 function setConnectButton() {
-  const btn = document.getElementById('connectWalletBtn');
-  if (!btn) return;
-  if (state.wallet) {
-    btn.textContent = `${state.wallet.slice(0, 6)}...${state.wallet.slice(-4)} (disconnect)`;
-    btn.classList.add('connected');
-  } else {
-    btn.textContent = 'connect moderator wallet';
-    btn.classList.remove('connected');
+  const walletButtons = [document.getElementById('connectWalletBtn'), document.getElementById('walletBtn')].filter(Boolean);
+  if (!walletButtons.length) return;
+  for (const btn of walletButtons) {
+    if (state.wallet) {
+      const suffix = btn.id === 'connectWalletBtn' ? ' (disconnect)' : '';
+      btn.textContent = `${state.wallet.slice(0, 6)}...${state.wallet.slice(-4)}${suffix}`;
+      btn.classList.add('connected');
+    } else {
+      btn.textContent = btn.id === 'connectWalletBtn' ? 'connect moderator wallet' : 'Connect Wallet';
+      btn.classList.remove('connected');
+    }
   }
 }
 
@@ -448,14 +451,16 @@ async function restoreWalletSession() {
 }
 
 function bindEvents() {
-  document.getElementById('connectWalletBtn')?.addEventListener('click', async () => {
+  const onWalletButtonClick = async () => {
     try {
       if (state.wallet) disconnectWallet();
       else openWalletModal();
     } catch (error) {
       showToast(error.message, 'error');
     }
-  });
+  };
+  document.getElementById('connectWalletBtn')?.addEventListener('click', onWalletButtonClick);
+  document.getElementById('walletBtn')?.addEventListener('click', onWalletButtonClick);
 
   document.getElementById('refreshListingsBtn')?.addEventListener('click', async () => {
     try {
