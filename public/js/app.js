@@ -179,6 +179,14 @@ function getSellerGuardHelper() {
   return helper;
 }
 
+function getNetworkHelper() {
+  const helper = window?.SoulStarterNetwork;
+  if (!helper || typeof helper.fetchWithTimeout !== 'function' || typeof helper.readError !== 'function') {
+    throw new Error('Network helper unavailable');
+  }
+  return helper;
+}
+
 function getAppBootstrapHelper() {
   const helper = window?.SoulStarterAppBootstrap;
   if (
@@ -823,12 +831,7 @@ async function verifySettlementOnchain(txHash, expectedSettlement) {
 }
 
 async function readError(response) {
-  try {
-    const body = await response.json();
-    return body.error || body.message || null;
-  } catch (_) {
-    return null;
-  }
+  return getNetworkHelper().readError(response);
 }
 
 function getStoredRedownloadSession(wallet) {
@@ -1055,18 +1058,7 @@ async function loadModeratorAllowlist() {
 }
 
 async function fetchWithTimeout(url, options = {}, timeout = CONFIG.requestTimeout) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') throw new Error('Request timed out');
-    throw error;
-  }
+  return getNetworkHelper().fetchWithTimeout(url, options, timeout);
 }
 
 function showToast(message, type = 'info') {
