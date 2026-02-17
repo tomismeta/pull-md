@@ -60,6 +60,14 @@ function getWalletCommon() {
   return helper;
 }
 
+function getWalletConnector() {
+  const helper = window?.SoulStarterWalletConnect;
+  if (!helper) {
+    throw new Error('Wallet connector helper unavailable');
+  }
+  return helper;
+}
+
 function getUiShell() {
   const helper = window?.SoulStarterUiShell;
   if (!helper) {
@@ -127,79 +135,74 @@ async function connectWithProvider(rawProvider) {
 }
 
 async function connectWithProviderInternal(rawProvider, type, silent) {
-  if (!rawProvider) throw new Error('Wallet provider not found');
-  closeWalletModal();
-  provider = new ethers.BrowserProvider(rawProvider, 'any');
-  if (silent) {
-    const accounts = await provider.send('eth_accounts', []);
-    const first = Array.isArray(accounts) && accounts[0] ? String(accounts[0]) : '';
-    if (!first) throw new Error('No existing wallet authorization found');
-  } else {
-    await provider.send('eth_requestAccounts', []);
-  }
-  signer = await provider.getSigner();
-  walletAddress = (await signer.getAddress()).toLowerCase();
-  walletType = type;
-  await ensureBaseNetwork();
-  saveWalletSession();
-  await Promise.all([refreshEntitlementsForWallet(walletAddress), refreshCreatedSoulsForWallet(walletAddress)]);
-  updateWalletUI();
-  updateModeratorNavLinkVisibility();
-  loadSouls();
-  updateSoulPagePurchaseState();
-  if (!silent) showToast('Wallet connected', 'success');
+  return getWalletConnector().connectWithProviderInternal({
+    rawProvider,
+    walletType: type,
+    silent,
+    closeModal: closeWalletModal,
+    ensureNetwork: ensureBaseNetwork,
+    onState: (next) => {
+      provider = next.provider;
+      signer = next.signer;
+      walletAddress = next.wallet;
+      walletType = next.walletType;
+    },
+    afterConnected: async ({ silent: wasSilent }) => {
+      saveWalletSession();
+      await Promise.all([refreshEntitlementsForWallet(walletAddress), refreshCreatedSoulsForWallet(walletAddress)]);
+      updateWalletUI();
+      updateModeratorNavLinkVisibility();
+      loadSouls();
+      updateSoulPagePurchaseState();
+      if (!wasSilent) showToast('Wallet connected', 'success');
+    }
+  });
 }
 
 async function connectMetaMask() {
-  const metamaskProvider = findProviderByKind('metamask');
-  if (metamaskProvider) {
-    return connectWithProviderInternal(metamaskProvider, 'metamask', false);
-  }
-
-  const fallback = fallbackInjectedProvider();
-  if (!fallback) {
-    showToast('MetaMask not found. Install MetaMask first.', 'error');
-    return;
-  }
-
-  showToast('MetaMask-specific provider not detected. Using current injected wallet.', 'warning');
-  return connectWithProviderInternal(fallback, 'metamask', false);
+  return getWalletConnector().connectWithPreferredKind({
+    kind: 'metamask',
+    walletType: 'metamask',
+    connectInternal: connectWithProviderInternal,
+    findProviderByKind,
+    fallbackInjectedProvider,
+    notify: (message, type) => showToast(message, type),
+    missingProviderMessage: 'MetaMask not found. Install MetaMask first.',
+    fallbackNotice: 'MetaMask-specific provider not detected. Using current injected wallet.',
+    throwOnMissingProvider: false
+  });
 }
 
 async function connectRabby() {
-  const rabbyProvider = findProviderByKind('rabby');
-  if (rabbyProvider) {
-    return connectWithProviderInternal(rabbyProvider, 'rabby', false);
-  }
-
-  const fallback = fallbackInjectedProvider();
-  if (!fallback) {
-    showToast('Rabby wallet not found.', 'error');
-    return;
-  }
-
-  showToast('Rabby-specific provider not detected. Using current injected wallet.', 'warning');
-  return connectWithProviderInternal(fallback, 'rabby', false);
+  return getWalletConnector().connectWithPreferredKind({
+    kind: 'rabby',
+    walletType: 'rabby',
+    connectInternal: connectWithProviderInternal,
+    findProviderByKind,
+    fallbackInjectedProvider,
+    notify: (message, type) => showToast(message, type),
+    missingProviderMessage: 'Rabby wallet not found.',
+    fallbackNotice: 'Rabby-specific provider not detected. Using current injected wallet.',
+    throwOnMissingProvider: false
+  });
 }
 
 async function connectBankr() {
-  const bankrProvider = findProviderByKind('bankr');
-  if (bankrProvider) {
-    return connectWithProviderInternal(bankrProvider, 'bankr', false);
-  }
-
-  const fallback = fallbackInjectedProvider();
-  if (!fallback) {
-    showToast('Bankr Wallet not found.', 'error');
-    return;
-  }
-
-  showToast('Bankr-specific provider not detected. Using current injected wallet.', 'warning');
-  return connectWithProviderInternal(fallback, 'bankr', false);
+  return getWalletConnector().connectWithPreferredKind({
+    kind: 'bankr',
+    walletType: 'bankr',
+    connectInternal: connectWithProviderInternal,
+    findProviderByKind,
+    fallbackInjectedProvider,
+    notify: (message, type) => showToast(message, type),
+    missingProviderMessage: 'Bankr Wallet not found.',
+    fallbackNotice: 'Bankr-specific provider not detected. Using current injected wallet.',
+    throwOnMissingProvider: false
+  });
 }
 
-async function ensureBaseNetwork() {
-  return getWalletCommon().ensureBaseNetwork(provider, {
+async function ensureBaseNetwork(targetProvider = provider) {
+  return getWalletCommon().ensureBaseNetwork(targetProvider, {
     chainIdDec: CONFIG.baseChainIdDec,
     chainIdHex: CONFIG.baseChainIdHex,
     chainParams: CONFIG.baseChainParams
