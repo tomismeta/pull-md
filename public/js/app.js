@@ -68,6 +68,14 @@ function getWalletConnector() {
   return helper;
 }
 
+function getStorageHelper() {
+  const helper = window?.SoulStarterStorage;
+  if (!helper) {
+    throw new Error('Storage helper unavailable');
+  }
+  return helper;
+}
+
 function getUiShell() {
   const helper = window?.SoulStarterUiShell;
   if (!helper) {
@@ -258,26 +266,10 @@ function isSoulAccessible(soulId) {
   return created.has(soulId);
 }
 
-function parseSoulIdFromReceiptKey(key, wallet) {
-  const prefix = `${RECEIPT_PREFIX}${wallet.toLowerCase()}.`;
-  if (!String(key || '').startsWith(prefix)) return null;
-  return String(key).slice(prefix.length);
-}
-
 function collectStoredProofs(wallet) {
-  const proofs = [];
-  try {
-    const normalized = wallet.toLowerCase();
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      const soulId = parseSoulIdFromReceiptKey(key, normalized);
-      if (!soulId) continue;
-      const receipt = localStorage.getItem(key);
-      if (!receipt) continue;
-      proofs.push({ soul_id: soulId, receipt });
-    }
-  } catch (_) {}
-  return proofs;
+  return getStorageHelper().collectStoredProofs(wallet, {
+    receiptPrefix: RECEIPT_PREFIX
+  });
 }
 
 function getMcpClient() {
@@ -1145,63 +1137,38 @@ async function readError(response) {
   }
 }
 
-function receiptStorageKey(wallet, soulId) {
-  return `soulstarter.receipt.${wallet.toLowerCase()}.${soulId}`;
-}
-
-function redownloadSessionStorageKey(wallet) {
-  return `${REDOWNLOAD_SESSION_PREFIX}${String(wallet || '').toLowerCase()}`;
-}
-
 function getStoredRedownloadSession(wallet) {
-  try {
-    const raw = localStorage.getItem(redownloadSessionStorageKey(wallet));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
-    const token = String(parsed.token || '');
-    const expiresAtMs = Number(parsed.expiresAtMs || 0);
-    if (!token || !Number.isFinite(expiresAtMs) || Date.now() >= expiresAtMs) return null;
-    return { token, expiresAtMs };
-  } catch (_) {
-    return null;
-  }
+  return getStorageHelper().getStoredRedownloadSession(wallet, {
+    redownloadSessionPrefix: REDOWNLOAD_SESSION_PREFIX
+  });
 }
 
 function storeRedownloadSession(wallet, token, expiresAtMs) {
-  try {
-    localStorage.setItem(
-      redownloadSessionStorageKey(wallet),
-      JSON.stringify({
-        token: String(token || ''),
-        expiresAtMs: Number(expiresAtMs || 0)
-      })
-    );
-  } catch (_) {}
+  getStorageHelper().storeRedownloadSession(wallet, token, expiresAtMs, {
+    redownloadSessionPrefix: REDOWNLOAD_SESSION_PREFIX
+  });
 }
 
 function clearRedownloadSession(wallet) {
-  try {
-    localStorage.removeItem(redownloadSessionStorageKey(wallet));
-  } catch (_) {}
+  getStorageHelper().clearRedownloadSession(wallet, {
+    redownloadSessionPrefix: REDOWNLOAD_SESSION_PREFIX
+  });
 }
 
 function storeReceipt(soulId, wallet, receipt) {
-  try {
-    localStorage.setItem(receiptStorageKey(wallet, soulId), receipt);
-    const normalized = wallet.toLowerCase();
-    const owned = entitlementCacheByWallet.get(normalized) || new Set();
-    owned.add(soulId);
-    entitlementCacheByWallet.set(normalized, owned);
-  } catch (_) {}
+  getStorageHelper().storeReceipt(soulId, wallet, receipt, {
+    receiptPrefix: RECEIPT_PREFIX
+  });
+  const normalized = wallet.toLowerCase();
+  const owned = entitlementCacheByWallet.get(normalized) || new Set();
+  owned.add(soulId);
+  entitlementCacheByWallet.set(normalized, owned);
 }
 
 function getStoredReceipt(soulId, wallet) {
-  try {
-    return localStorage.getItem(receiptStorageKey(wallet, soulId));
-  } catch (_) {
-    return null;
-  }
+  return getStorageHelper().getStoredReceipt(soulId, wallet, {
+    receiptPrefix: RECEIPT_PREFIX
+  });
 }
 
 function triggerMarkdownDownload(content, soulId) {
