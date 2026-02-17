@@ -73,6 +73,14 @@ function getWalletCommon() {
   return helper;
 }
 
+function getSiweBuilder() {
+  const helper = window?.SoulStarterSiwe;
+  if (!helper || typeof helper.buildScopedMessage !== 'function') {
+    throw new Error('SIWE message helper unavailable');
+  }
+  return helper;
+}
+
 function setWalletButton() {
   const btn = document.getElementById('walletBtn');
   if (!btn) return;
@@ -232,31 +240,16 @@ async function loadModeratorAllowlist() {
   updateModeratorNavLinkVisibility();
 }
 
-async function sha256Hex(input) {
-  return getWalletCommon().sha256Hex(input);
-}
-
 async function creatorSiweMessage(action, timestamp) {
-  const ts = Number(timestamp);
-  const nonceSeed = `creator|${String(action || '')}|${String(ts)}`;
-  const nonce = (await sha256Hex(nonceSeed)).slice(0, 16);
-  return [
-    `${SIWE_DOMAIN} wants you to sign in with your Ethereum account:`,
-    String(STATE.wallet || '').toLowerCase(),
-    '',
-    'Authenticate wallet ownership for SoulStarter. No token transfer or approval.',
-    '',
-    `URI: ${SIWE_URI}`,
-    'Version: 1',
-    `Chain ID: ${BASE_CHAIN_DEC}`,
-    `Nonce: ${nonce}`,
-    `Issued At: ${new Date(ts).toISOString()}`,
-    `Expiration Time: ${new Date(ts + 5 * 60 * 1000).toISOString()}`,
-    `Request ID: ${String(action || 'creator')}:creator`,
-    'Resources:',
-    `- urn:soulstarter:action:${String(action || '')}`,
-    '- urn:soulstarter:scope:creator'
-  ].join('\n');
+  return getSiweBuilder().buildScopedMessage({
+    domain: SIWE_DOMAIN,
+    uri: SIWE_URI,
+    chainId: BASE_CHAIN_DEC,
+    wallet: STATE.wallet,
+    scope: 'creator',
+    action,
+    timestamp
+  });
 }
 
 async function creatorAuth(action) {
