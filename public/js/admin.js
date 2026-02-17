@@ -54,6 +54,14 @@ function fallbackInjectedProvider() {
   return window?.SoulStarterWalletProviders?.fallbackInjectedProvider?.() || null;
 }
 
+function getWalletCommon() {
+  const helper = window?.SoulStarterWalletCommon;
+  if (!helper) {
+    throw new Error('Wallet common helper unavailable');
+  }
+  return helper;
+}
+
 function normalizeAddress(value) {
   try {
     return ethers.getAddress(String(value || '').trim()).toLowerCase();
@@ -124,58 +132,33 @@ function setWalletOptionsDisabled(disabled) {
 }
 
 async function ensureBaseNetwork(provider) {
-  const network = await provider.getNetwork();
-  if (Number(network.chainId) === BASE_CHAIN_DEC) return;
-  try {
-    await provider.send('wallet_switchEthereumChain', [{ chainId: BASE_CHAIN_HEX }]);
-  } catch (error) {
-    if (error.code === 4902) {
-      await provider.send('wallet_addEthereumChain', [
-        {
-          chainId: BASE_CHAIN_HEX,
-          chainName: 'Base',
-          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-          rpcUrls: ['https://mainnet.base.org'],
-          blockExplorerUrls: ['https://basescan.org']
-        }
-      ]);
-      return;
+  return getWalletCommon().ensureBaseNetwork(provider, {
+    chainIdDec: BASE_CHAIN_DEC,
+    chainIdHex: BASE_CHAIN_HEX,
+    chainParams: {
+      chainId: BASE_CHAIN_HEX,
+      chainName: 'Base',
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: ['https://mainnet.base.org'],
+      blockExplorerUrls: ['https://basescan.org']
     }
-    throw error;
-  }
+  });
 }
 
 function saveWalletSession() {
-  if (!state.wallet || !state.walletType) return;
-  try {
-    localStorage.setItem(
-      WALLET_SESSION_KEY,
-      JSON.stringify({
-        wallet: state.wallet,
-        walletType: state.walletType
-      })
-    );
-  } catch (_) {}
+  getWalletCommon().saveWalletSession({
+    key: WALLET_SESSION_KEY,
+    wallet: state.wallet,
+    walletType: state.walletType
+  });
 }
 
 function clearWalletSession() {
-  try {
-    localStorage.removeItem(WALLET_SESSION_KEY);
-  } catch (_) {}
+  getWalletCommon().clearWalletSession({ key: WALLET_SESSION_KEY });
 }
 
 function readWalletSession() {
-  try {
-    const raw = localStorage.getItem(WALLET_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const wallet = String(parsed?.wallet || '').toLowerCase();
-    const walletType = String(parsed?.walletType || '').toLowerCase();
-    if (!wallet || !walletType) return null;
-    return { wallet, walletType };
-  } catch (_) {
-    return null;
-  }
+  return getWalletCommon().readWalletSession({ key: WALLET_SESSION_KEY });
 }
 
 async function connectWithProviderInternal(rawProvider, walletType, silent) {
@@ -222,9 +205,7 @@ async function connectBankrProvider() {
 }
 
 async function sha256Hex(input) {
-  const enc = new TextEncoder().encode(String(input));
-  const digest = await crypto.subtle.digest('SHA-256', enc);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return getWalletCommon().sha256Hex(input);
 }
 
 async function moderatorSiweMessage(action, timestamp) {

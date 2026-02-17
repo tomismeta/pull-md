@@ -52,6 +52,14 @@ function fallbackInjectedProvider() {
   return window?.SoulStarterWalletProviders?.fallbackInjectedProvider?.() || null;
 }
 
+function getWalletCommon() {
+  const helper = window?.SoulStarterWalletCommon;
+  if (!helper) {
+    throw new Error('Wallet common helper unavailable');
+  }
+  return helper;
+}
+
 function openWalletModal() {
   const modal = document.getElementById('walletModal');
   if (modal) modal.style.display = 'flex';
@@ -85,36 +93,19 @@ function disconnectWallet() {
 }
 
 function saveWalletSession() {
-  if (!walletAddress || !walletType) return;
-  try {
-    localStorage.setItem(
-      WALLET_SESSION_KEY,
-      JSON.stringify({
-        wallet: walletAddress,
-        walletType
-      })
-    );
-  } catch (_) {}
+  getWalletCommon().saveWalletSession({
+    key: WALLET_SESSION_KEY,
+    wallet: walletAddress,
+    walletType
+  });
 }
 
 function clearWalletSession() {
-  try {
-    localStorage.removeItem(WALLET_SESSION_KEY);
-  } catch (_) {}
+  getWalletCommon().clearWalletSession({ key: WALLET_SESSION_KEY });
 }
 
 function readWalletSession() {
-  try {
-    const raw = localStorage.getItem(WALLET_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const wallet = String(parsed?.wallet || '').toLowerCase();
-    const type = String(parsed?.walletType || '').toLowerCase();
-    if (!wallet || !type) return null;
-    return { wallet, walletType: type };
-  } catch (_) {
-    return null;
-  }
+  return getWalletCommon().readWalletSession({ key: WALLET_SESSION_KEY });
 }
 
 async function connectWithProvider(rawProvider) {
@@ -194,19 +185,11 @@ async function connectBankr() {
 }
 
 async function ensureBaseNetwork() {
-  if (!provider) return;
-  const network = await provider.getNetwork();
-  if (Number(network.chainId) === CONFIG.baseChainIdDec) return;
-
-  try {
-    await provider.send('wallet_switchEthereumChain', [{ chainId: CONFIG.baseChainIdHex }]);
-  } catch (error) {
-    if (error.code === 4902) {
-      await provider.send('wallet_addEthereumChain', [CONFIG.baseChainParams]);
-      return;
-    }
-    throw error;
-  }
+  return getWalletCommon().ensureBaseNetwork(provider, {
+    chainIdDec: CONFIG.baseChainIdDec,
+    chainIdHex: CONFIG.baseChainIdHex,
+    chainParams: CONFIG.baseChainParams
+  });
 }
 
 function updateWalletUI() {
@@ -549,9 +532,7 @@ async function restoreWalletSession() {
 }
 
 async function sha256Hex(input) {
-  const enc = new TextEncoder().encode(String(input));
-  const digest = await crypto.subtle.digest('SHA-256', enc);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return getWalletCommon().sha256Hex(input);
 }
 
 async function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
