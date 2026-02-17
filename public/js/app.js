@@ -71,6 +71,26 @@ function getStorageHelper() {
   return helper;
 }
 
+function getWalletStateHelper() {
+  const helper = window?.SoulStarterWalletState;
+  if (
+    !helper ||
+    typeof helper.updateWalletUI !== 'function' ||
+    typeof helper.updateModeratorNavLinks !== 'function' ||
+    typeof helper.ownedSoulSetForWallet !== 'function' ||
+    typeof helper.createdSoulSetForWallet !== 'function' ||
+    typeof helper.isSoulCreated !== 'function' ||
+    typeof helper.isSoulAccessible !== 'function' ||
+    typeof helper.collectStoredProofs !== 'function' ||
+    typeof helper.refreshEntitlementsForWallet !== 'function' ||
+    typeof helper.refreshCreatedSoulsForWallet !== 'function' ||
+    typeof helper.loadModeratorAllowlist !== 'function'
+  ) {
+    throw new Error('Wallet state helper unavailable');
+  }
+  return helper;
+}
+
 function getToastHelper() {
   const helper = window?.SoulStarterToast;
   if (!helper || typeof helper.show !== 'function') {
@@ -342,56 +362,58 @@ async function ensureBaseNetwork(targetProvider = provider) {
 }
 
 function updateWalletUI() {
-  const btn = document.getElementById('walletBtn');
-  const text = document.getElementById('walletText');
-  if (!btn || !text) return;
-
-  if (walletAddress) {
-    text.textContent = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
-    btn.classList.add('connected');
-    btn.onclick = disconnectWallet;
-  } else {
-    text.textContent = 'Connect Wallet';
-    btn.classList.remove('connected');
-    btn.onclick = openWalletModal;
-  }
+  getWalletStateHelper().updateWalletUI({
+    walletAddress,
+    buttonId: 'walletBtn',
+    labelId: 'walletText',
+    onDisconnect: disconnectWallet,
+    onConnect: openWalletModal
+  });
 }
 
 function updateModeratorNavLinkVisibility() {
-  const navLinks = document.querySelectorAll('.moderator-nav-link');
-  if (!navLinks.length) return;
-  const show = Boolean(walletAddress && moderatorAllowlist.has(walletAddress));
-  navLinks.forEach((el) => {
-    el.style.display = show ? '' : 'none';
+  getWalletStateHelper().updateModeratorNavLinks({
+    walletAddress,
+    moderatorAllowlist,
+    selector: '.moderator-nav-link'
   });
 }
 
 function ownedSoulSetForCurrentWallet() {
-  if (!walletAddress) return new Set();
-  return entitlementCacheByWallet.get(walletAddress) || new Set();
+  return getWalletStateHelper().ownedSoulSetForWallet({
+    walletAddress,
+    entitlementCacheByWallet
+  });
 }
 
 function createdSoulSetForCurrentWallet() {
-  if (!walletAddress) return new Set();
-  return createdSoulCacheByWallet.get(walletAddress) || new Set();
+  return getWalletStateHelper().createdSoulSetForWallet({
+    walletAddress,
+    createdSoulCacheByWallet
+  });
 }
 
 function isSoulCreated(soulId) {
-  if (!walletAddress || !soulId) return false;
-  const created = createdSoulSetForCurrentWallet();
-  return created.has(soulId);
+  return getWalletStateHelper().isSoulCreated({
+    walletAddress,
+    soulId,
+    createdSoulCacheByWallet
+  });
 }
 
 function isSoulAccessible(soulId) {
-  if (!walletAddress || !soulId) return false;
-  const owned = ownedSoulSetForCurrentWallet();
-  if (owned.has(soulId)) return true;
-  const created = createdSoulSetForCurrentWallet();
-  return created.has(soulId);
+  return getWalletStateHelper().isSoulAccessible({
+    walletAddress,
+    soulId,
+    entitlementCacheByWallet,
+    createdSoulCacheByWallet
+  });
 }
 
 function collectStoredProofs(wallet) {
-  return getStorageHelper().collectStoredProofs(wallet, {
+  return getWalletStateHelper().collectStoredProofs({
+    wallet,
+    storageHelper: getStorageHelper(),
     receiptPrefix: RECEIPT_PREFIX
   });
 }
@@ -412,47 +434,29 @@ async function mcpToolCall(name, args = {}) {
 }
 
 async function refreshEntitlementsForWallet(wallet) {
-  if (!wallet) return;
-  const proofs = collectStoredProofs(wallet);
-  if (proofs.length === 0) {
-    entitlementCacheByWallet.set(wallet.toLowerCase(), new Set());
-    return;
-  }
-  try {
-    const payload = await mcpToolCall('check_entitlements', {
-      wallet_address: wallet.toLowerCase(),
-      proofs
-    });
-    const owned = new Set(
-      (Array.isArray(payload?.entitlements) ? payload.entitlements : [])
-        .filter((entry) => entry?.entitled && entry?.soul_id)
-        .map((entry) => String(entry.soul_id))
-    );
-    entitlementCacheByWallet.set(wallet.toLowerCase(), owned);
-  } catch (_) {
-    const fallback = new Set(proofs.map((proof) => String(proof.soul_id)));
-    entitlementCacheByWallet.set(wallet.toLowerCase(), fallback);
-  }
-  renderOwnedSouls();
-  updateSoulPagePurchaseState();
+  await getWalletStateHelper().refreshEntitlementsForWallet({
+    wallet,
+    mcpToolCall,
+    storageHelper: getStorageHelper(),
+    receiptPrefix: RECEIPT_PREFIX,
+    entitlementCacheByWallet,
+    onStateChanged: () => {
+      renderOwnedSouls();
+      updateSoulPagePurchaseState();
+    }
+  });
 }
 
 async function refreshCreatedSoulsForWallet(wallet) {
-  if (!wallet) return;
-  try {
-    const payload = await mcpToolCall('list_published_listings', {});
-    const created = new Set(
-      (Array.isArray(payload?.listings) ? payload.listings : [])
-        .filter((entry) => String(entry?.wallet_address || '').toLowerCase() === wallet.toLowerCase())
-        .map((entry) => String(entry?.soul_id || '').trim())
-        .filter(Boolean)
-    );
-    createdSoulCacheByWallet.set(wallet.toLowerCase(), created);
-  } catch (_) {
-    createdSoulCacheByWallet.set(wallet.toLowerCase(), new Set());
-  }
-  renderOwnedSouls();
-  updateSoulPagePurchaseState();
+  await getWalletStateHelper().refreshCreatedSoulsForWallet({
+    wallet,
+    mcpToolCall,
+    createdSoulCacheByWallet,
+    onStateChanged: () => {
+      renderOwnedSouls();
+      updateSoulPagePurchaseState();
+    }
+  });
 }
 
 function updateSoulPagePurchaseState() {
@@ -1044,17 +1048,13 @@ async function loadSouls() {
 }
 
 async function loadModeratorAllowlist() {
-  try {
-    const payload = await mcpToolCall('list_moderators', {});
-    moderatorAllowlist = new Set(
-      (Array.isArray(payload?.moderators) ? payload.moderators : [])
-        .map((wallet) => String(wallet || '').toLowerCase())
-        .filter((wallet) => /^0x[a-f0-9]{40}$/i.test(wallet))
-    );
-  } catch (_) {
-    moderatorAllowlist = new Set();
-  }
-  updateModeratorNavLinkVisibility();
+  moderatorAllowlist = await getWalletStateHelper().loadModeratorAllowlist({
+    mcpToolCall,
+    onAllowlistLoaded: (allowlist) => {
+      moderatorAllowlist = allowlist;
+      updateModeratorNavLinkVisibility();
+    }
+  });
 }
 
 async function fetchWithTimeout(url, options = {}, timeout = CONFIG.requestTimeout) {
