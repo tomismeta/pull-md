@@ -30,10 +30,8 @@ let provider = null;
 let signer = null;
 let walletAddress = null;
 let walletType = null;
-let activeSuccessDownloadUrl = null;
-let latestSoulDownload = null;
-let settlementVerificationSequence = 0;
 let currentSoulDetailId = null;
+let purchaseFlowController = null;
 
 function initProviderDiscovery() {
   window?.SoulStarterWalletProviders?.initDiscovery?.();
@@ -176,6 +174,14 @@ function getDownloadDeliveryHelper() {
   return helper;
 }
 
+function getPurchaseFlowHelper() {
+  const helper = window?.SoulStarterPurchaseFlow;
+  if (!helper || typeof helper.createController !== 'function') {
+    throw new Error('Purchase flow helper unavailable');
+  }
+  return helper;
+}
+
 function getSoulDetailUiHelper() {
   const helper = window?.SoulStarterSoulDetailUi;
   if (
@@ -234,6 +240,48 @@ function getSiweBuilder() {
     throw new Error('SIWE message helper unavailable');
   }
   return helper;
+}
+
+function getPurchaseFlowController() {
+  if (purchaseFlowController) return purchaseFlowController;
+  purchaseFlowController = getPurchaseFlowHelper().createController({
+    apiBase: CONFIG.apiBase,
+    getWalletAddress: () => walletAddress,
+    getSigner: () => signer,
+    showToast,
+    openWalletModal,
+    ensureBaseNetwork,
+    tryRedownload: (soulId) => tryRedownload(soulId),
+    getExpectedSellerAddressForSoul,
+    createX402SdkEngine,
+    fetchWithTimeout,
+    decodePaymentRequiredWithSdk,
+    buildX402PaymentSignature,
+    readError,
+    readSettlementResponse,
+    storeReceipt,
+    markSoulOwned: (soulId) => {
+      if (!walletAddress) return;
+      const normalized = walletAddress.toLowerCase();
+      const owned = entitlementCacheByWallet.get(normalized) || new Set();
+      owned.add(soulId);
+      entitlementCacheByWallet.set(normalized, owned);
+    },
+    loadSouls,
+    updateSoulPagePurchaseState,
+    renderSettlementVerification,
+    verifySettlementOnchain,
+    triggerMarkdownDownload,
+    isLikelyMobileBrowser,
+    handleMobileDownloadClick: ({ event, content, soulId, showToast: notify }) =>
+      getDownloadDeliveryHelper().handleMobileDownloadClick({
+        event,
+        content,
+        soulId,
+        showToast: notify
+      })
+  });
+  return purchaseFlowController;
 }
 
 function openWalletModal() {
@@ -669,130 +717,11 @@ async function tryRedownload(soulId) {
 }
 
 async function purchaseSoul(soulId) {
-  if (!walletAddress || !signer) {
-    showToast('Connect wallet first', 'warning');
-    openWalletModal();
-    return;
-  }
-
-  const btn = document.getElementById('buyBtn');
-  try {
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Checking access...';
-    }
-
-    await ensureBaseNetwork();
-
-    const prior = await tryRedownload(soulId);
-    if (prior.ok) {
-      if (walletAddress) {
-        const owned = ownedSoulSetForCurrentWallet();
-        owned.add(soulId);
-        entitlementCacheByWallet.set(walletAddress, owned);
-      }
-      loadSouls();
-      updateSoulPagePurchaseState();
-      showToast('Entitlement verified. Download restored.', 'success');
-      return;
-    }
-
-    if (btn) btn.textContent = 'Requesting x402 terms...';
-    const expectedSeller = await getExpectedSellerAddressForSoul(soulId);
-    const x402Engine = await createX402SdkEngine({
-      wallet: walletAddress,
-      activeSigner: signer,
-      expectedSeller,
-      preferredAssetTransferMethod: 'eip3009'
-    });
-    const initial = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'X-WALLET-ADDRESS': walletAddress,
-        'X-ASSET-TRANSFER-METHOD': 'eip3009'
-      }
-    });
-
-    if (initial.status !== 402) {
-      const error = await readError(initial);
-      throw new Error(error || `Expected 402 payment required (got ${initial.status})`);
-    }
-
-    const paymentRequired = await decodePaymentRequiredWithSdk(initial, x402Engine.httpClient);
-    if (btn) btn.textContent = 'Signing x402 payment...';
-    const paymentPayload = await buildX402PaymentSignature(paymentRequired, soulId, x402Engine);
-
-    if (btn) btn.textContent = 'Submitting payment...';
-    const paid = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
-      method: 'GET',
-      headers: {
-        'PAYMENT-SIGNATURE': btoa(JSON.stringify(paymentPayload)),
-        'X-WALLET-ADDRESS': walletAddress,
-        'X-ASSET-TRANSFER-METHOD': 'eip3009',
-        Accept: 'text/markdown'
-      }
-    });
-
-    if (!paid.ok) {
-      const error = await readError(paid);
-      throw new Error(error || 'Payment failed');
-    }
-
-    const settlementResponse = readSettlementResponse(paid);
-    if (!settlementResponse?.success) {
-      throw new Error('Payment did not include a confirmed settlement response');
-    }
-
-    const content = await paid.text();
-    const tx = settlementResponse.transaction || null;
-    const receipt = paid.headers.get('X-PURCHASE-RECEIPT');
-    if (receipt) storeReceipt(soulId, walletAddress, receipt);
-    if (walletAddress) {
-      const owned = ownedSoulSetForCurrentWallet();
-      owned.add(soulId);
-      entitlementCacheByWallet.set(walletAddress, owned);
-    }
-
-    const expectedSettlement = {
-      token: paymentPayload?.accepted?.asset || null,
-      amount: paymentPayload?.accepted?.amount || null,
-      payTo: paymentPayload?.accepted?.payTo || null,
-      payer: walletAddress,
-      network: paymentPayload?.accepted?.network || null
-    };
-    showPaymentSuccess(content, tx, soulId, false, expectedSettlement);
-    showToast('Soul acquired successfully!', 'success');
-    loadSouls();
-    updateSoulPagePurchaseState();
-  } catch (error) {
-    console.error('Purchase failed:', error);
-    showToast(`Purchase failed: ${error.message || 'Unknown error'}`, 'error');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Purchase Soul';
-    }
-  }
+  return getPurchaseFlowController().purchaseSoul(soulId);
 }
 
 async function downloadOwnedSoul(soulId) {
-  if (!walletAddress || !signer) {
-    showToast('Connect your wallet first', 'warning');
-    openWalletModal();
-    return;
-  }
-  try {
-    await ensureBaseNetwork();
-    const prior = await tryRedownload(soulId);
-    if (prior.ok) {
-      showToast('Download restored from your entitlement.', 'success');
-      return;
-    }
-    showToast('No purchase or creator entitlement found for this soul on this wallet.', 'warning');
-  } catch (error) {
-    showToast(`Download failed: ${error.message || 'Unknown error'}`, 'error');
-  }
+  return getPurchaseFlowController().downloadOwnedSoul(soulId);
 }
 
 function readSettlementTx(response) {
@@ -880,110 +809,8 @@ function isLikelyMobileBrowser() {
   return getDownloadDeliveryHelper().isLikelyMobileBrowser();
 }
 
-async function handleSuccessDownloadClick(event) {
-  if (!latestSoulDownload || !isLikelyMobileBrowser()) return;
-  const { content, soulId } = latestSoulDownload;
-  await getDownloadDeliveryHelper().handleMobileDownloadClick({
-    event,
-    content,
-    soulId,
-    showToast
-  });
-}
-
-function revokeActiveSuccessDownloadUrl() {
-  if (!activeSuccessDownloadUrl) return;
-  try {
-    URL.revokeObjectURL(activeSuccessDownloadUrl);
-  } catch (_) {}
-  activeSuccessDownloadUrl = null;
-}
-
 function showPaymentSuccess(content, txRef, soulId, redownload, expectedSettlement = null) {
-  const txHash = typeof txRef === 'string' ? txRef : null;
-  settlementVerificationSequence += 1;
-  const verificationRunId = settlementVerificationSequence;
-  latestSoulDownload = { content, soulId };
-  const purchaseCard = document.getElementById('purchaseCard');
-  if (purchaseCard) purchaseCard.style.display = 'none';
-
-  const successCard = document.getElementById('successCard');
-  const downloadLink = document.getElementById('downloadLink');
-  if (successCard) {
-    successCard.style.display = 'block';
-    const heading = successCard.querySelector('h3');
-    if (heading) {
-      heading.textContent = redownload ? 'Soul Restored!' : 'Soul Acquired!';
-    }
-
-    const firstP = successCard.querySelector('p');
-    if (firstP) {
-      firstP.textContent = redownload
-        ? 'Entitlement verified via wallet re-authentication.'
-        : 'x402 payment settled successfully.';
-    }
-  }
-
-  if (downloadLink) {
-    revokeActiveSuccessDownloadUrl();
-    activeSuccessDownloadUrl = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
-    downloadLink.href = activeSuccessDownloadUrl;
-    downloadLink.download = `${soulId}-SOUL.md`;
-    downloadLink.onclick = handleSuccessDownloadClick;
-  }
-
-  // Always trigger human download, even outside detail page cards.
-  try {
-    triggerMarkdownDownload(content, soulId);
-  } catch (_) {}
-
-  const txHashEl = document.getElementById('txHash');
-  if (txHashEl && successCard) {
-    txHashEl.textContent = '';
-    if (txHash) {
-      txHashEl.appendChild(document.createTextNode('Transaction: '));
-      const link = document.createElement('a');
-      link.href = `https://basescan.org/tx/${encodeURIComponent(txHash)}`;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = `${txHash.slice(0, 10)}...${txHash.slice(-8)}`;
-      txHashEl.appendChild(link);
-    } else {
-      txHashEl.textContent = 'Transaction: prior entitlement';
-    }
-  }
-
-  if (redownload || !txHash || !expectedSettlement) {
-    renderSettlementVerification({ phase: 'hidden' });
-    return;
-  }
-
-  renderSettlementVerification({ phase: 'pending' });
-  verifySettlementOnchain(txHash, expectedSettlement)
-    .then((result) => {
-      if (verificationRunId !== settlementVerificationSequence) return;
-      if (result.verified) {
-        renderSettlementVerification({
-          phase: 'verified',
-          actual: result.actual,
-          expected: result.expected
-        });
-        return;
-      }
-      renderSettlementVerification({
-        phase: 'warn',
-        reason: result.reason,
-        expected: result.expected
-      });
-    })
-    .catch(() => {
-      if (verificationRunId !== settlementVerificationSequence) return;
-      renderSettlementVerification({
-        phase: 'warn',
-        reason: 'Unable to verify settlement right now. You can still inspect the transaction on BaseScan.',
-        expected: expectedSettlement
-      });
-    });
+  return getPurchaseFlowController().showPaymentSuccess(content, txRef, soulId, redownload, expectedSettlement);
 }
 
 function escapeHtml(text) {
@@ -1121,6 +948,6 @@ window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
 window.downloadOwnedSoul = downloadOwnedSoul;
 getAppBootstrapHelper().bindBeforeUnload(() => {
-  revokeActiveSuccessDownloadUrl();
+  getPurchaseFlowController().revokeActiveSuccessDownloadUrl();
 });
 window.showToast = showToast;
