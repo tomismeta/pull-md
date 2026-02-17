@@ -161,6 +161,21 @@ function getSoulCardsHelper() {
   return helper;
 }
 
+function getCatalogUiHelper() {
+  const helper = window?.SoulStarterCatalogUi;
+  if (
+    !helper ||
+    typeof helper.updateSoulPagePurchaseState !== 'function' ||
+    typeof helper.updateSoulDetailMetadata !== 'function' ||
+    typeof helper.hydrateSoulDetailPage !== 'function' ||
+    typeof helper.renderOwnedSouls !== 'function' ||
+    typeof helper.loadSouls !== 'function'
+  ) {
+    throw new Error('Catalog UI helper unavailable');
+  }
+  return helper;
+}
+
 function getDownloadDeliveryHelper() {
   const helper = window?.SoulStarterDownloadDelivery;
   if (
@@ -508,7 +523,8 @@ async function refreshCreatedSoulsForWallet(wallet) {
 }
 
 function updateSoulPagePurchaseState() {
-  getSoulDetailUiHelper().updateSoulPagePurchaseState({
+  getCatalogUiHelper().updateSoulPagePurchaseState({
+    soulDetailUiHelper: getSoulDetailUiHelper(),
     walletAddress,
     currentSoulDetailId,
     soulCatalogCache,
@@ -522,97 +538,52 @@ function formatCreatorLabel(raw) {
   return getSoulDetailUiHelper().formatCreatorLabel(raw, shortenAddress);
 }
 
-function soulIdFromLocation() {
-  return getSoulDetailUiHelper().soulIdFromLocation(window.location);
-}
-
 function soulListingHref(soulId) {
   return getSoulDetailUiHelper().soulListingHref(soulId);
 }
 
 function updateSoulDetailMetadata(soul) {
-  getSoulDetailUiHelper().updateSoulDetailMetadata({
+  const nextSoulDetailId = getCatalogUiHelper().updateSoulDetailMetadata({
     soul,
+    soulDetailUiHelper: getSoulDetailUiHelper(),
     escapeHtml,
     getSoulGlyph,
     shortenAddress,
-    formatCreatorLabelFn: formatCreatorLabel
+    formatCreatorLabelFn: formatCreatorLabel,
+    buyButtonId: 'buyBtn'
   });
-
-  if (soul?.id) {
-    currentSoulDetailId = String(soul.id);
-    const btn = document.getElementById('buyBtn');
-    if (btn) btn.dataset.soulId = currentSoulDetailId;
-    document.title = `${String(soul.name || soul.id)} — SoulStarter`;
-    const descMeta = document.querySelector('meta[name="description"]');
-    if (descMeta) descMeta.setAttribute('content', String(soul.description || 'SoulStarter listing details.'));
-  }
+  if (nextSoulDetailId) currentSoulDetailId = nextSoulDetailId;
 }
 
 async function hydrateSoulDetailPage() {
-  const pageRoot = document.getElementById('soulDetailPage');
-  if (!pageRoot) return;
-  const soulId = soulIdFromLocation();
-  const btn = document.getElementById('buyBtn');
-  if (btn) {
-    btn.textContent = 'Loading...';
-    btn.disabled = true;
+  const result = await getCatalogUiHelper().hydrateSoulDetailPage({
+    soulDetailUiHelper: getSoulDetailUiHelper(),
+    mcpToolCall,
+    currentSoulDetailId,
+    soulCatalogCache,
+    setSoulCatalogCache: (next) => {
+      soulCatalogCache = next;
+    },
+    updateSoulDetailMetadata,
+    updateSoulPagePurchaseState,
+    showToast,
+    pageRootId: 'soulDetailPage',
+    buyButtonId: 'buyBtn'
+  });
+  if (result?.currentSoulDetailId) {
+    currentSoulDetailId = result.currentSoulDetailId;
   }
-  if (!soulId) {
-    showToast('Missing soul id in URL', 'error');
-    if (btn) {
-      btn.textContent = 'Unavailable';
-    }
-    return;
-  }
-
-  try {
-    const payload = await mcpToolCall('get_soul_details', { id: soulId });
-    const soul = payload?.soul || null;
-    if (!soul) throw new Error('Soul metadata unavailable');
-    soulCatalogCache = [soul, ...(Array.isArray(soulCatalogCache) ? soulCatalogCache.filter((item) => item.id !== soul.id) : [])];
-    updateSoulDetailMetadata(soul);
-    updateSoulPagePurchaseState();
-  } catch (error) {
-    showToast(error?.message || 'Unable to load soul details', 'error');
-    const name = document.getElementById('soulDetailName');
-    if (name) name.textContent = 'Soul unavailable';
-    const description = document.getElementById('soulDetailDescription');
-    if (description) description.textContent = 'This listing could not be loaded.';
-    if (btn) {
-      btn.textContent = 'Unavailable';
-      btn.disabled = true;
-    }
-    return;
-  }
-
-  if (btn) btn.disabled = false;
 }
 
 function renderOwnedSouls() {
-  const grid = document.getElementById('ownedSoulsGrid');
-  if (!grid) return;
-
-  if (!walletAddress) {
-    grid.innerHTML = '<p class="admin-empty">Connect your wallet to view your purchased and created souls.</p>';
-    return;
-  }
-
-  const owned = ownedSoulSetForCurrentWallet();
-  const created = createdSoulSetForCurrentWallet();
-  const allSoulIds = new Set([...owned, ...created]);
-  if (!allSoulIds.size) {
-    grid.innerHTML = '<p class="admin-empty">No purchased or created souls found for this wallet yet.</p>';
-    return;
-  }
-
-  const byId = new Map((Array.isArray(soulCatalogCache) ? soulCatalogCache : []).map((soul) => [soul.id, soul]));
-  grid.innerHTML = getSoulCardsHelper().buildOwnedSoulCardsHtml({
-    soulIds: [...allSoulIds],
-    ownedSet: owned,
-    createdSet: created,
-    soulsById: byId,
-    listingHrefBuilder: soulListingHref
+  getCatalogUiHelper().renderOwnedSouls({
+    walletAddress,
+    soulCatalogCache,
+    ownedSoulSetForCurrentWallet,
+    createdSoulSetForCurrentWallet,
+    soulCardsHelper: getSoulCardsHelper(),
+    listingHrefBuilder: soulListingHref,
+    containerId: 'ownedSoulsGrid'
   });
 }
 
@@ -817,14 +788,6 @@ function escapeHtml(text) {
   return getSoulCardsHelper().escapeHtml(text);
 }
 
-function formatCardDescription(value, fallback) {
-  return getSoulCardsHelper().formatCardDescription(value, fallback);
-}
-
-function formatSoulPriceLabel(soul) {
-  return getSoulCardsHelper().formatSoulPriceLabel(soul);
-}
-
 function renderInventorySummary(souls, errorMessage = '') {
   getSoulCardsHelper().renderInventorySummary({
     souls,
@@ -838,40 +801,20 @@ function getSoulGlyph(soul) {
 }
 
 async function loadSouls() {
-  const grid = document.getElementById('soulsGrid');
-  if (!grid) {
-    renderOwnedSouls();
-    return;
-  }
-
-  try {
-    const response = await fetchWithTimeout('/api/souls');
-    if (!response.ok) throw new Error('Failed to load soul catalog');
-    const payload = await response.json();
-    const souls = payload.souls || [];
-    soulCatalogCache = souls;
-    renderInventorySummary(souls);
-
-    if (!souls.length) {
-      grid.innerHTML =
-        '<p class="admin-empty">No public souls are listed yet. Use <a href="/create.html">Create</a> to publish the first listing.</p>';
-      renderOwnedSouls();
-      return;
-    }
-
-    grid.innerHTML = getSoulCardsHelper().buildCatalogSoulCardsHtml({
-      souls,
-      isAccessible: isSoulAccessible,
-      listingHrefBuilder: soulListingHref,
-      lineageLabelForSoul: (soul) => formatCreatorLabel(soul?.provenance?.raised_by || '')
-    });
-    renderOwnedSouls();
-  } catch (error) {
-    console.error('Catalog load failed:', error);
-    grid.innerHTML = '<p>Souls are temporarily unavailable. Please try again.</p>';
-    renderInventorySummary([], 'Souls are temporarily unavailable.');
-    renderOwnedSouls();
-  }
+  await getCatalogUiHelper().loadSouls({
+    fetchWithTimeout,
+    soulCardsHelper: getSoulCardsHelper(),
+    soulCatalogCache,
+    setSoulCatalogCache: (next) => {
+      soulCatalogCache = next;
+    },
+    renderInventorySummary,
+    renderOwnedSouls,
+    isSoulAccessible,
+    listingHrefBuilder: soulListingHref,
+    lineageLabelForSoul: (soul) => formatCreatorLabel(soul?.provenance?.raised_by || ''),
+    soulsGridId: 'soulsGrid'
+  });
 }
 
 async function loadModeratorAllowlist() {
