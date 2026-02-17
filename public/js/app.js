@@ -76,6 +76,14 @@ function getStorageHelper() {
   return helper;
 }
 
+function getToastHelper() {
+  const helper = window?.SoulStarterToast;
+  if (!helper || typeof helper.show !== 'function') {
+    throw new Error('Toast helper unavailable');
+  }
+  return helper;
+}
+
 function getUiShell() {
   const helper = window?.SoulStarterUiShell;
   if (!helper) {
@@ -1497,19 +1505,13 @@ async function fetchWithTimeout(url, options = {}, timeout = CONFIG.requestTimeo
 }
 
 function showToast(message, type = 'info') {
-  const container = document.getElementById('toastContainer');
-  if (!container) return;
-
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-  container.appendChild(toast);
-
-  requestAnimationFrame(() => toast.classList.add('show'));
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 300);
-  }, 4000);
+  getToastHelper().show({
+    message,
+    type,
+    containerId: 'toastContainer',
+    durationMs: 4000,
+    removeDelayMs: 300
+  });
 }
 
 function bindWalletOptionHandlers() {

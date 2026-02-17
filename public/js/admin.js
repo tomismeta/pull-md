@@ -21,6 +21,14 @@ function getMcpClient() {
   return client;
 }
 
+function getToastHelper() {
+  const helper = window?.SoulStarterToast;
+  if (!helper || typeof helper.show !== 'function') {
+    throw new Error('Toast helper unavailable');
+  }
+  return helper;
+}
+
 async function mcpToolCall(name, args = {}) {
   return getMcpClient().callTool(name, args, {
     endpoint: MCP_ENDPOINT,
@@ -29,17 +37,13 @@ async function mcpToolCall(name, args = {}) {
 }
 
 function showToast(message, type = 'info') {
-  const container = document.getElementById('toastContainer');
-  if (!container) return;
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-  container.appendChild(toast);
-  requestAnimationFrame(() => toast.classList.add('show'));
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 200);
-  }, 2800);
+  getToastHelper().show({
+    message,
+    type,
+    containerId: 'toastContainer',
+    durationMs: 2800,
+    removeDelayMs: 200
+  });
 }
 
 function initProviderDiscovery() {
