@@ -45,217 +45,159 @@ function fallbackInjectedProvider() {
   return window?.SoulStarterWalletProviders?.fallbackInjectedProvider?.() || null;
 }
 
-function getWalletCommon() {
-  const helper = window?.SoulStarterWalletCommon;
-  if (!helper) {
-    throw new Error('Wallet common helper unavailable');
+const HELPER_SPECS = Object.freeze({
+  walletCommon: {
+    globalName: 'SoulStarterWalletCommon',
+    methods: [],
+    error: 'Wallet common helper unavailable'
+  },
+  walletConnector: {
+    globalName: 'SoulStarterWalletConnect',
+    methods: [],
+    error: 'Wallet connector helper unavailable'
+  },
+  storage: {
+    globalName: 'SoulStarterStorage',
+    methods: [],
+    error: 'Storage helper unavailable'
+  },
+  walletState: {
+    globalName: 'SoulStarterWalletState',
+    methods: [
+      'updateWalletUI',
+      'updateModeratorNavLinks',
+      'ownedSoulSetForWallet',
+      'createdSoulSetForWallet',
+      'isSoulCreated',
+      'isSoulAccessible',
+      'collectStoredProofs',
+      'refreshEntitlementsForWallet',
+      'refreshCreatedSoulsForWallet',
+      'loadModeratorAllowlist'
+    ],
+    error: 'Wallet state helper unavailable'
+  },
+  toast: {
+    globalName: 'SoulStarterToast',
+    methods: ['show'],
+    error: 'Toast helper unavailable'
+  },
+  settlementVerify: {
+    globalName: 'SoulStarterSettlementVerify',
+    methods: ['verifySettlementOnchain', 'formatMicroUsdc'],
+    error: 'Settlement verify helper unavailable'
+  },
+  settlementUi: {
+    globalName: 'SoulStarterSettlementUi',
+    methods: ['readSettlementResponse', 'readSettlementTx', 'renderSettlementVerification'],
+    error: 'Settlement UI helper unavailable'
+  },
+  x402Browser: {
+    globalName: 'SoulStarterX402Browser',
+    methods: ['normalizeAddress', 'createSdkEngine', 'decodePaymentRequiredWithSdk', 'createPaymentPayload'],
+    error: 'x402 browser helper unavailable'
+  },
+  redownload: {
+    globalName: 'SoulStarterRedownloadFlow',
+    methods: ['ensureRedownloadSession', 'attemptRedownload'],
+    error: 'Redownload helper unavailable'
+  },
+  soulCards: {
+    globalName: 'SoulStarterSoulCards',
+    methods: [
+      'escapeHtml',
+      'formatCardDescription',
+      'formatSoulPriceLabel',
+      'getSoulGlyph',
+      'renderInventorySummary',
+      'buildOwnedSoulCardsHtml',
+      'buildCatalogSoulCardsHtml'
+    ],
+    error: 'Soul cards helper unavailable'
+  },
+  catalogUi: {
+    globalName: 'SoulStarterCatalogUi',
+    methods: [
+      'updateSoulPagePurchaseState',
+      'updateSoulDetailMetadata',
+      'hydrateSoulDetailPage',
+      'renderOwnedSouls',
+      'loadSouls'
+    ],
+    error: 'Catalog UI helper unavailable'
+  },
+  downloadDelivery: {
+    globalName: 'SoulStarterDownloadDelivery',
+    methods: ['triggerMarkdownDownload', 'isLikelyMobileBrowser', 'handleMobileDownloadClick'],
+    error: 'Download delivery helper unavailable'
+  },
+  purchaseFlow: {
+    globalName: 'SoulStarterPurchaseFlow',
+    methods: ['createController'],
+    error: 'Purchase flow helper unavailable'
+  },
+  soulDetailUi: {
+    globalName: 'SoulStarterSoulDetailUi',
+    methods: ['soulIdFromLocation', 'soulListingHref', 'formatCreatorLabel', 'updateSoulDetailMetadata', 'updateSoulPagePurchaseState'],
+    error: 'Soul detail UI helper unavailable'
+  },
+  sellerGuard: {
+    globalName: 'SoulStarterSellerGuard',
+    methods: ['normalizeAddress', 'resolveExpectedSellerAddress'],
+    error: 'Seller guard helper unavailable'
+  },
+  network: {
+    globalName: 'SoulStarterNetwork',
+    methods: ['fetchWithTimeout', 'readError'],
+    error: 'Network helper unavailable'
+  },
+  appBootstrap: {
+    globalName: 'SoulStarterAppBootstrap',
+    methods: ['bindWalletOptionHandlers', 'runStartup', 'bindBeforeUnload'],
+    error: 'App bootstrap helper unavailable'
+  },
+  uiShell: {
+    globalName: 'SoulStarterUiShell',
+    methods: [],
+    error: 'UI shell helper unavailable'
+  },
+  siwe: {
+    globalName: 'SoulStarterSiwe',
+    methods: ['buildSoulActionMessage'],
+    error: 'SIWE message helper unavailable'
   }
+});
+
+function requireHelper(specKey) {
+  const spec = HELPER_SPECS[specKey];
+  if (!spec) throw new Error(`Unknown helper spec: ${specKey}`);
+  const helper = window?.[spec.globalName];
+  if (!helper) throw new Error(spec.error);
+  const requiredMethods = Array.isArray(spec.methods) ? spec.methods : [];
+  const missing = requiredMethods.some((methodName) => typeof helper[methodName] !== 'function');
+  if (missing) throw new Error(spec.error);
   return helper;
 }
 
-function getWalletConnector() {
-  const helper = window?.SoulStarterWalletConnect;
-  if (!helper) {
-    throw new Error('Wallet connector helper unavailable');
-  }
-  return helper;
-}
-
-function getStorageHelper() {
-  const helper = window?.SoulStarterStorage;
-  if (!helper) {
-    throw new Error('Storage helper unavailable');
-  }
-  return helper;
-}
-
-function getWalletStateHelper() {
-  const helper = window?.SoulStarterWalletState;
-  if (
-    !helper ||
-    typeof helper.updateWalletUI !== 'function' ||
-    typeof helper.updateModeratorNavLinks !== 'function' ||
-    typeof helper.ownedSoulSetForWallet !== 'function' ||
-    typeof helper.createdSoulSetForWallet !== 'function' ||
-    typeof helper.isSoulCreated !== 'function' ||
-    typeof helper.isSoulAccessible !== 'function' ||
-    typeof helper.collectStoredProofs !== 'function' ||
-    typeof helper.refreshEntitlementsForWallet !== 'function' ||
-    typeof helper.refreshCreatedSoulsForWallet !== 'function' ||
-    typeof helper.loadModeratorAllowlist !== 'function'
-  ) {
-    throw new Error('Wallet state helper unavailable');
-  }
-  return helper;
-}
-
-function getToastHelper() {
-  const helper = window?.SoulStarterToast;
-  if (!helper || typeof helper.show !== 'function') {
-    throw new Error('Toast helper unavailable');
-  }
-  return helper;
-}
-
-function getSettlementVerifier() {
-  const helper = window?.SoulStarterSettlementVerify;
-  if (!helper || typeof helper.verifySettlementOnchain !== 'function' || typeof helper.formatMicroUsdc !== 'function') {
-    throw new Error('Settlement verify helper unavailable');
-  }
-  return helper;
-}
-
-function getSettlementUiHelper() {
-  const helper = window?.SoulStarterSettlementUi;
-  if (
-    !helper ||
-    typeof helper.readSettlementResponse !== 'function' ||
-    typeof helper.readSettlementTx !== 'function' ||
-    typeof helper.renderSettlementVerification !== 'function'
-  ) {
-    throw new Error('Settlement UI helper unavailable');
-  }
-  return helper;
-}
-
-function getX402Helper() {
-  const helper = window?.SoulStarterX402Browser;
-  if (
-    !helper ||
-    typeof helper.normalizeAddress !== 'function' ||
-    typeof helper.createSdkEngine !== 'function' ||
-    typeof helper.decodePaymentRequiredWithSdk !== 'function' ||
-    typeof helper.createPaymentPayload !== 'function'
-  ) {
-    throw new Error('x402 browser helper unavailable');
-  }
-  return helper;
-}
-
-function getRedownloadHelper() {
-  const helper = window?.SoulStarterRedownloadFlow;
-  if (
-    !helper ||
-    typeof helper.ensureRedownloadSession !== 'function' ||
-    typeof helper.attemptRedownload !== 'function'
-  ) {
-    throw new Error('Redownload helper unavailable');
-  }
-  return helper;
-}
-
-function getSoulCardsHelper() {
-  const helper = window?.SoulStarterSoulCards;
-  if (
-    !helper ||
-    typeof helper.escapeHtml !== 'function' ||
-    typeof helper.formatCardDescription !== 'function' ||
-    typeof helper.formatSoulPriceLabel !== 'function' ||
-    typeof helper.getSoulGlyph !== 'function' ||
-    typeof helper.renderInventorySummary !== 'function' ||
-    typeof helper.buildOwnedSoulCardsHtml !== 'function' ||
-    typeof helper.buildCatalogSoulCardsHtml !== 'function'
-  ) {
-    throw new Error('Soul cards helper unavailable');
-  }
-  return helper;
-}
-
-function getCatalogUiHelper() {
-  const helper = window?.SoulStarterCatalogUi;
-  if (
-    !helper ||
-    typeof helper.updateSoulPagePurchaseState !== 'function' ||
-    typeof helper.updateSoulDetailMetadata !== 'function' ||
-    typeof helper.hydrateSoulDetailPage !== 'function' ||
-    typeof helper.renderOwnedSouls !== 'function' ||
-    typeof helper.loadSouls !== 'function'
-  ) {
-    throw new Error('Catalog UI helper unavailable');
-  }
-  return helper;
-}
-
-function getDownloadDeliveryHelper() {
-  const helper = window?.SoulStarterDownloadDelivery;
-  if (
-    !helper ||
-    typeof helper.triggerMarkdownDownload !== 'function' ||
-    typeof helper.isLikelyMobileBrowser !== 'function' ||
-    typeof helper.handleMobileDownloadClick !== 'function'
-  ) {
-    throw new Error('Download delivery helper unavailable');
-  }
-  return helper;
-}
-
-function getPurchaseFlowHelper() {
-  const helper = window?.SoulStarterPurchaseFlow;
-  if (!helper || typeof helper.createController !== 'function') {
-    throw new Error('Purchase flow helper unavailable');
-  }
-  return helper;
-}
-
-function getSoulDetailUiHelper() {
-  const helper = window?.SoulStarterSoulDetailUi;
-  if (
-    !helper ||
-    typeof helper.soulIdFromLocation !== 'function' ||
-    typeof helper.soulListingHref !== 'function' ||
-    typeof helper.formatCreatorLabel !== 'function' ||
-    typeof helper.updateSoulDetailMetadata !== 'function' ||
-    typeof helper.updateSoulPagePurchaseState !== 'function'
-  ) {
-    throw new Error('Soul detail UI helper unavailable');
-  }
-  return helper;
-}
-
-function getSellerGuardHelper() {
-  const helper = window?.SoulStarterSellerGuard;
-  if (!helper || typeof helper.normalizeAddress !== 'function' || typeof helper.resolveExpectedSellerAddress !== 'function') {
-    throw new Error('Seller guard helper unavailable');
-  }
-  return helper;
-}
-
-function getNetworkHelper() {
-  const helper = window?.SoulStarterNetwork;
-  if (!helper || typeof helper.fetchWithTimeout !== 'function' || typeof helper.readError !== 'function') {
-    throw new Error('Network helper unavailable');
-  }
-  return helper;
-}
-
-function getAppBootstrapHelper() {
-  const helper = window?.SoulStarterAppBootstrap;
-  if (
-    !helper ||
-    typeof helper.bindWalletOptionHandlers !== 'function' ||
-    typeof helper.runStartup !== 'function' ||
-    typeof helper.bindBeforeUnload !== 'function'
-  ) {
-    throw new Error('App bootstrap helper unavailable');
-  }
-  return helper;
-}
-
-function getUiShell() {
-  const helper = window?.SoulStarterUiShell;
-  if (!helper) {
-    throw new Error('UI shell helper unavailable');
-  }
-  return helper;
-}
-
-function getSiweBuilder() {
-  const helper = window?.SoulStarterSiwe;
-  if (!helper || typeof helper.buildSoulActionMessage !== 'function') {
-    throw new Error('SIWE message helper unavailable');
-  }
-  return helper;
-}
+function getWalletCommon() { return requireHelper('walletCommon'); }
+function getWalletConnector() { return requireHelper('walletConnector'); }
+function getStorageHelper() { return requireHelper('storage'); }
+function getWalletStateHelper() { return requireHelper('walletState'); }
+function getToastHelper() { return requireHelper('toast'); }
+function getSettlementVerifier() { return requireHelper('settlementVerify'); }
+function getSettlementUiHelper() { return requireHelper('settlementUi'); }
+function getX402Helper() { return requireHelper('x402Browser'); }
+function getRedownloadHelper() { return requireHelper('redownload'); }
+function getSoulCardsHelper() { return requireHelper('soulCards'); }
+function getCatalogUiHelper() { return requireHelper('catalogUi'); }
+function getDownloadDeliveryHelper() { return requireHelper('downloadDelivery'); }
+function getPurchaseFlowHelper() { return requireHelper('purchaseFlow'); }
+function getSoulDetailUiHelper() { return requireHelper('soulDetailUi'); }
+function getSellerGuardHelper() { return requireHelper('sellerGuard'); }
+function getNetworkHelper() { return requireHelper('network'); }
+function getAppBootstrapHelper() { return requireHelper('appBootstrap'); }
+function getUiShell() { return requireHelper('uiShell'); }
+function getSiweBuilder() { return requireHelper('siwe'); }
 
 function getPurchaseFlowController() {
   if (purchaseFlowController) return purchaseFlowController;
