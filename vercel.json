@@ -7,6 +7,14 @@
   },
   "routes": [
     {
+      "src": "/mcp",
+      "dest": "/api/mcp/index.js"
+    },
+    {
+      "src": "/api/mcp",
+      "dest": "/api/mcp/index.js"
+    },
+    {
       "src": "/api/mcp/manifest",
       "dest": "/api/mcp/manifest.js"
     },

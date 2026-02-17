@@ -1,3 +1,5 @@
+import { getMcpToolsForManifest } from '../_lib/mcp_tools.js';
+
 export default function handler(req, res) {
   const allowedOrigins = [
     'https://soulstarter.vercel.app',
@@ -17,6 +19,8 @@ export default function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
+
+  const tools = getMcpToolsForManifest();
 
   return res.status(200).json({
     schema_version: 'v1',
@@ -87,117 +91,13 @@ export default function handler(req, res) {
       bankr_note:
         'Bankr EIP-3009 signatures may fail USDC contract verification in this flow (FiatTokenV2: invalid signature). Prefer EmblemVault until upstream signer compatibility is fixed.'
     },
-    tools: [
-      {
-        name: 'list_souls',
-        description: 'List available souls and pricing',
-        endpoint: '/api/mcp/tools/list_souls',
-        method: 'GET',
-        returns: { type: 'object', description: 'Soul list with metadata and pricing' }
-      },
-      {
-        name: 'get_soul_details',
-        description: 'Get full metadata, auth message examples, and purchase endpoint for one soul',
-        endpoint: '/api/mcp/tools/get_soul_details',
-        method: 'GET',
-        parameters: {
-          id: { type: 'string', required: true, description: 'Soul identifier' }
-        },
-        returns: { type: 'object', description: 'Soul details and x402 interaction contract' }
-      },
-      {
-        name: 'check_entitlements',
-        description: 'Verify receipt proofs for wallet re-download entitlement',
-        endpoint: '/api/mcp/tools/check_entitlements',
-        method: 'POST',
-        parameters: {
-          wallet_address: { type: 'string', required: true, description: 'Wallet to check' },
-          proofs: { type: 'array', required: true, description: 'List of { soul_id, receipt } proofs' }
-        },
-        returns: { type: 'object', description: 'Per-proof entitlement status' }
-      },
-      {
-        name: 'get_listing_template',
-        description: 'Get immediate publish payload template for creator soul listings',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'GET',
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=get_listing_template' }
-        },
-        returns: { type: 'object', description: 'Template payload for immediate creator publish contract' }
-      },
-      {
-        name: 'publish_listing',
-        description: 'Creator-auth immediate publish. Returns shareable soul URL and purchase endpoint.',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'POST',
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=publish_listing' },
-          wallet_address: { type: 'string', required: true, description: 'Creator wallet address' },
-          auth_signature: { type: 'string', required: true, description: 'Wallet signature over creator auth message' },
-          auth_timestamp: { type: 'number', required: true, description: 'Unix ms timestamp used in auth message' },
-          listing: { type: 'object', required: true, description: 'Minimal publish payload: name, price_usdc, description, soul_markdown' }
-        },
-        returns: { type: 'object', description: 'Published listing summary + share_url + purchase endpoint' }
-      },
-      {
-        name: 'list_my_published_listings',
-        description: 'List creator-owned published listings (including hidden listings)',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'GET',
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=list_my_published_listings' }
-        },
-        auth_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
-        returns: { type: 'object', description: 'Wallet-scoped list of published listing summaries' }
-      },
-      {
-        name: 'list_published_listings',
-        description: 'Public list of currently visible published listings',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'GET',
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=list_published_listings' }
-        },
-        returns: { type: 'object', description: 'Public listing summaries for discoverability and purchase' }
-      },
-      {
-        name: 'list_moderators',
-        description: 'List allowlisted moderator wallet addresses',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'GET',
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=list_moderators' }
-        },
-        returns: { type: 'object', description: 'Allowlisted moderator wallet addresses' }
-      },
-      {
-        name: 'list_moderation_listings',
-        description: 'Moderator-only list of visible and hidden listings',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'GET',
-        admin_only: true,
-        auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=list_moderation_listings' }
-        },
-        returns: { type: 'object', description: 'Listing partitions for moderation visibility actions' }
-      },
-      {
-        name: 'remove_listing_visibility',
-        description: 'Moderator-only action to remove a listing from public visibility',
-        endpoint: '/api/mcp/tools/creator_marketplace',
-        method: 'POST',
-        admin_only: true,
-        auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
-        parameters: {
-          action: { type: 'string', required: true, description: 'Set action=remove_listing_visibility' },
-          soul_id: { type: 'string', required: true, description: 'Published soul identifier to hide' },
-          reason: { type: 'string', required: false, description: 'Optional moderation reason for audit trail' }
-        },
-        returns: { type: 'object', description: 'Updated listing visibility state' }
-      }
-    ],
+    mcp: {
+      endpoint: '/mcp',
+      transport: 'streamable_http',
+      protocol_version: '2025-06-18',
+      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call']
+    },
+    tools,
     download_contract: {
       canonical_base_url: 'https://soulstarter.vercel.app',
       endpoint_pattern: '/api/souls/{id}/download',
