@@ -87,6 +87,19 @@ function getSettlementVerifier() {
   return helper;
 }
 
+function getSettlementUiHelper() {
+  const helper = window?.SoulStarterSettlementUi;
+  if (
+    !helper ||
+    typeof helper.readSettlementResponse !== 'function' ||
+    typeof helper.readSettlementTx !== 'function' ||
+    typeof helper.renderSettlementVerification !== 'function'
+  ) {
+    throw new Error('Settlement UI helper unavailable');
+  }
+  return helper;
+}
+
 function getX402Helper() {
   const helper = window?.SoulStarterX402Browser;
   if (
@@ -797,18 +810,11 @@ async function downloadOwnedSoul(soulId) {
 }
 
 function readSettlementTx(response) {
-  const payload = readSettlementResponse(response);
-  return payload?.transaction || null;
+  return getSettlementUiHelper().readSettlementTx(response);
 }
 
 function readSettlementResponse(response) {
-  const header = response.headers.get('PAYMENT-RESPONSE');
-  if (!header) return null;
-  try {
-    return JSON.parse(atob(header));
-  } catch (_) {
-    return null;
-  }
+  return getSettlementUiHelper().readSettlementResponse(response);
 }
 
 function normalizeAddressLower(value) {
@@ -831,58 +837,11 @@ function shortenAddress(value) {
 
 function renderSettlementVerification(view) {
   const panel = document.getElementById('settlementVerification');
-  if (!panel) return;
-  if (!view || view.phase === 'hidden') {
-    panel.style.display = 'none';
-    panel.className = 'settlement-verification';
-    panel.innerHTML = '';
-    return;
-  }
-
-  panel.style.display = 'block';
-  if (view.phase === 'pending') {
-    panel.className = 'settlement-verification settlement-verification-pending';
-    panel.innerHTML = `
-      <div class="settlement-verification-header">
-        <strong>Verifying settlement</strong>
-      </div>
-      <p>Confirming on-chain USDC transfer details.</p>
-    `;
-    return;
-  }
-
-  if (view.phase === 'verified') {
-    const actual = view.actual || {};
-    panel.className = 'settlement-verification settlement-verification-ok';
-    panel.innerHTML = `
-      <div class="settlement-verification-header">
-        <strong>Verified settlement</strong>
-        <span class="verification-pill verification-pill-ok">Verified</span>
-      </div>
-      <p>This transaction matches SoulStarter payment expectations.</p>
-      <dl class="verification-grid">
-        <dt>Payer</dt><dd>${escapeHtml(shortenAddress(actual.from || view.expected?.payer || '-'))}</dd>
-        <dt>Pay To</dt><dd>${escapeHtml(shortenAddress(actual.to || view.expected?.payTo || '-'))}</dd>
-        <dt>Amount</dt><dd>${escapeHtml(formatMicroUsdc(actual.amount || view.expected?.amount || null))}</dd>
-        <dt>Token</dt><dd>${escapeHtml(shortenAddress(view.expected?.token || '-'))}</dd>
-      </dl>
-    `;
-    return;
-  }
-
-  panel.className = 'settlement-verification settlement-verification-warn';
-  panel.innerHTML = `
-    <div class="settlement-verification-header">
-      <strong>Settlement not verified</strong>
-      <span class="verification-pill verification-pill-warn">Check manually</span>
-    </div>
-    <p>${escapeHtml(view.reason || 'Transaction details did not match expected settlement fields.')}</p>
-    <dl class="verification-grid">
-      <dt>Expected Pay To</dt><dd>${escapeHtml(shortenAddress(view.expected?.payTo || '-'))}</dd>
-      <dt>Expected Amount</dt><dd>${escapeHtml(formatMicroUsdc(view.expected?.amount || null))}</dd>
-      <dt>Expected Token</dt><dd>${escapeHtml(shortenAddress(view.expected?.token || '-'))}</dd>
-    </dl>
-  `;
+  getSettlementUiHelper().renderSettlementVerification(panel, view, {
+    escapeHtml,
+    shortenAddress,
+    formatMicroUsdc
+  });
 }
 
 async function verifySettlementOnchain(txHash, expectedSettlement) {
