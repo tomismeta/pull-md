@@ -34,7 +34,6 @@ let activeSuccessDownloadUrl = null;
 let latestSoulDownload = null;
 let settlementVerificationSequence = 0;
 let currentSoulDetailId = null;
-let x402SdkModulesPromise = null;
 
 function initProviderDiscovery() {
   window?.SoulStarterWalletProviders?.initDiscovery?.();
@@ -84,6 +83,20 @@ function getSettlementVerifier() {
   const helper = window?.SoulStarterSettlementVerify;
   if (!helper || typeof helper.verifySettlementOnchain !== 'function' || typeof helper.formatMicroUsdc !== 'function') {
     throw new Error('Settlement verify helper unavailable');
+  }
+  return helper;
+}
+
+function getX402Helper() {
+  const helper = window?.SoulStarterX402Browser;
+  if (
+    !helper ||
+    typeof helper.normalizeAddress !== 'function' ||
+    typeof helper.createSdkEngine !== 'function' ||
+    typeof helper.decodePaymentRequiredWithSdk !== 'function' ||
+    typeof helper.createPaymentPayload !== 'function'
+  ) {
+    throw new Error('x402 browser helper unavailable');
   }
   return helper;
 }
@@ -565,11 +578,7 @@ async function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
 }
 
 function normalizeAddress(address) {
-  try {
-    return ethers.getAddress(String(address || '').trim());
-  } catch (_) {
-    return null;
-  }
+  return getX402Helper().normalizeAddress(address);
 }
 
 function assertExpectedSellerAddress(payTo, expectedPayTo) {
@@ -634,135 +643,41 @@ async function ensureRedownloadSession() {
   return { token, expiresAtMs };
 }
 
-function normalizeTypedDataTypesForEthers(types) {
-  const source = types && typeof types === 'object' ? types : {};
-  const result = {};
-  for (const [key, value] of Object.entries(source)) {
-    if (key === 'EIP712Domain') continue;
-    result[key] = value;
-  }
-  return result;
-}
-
-async function loadX402SdkModules() {
-  if (!x402SdkModulesPromise) {
-    x402SdkModulesPromise = Promise.all([
-      import(`https://esm.sh/@x402/fetch@${X402_FETCH_SDK_VERSION}?bundle`),
-      import(`https://esm.sh/@x402/evm@${X402_EVM_SDK_VERSION}?bundle`)
-    ]).then(([fetchSdk, evmSdk]) => ({
-      x402Client: fetchSdk.x402Client,
-      x402HTTPClient: fetchSdk.x402HTTPClient,
-      ExactEvmScheme: evmSdk.ExactEvmScheme,
-      toClientEvmSigner: evmSdk.toClientEvmSigner
-    }));
-  }
-  return x402SdkModulesPromise;
-}
-
-function selectPaymentRequirement({
-  accepts,
-  expectedSeller,
-  preferredAssetTransferMethod = 'eip3009'
-}) {
-  const options = Array.isArray(accepts) ? accepts : [];
-  if (options.length === 0) {
-    throw new Error('No payment requirements available');
-  }
-  const expected = normalizeAddress(expectedSeller || EXPECTED_SELLER_ADDRESS);
-  const sellerMatches = options.filter((option) => normalizeAddress(option?.payTo) === expected);
-  if (expected && sellerMatches.length === 0) {
-    throw new Error(
-      `Security check failed: payment recipient mismatch. Expected ${expected}. Do not continue.`
-    );
-  }
-  const method = String(preferredAssetTransferMethod || 'eip3009').trim().toLowerCase();
-  const target = method === 'permit2' ? 'permit2' : 'eip3009';
-  const preferredMatches = (sellerMatches.length ? sellerMatches : options).filter(
-    (option) => String(option?.extra?.assetTransferMethod || 'eip3009').toLowerCase() === target
-  );
-  if (preferredMatches.length > 0) return preferredMatches[0];
-  const available = [...new Set((sellerMatches.length ? sellerMatches : options).map((option) =>
-    String(option?.extra?.assetTransferMethod || 'eip3009').toLowerCase()
-  ))];
-  throw new Error(
-    `No ${target} payment option available for this quote. Available methods: ${available.join(', ') || 'none'}.`
-  );
-}
-
 async function createX402SdkEngine({
   wallet,
   activeSigner,
   expectedSeller,
   preferredAssetTransferMethod = 'eip3009'
 }) {
-  const sdk = await loadX402SdkModules();
-  const clientSigner = sdk.toClientEvmSigner({
-    address: wallet,
-    signTypedData: async ({ domain, types, message }) => {
-      const normalizedTypes = normalizeTypedDataTypesForEthers(types);
-      return activeSigner.signTypedData(domain || {}, normalizedTypes, message || {});
-    }
+  return getX402Helper().createSdkEngine({
+    wallet,
+    signer: activeSigner,
+    expectedSeller,
+    defaultExpectedSeller: EXPECTED_SELLER_ADDRESS,
+    preferredAssetTransferMethod,
+    fetchSdkVersion: X402_FETCH_SDK_VERSION,
+    evmSdkVersion: X402_EVM_SDK_VERSION
   });
-  const paymentRequirementsSelector = (_version, accepts) =>
-    selectPaymentRequirement({
-      accepts,
-      expectedSeller,
-      preferredAssetTransferMethod
-    });
-  const client = sdk.x402Client.fromConfig({
-    schemes: [
-      {
-        network: 'eip155:*',
-        client: new sdk.ExactEvmScheme(clientSigner)
-      }
-    ],
-    paymentRequirementsSelector
-  });
-  return {
-    client,
-    httpClient: new sdk.x402HTTPClient(client)
-  };
 }
 
 async function decodePaymentRequiredWithSdk(response, httpClient) {
-  let body;
-  try {
-    const text = await response.clone().text();
-    if (text) {
-      body = JSON.parse(text);
-    }
-  } catch (_) {}
-  return httpClient.getPaymentRequiredResponse((name) => response.headers.get(name), body);
+  return getX402Helper().decodePaymentRequiredWithSdk(response, httpClient);
 }
 
 async function buildX402PaymentSignature(paymentRequired, soulId, x402Engine = null) {
-  if (!paymentRequired || paymentRequired.x402Version !== 2) {
-    throw new Error('Unsupported x402 version');
-  }
-  const accepted = Array.isArray(paymentRequired.accepts) ? paymentRequired.accepts : [];
-  if (accepted.length === 0) {
-    throw new Error('No payment requirements available');
-  }
   const expectedSeller = await getExpectedSellerAddressForSoul(soulId);
-  const selected = selectPaymentRequirement({
-    accepts: accepted,
+  const result = await getX402Helper().createPaymentPayload({
+    paymentRequired,
     expectedSeller,
-    preferredAssetTransferMethod: 'eip3009'
+    defaultExpectedSeller: EXPECTED_SELLER_ADDRESS,
+    preferredAssetTransferMethod: 'eip3009',
+    engine: x402Engine,
+    wallet: walletAddress,
+    signer,
+    fetchSdkVersion: X402_FETCH_SDK_VERSION,
+    evmSdkVersion: X402_EVM_SDK_VERSION
   });
-  const engine =
-    x402Engine ||
-    (await createX402SdkEngine({
-      wallet: walletAddress,
-      activeSigner: signer,
-      expectedSeller,
-      preferredAssetTransferMethod: 'eip3009'
-    }));
-
-  const normalizedPaymentRequired = {
-    ...paymentRequired,
-    accepts: [selected]
-  };
-  return engine.client.createPaymentPayload(normalizedPaymentRequired);
+  return result.payload;
 }
 
 async function tryRedownload(soulId) {
