@@ -17,9 +17,6 @@ const SIWE_URI = 'https://soulstarter.vercel.app';
 const X402_FETCH_SDK_VERSION = '2.3.0';
 const X402_EVM_SDK_VERSION = '2.3.1';
 const EXPECTED_SELLER_ADDRESS = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
-const BASE_PUBLIC_RPC_URL = 'https://mainnet.base.org';
-const ERC20_TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
-const ERC20_TRANSFER_IFACE = new ethers.Interface(['event Transfer(address indexed from,address indexed to,uint256 value)']);
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 const RECEIPT_PREFIX = 'soulstarter.receipt.';
 const REDOWNLOAD_SESSION_PREFIX = 'soulstarter.redownload.session.';
@@ -35,7 +32,6 @@ let walletAddress = null;
 let walletType = null;
 let activeSuccessDownloadUrl = null;
 let latestSoulDownload = null;
-let baseRpcProvider = null;
 let settlementVerificationSequence = 0;
 let currentSoulDetailId = null;
 let x402SdkModulesPromise = null;
@@ -80,6 +76,14 @@ function getToastHelper() {
   const helper = window?.SoulStarterToast;
   if (!helper || typeof helper.show !== 'function') {
     throw new Error('Toast helper unavailable');
+  }
+  return helper;
+}
+
+function getSettlementVerifier() {
+  const helper = window?.SoulStarterSettlementVerify;
+  if (!helper || typeof helper.verifySettlementOnchain !== 'function' || typeof helper.formatMicroUsdc !== 'function') {
+    throw new Error('Settlement verify helper unavailable');
   }
   return helper;
 }
@@ -967,13 +971,6 @@ function readSettlementResponse(response) {
   }
 }
 
-function getBaseRpcProvider() {
-  if (!baseRpcProvider) {
-    baseRpcProvider = new ethers.JsonRpcProvider(BASE_PUBLIC_RPC_URL);
-  }
-  return baseRpcProvider;
-}
-
 function normalizeAddressLower(value) {
   try {
     return ethers.getAddress(String(value || '').trim()).toLowerCase();
@@ -982,25 +979,8 @@ function normalizeAddressLower(value) {
   }
 }
 
-function parseBigInt(value) {
-  try {
-    if (value === null || value === undefined || value === '') return null;
-    return BigInt(String(value));
-  } catch (_) {
-    return null;
-  }
-}
-
-function isTransactionHash(value) {
-  return /^0x[a-fA-F0-9]{64}$/.test(String(value || ''));
-}
-
 function formatMicroUsdc(value) {
-  const amount = parseBigInt(value);
-  if (amount === null) return '-';
-  const whole = amount / 1000000n;
-  const fractional = (amount % 1000000n).toString().padStart(6, '0').replace(/0+$/, '');
-  return fractional ? `${whole}.${fractional} USDC` : `${whole} USDC`;
+  return getSettlementVerifier().formatMicroUsdc(value);
 }
 
 function shortenAddress(value) {
@@ -1066,74 +1046,7 @@ function renderSettlementVerification(view) {
 }
 
 async function verifySettlementOnchain(txHash, expectedSettlement) {
-  const expected = {
-    token: normalizeAddressLower(expectedSettlement?.token),
-    payTo: normalizeAddressLower(expectedSettlement?.payTo),
-    payer: normalizeAddressLower(expectedSettlement?.payer),
-    amount: parseBigInt(expectedSettlement?.amount),
-    network: String(expectedSettlement?.network || '')
-  };
-
-  if (!isTransactionHash(txHash)) {
-    return { verified: false, reason: 'Missing or invalid transaction hash.', expected };
-  }
-
-  if (expected.network && expected.network !== 'eip155:8453') {
-    return { verified: false, reason: `Unexpected network: ${expected.network}`, expected };
-  }
-
-  const receipt = await getBaseRpcProvider().getTransactionReceipt(txHash);
-  if (!receipt) {
-    return { verified: false, reason: 'Transaction receipt not found yet.', expected };
-  }
-  if (Number(receipt.status) !== 1) {
-    return { verified: false, reason: 'Transaction reverted on-chain.', expected };
-  }
-
-  const transfers = [];
-  for (const log of receipt.logs || []) {
-    if (normalizeAddressLower(log.address) !== expected.token) continue;
-    if (!Array.isArray(log.topics) || String(log.topics[0] || '').toLowerCase() !== ERC20_TRANSFER_TOPIC.toLowerCase()) continue;
-    try {
-      const parsed = ERC20_TRANSFER_IFACE.parseLog(log);
-      if (!parsed || parsed.name !== 'Transfer') continue;
-      transfers.push({
-        from: normalizeAddressLower(parsed.args.from),
-        to: normalizeAddressLower(parsed.args.to),
-        amount: parseBigInt(parsed.args.value)
-      });
-    } catch (_) {}
-  }
-
-  if (!transfers.length) {
-    return { verified: false, reason: 'No USDC transfer log found for expected token in this transaction.', expected };
-  }
-
-  const exact = transfers.find((entry) => {
-    if (!entry.from || !entry.to || entry.amount === null) return false;
-    if (expected.payTo && entry.to !== expected.payTo) return false;
-    if (expected.payer && entry.from !== expected.payer) return false;
-    if (expected.amount !== null && entry.amount < expected.amount) return false;
-    return true;
-  });
-
-  if (exact) {
-    return { verified: true, expected, actual: exact };
-  }
-
-  const mismatch = [];
-  const best = transfers[0];
-  if (expected.payTo && !transfers.some((entry) => entry.to === expected.payTo)) mismatch.push('seller address mismatch');
-  if (expected.payer && !transfers.some((entry) => entry.from === expected.payer)) mismatch.push('payer mismatch');
-  if (expected.amount !== null && !transfers.some((entry) => entry.amount !== null && entry.amount >= expected.amount)) {
-    mismatch.push('amount below expected value');
-  }
-  return {
-    verified: false,
-    expected,
-    actual: best || null,
-    reason: mismatch.length ? mismatch.join('; ') : 'Transfer log found but fields did not match expected payment details.'
-  };
+  return getSettlementVerifier().verifySettlementOnchain(txHash, expectedSettlement);
 }
 
 async function readError(response) {
