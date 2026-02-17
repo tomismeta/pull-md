@@ -44,7 +44,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 `Accept: application/json, text/event-stream`
 
 - `GET /api/mcp/manifest`
-- `POST /mcp` (JSON-RPC streamable HTTP endpoint)
+- `POST /mcp` (JSON-RPC streamable HTTP endpoint, implemented with `@modelcontextprotocol/sdk`)
 - `POST /mcp` + `tools/call` `name=list_souls`
 - `POST /mcp` + `tools/call` `name=get_soul_details` (`arguments: { "id": "<soul_id>" }`)
 - `POST /mcp` + `tools/call` `name=check_entitlements`
