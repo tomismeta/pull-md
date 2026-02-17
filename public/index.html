@@ -129,24 +129,28 @@
       <div class="container">
         <div class="agent-api-card">
           <h3>For Agents</h3>
-          <p>Strict WebMCP for headless agents with canonical x402 purchase and re-download paths.</p>
+          <p>Use Streamable HTTP MCP for tool orchestration and canonical x402 for purchase + re-download.</p>
           <div class="agent-quickstart">
             <p><strong>Quickstart</strong></p>
+            <code>POST /mcp</code>
             <code>GET /api/mcp/manifest</code>
-            <code>GET /api/souls</code>
             <code>GET /api/souls/{id}/download</code>
           </div>
-          <pre class="hero-code-block">WebMCP manifest
+          <pre class="hero-code-block">MCP transport (Streamable HTTP)
+POST /mcp
+JSON-RPC methods: initialize, ping, tools/list, tools/call
+
+MCP discovery manifest
 GET /api/mcp/manifest
 
-Canonical purchase + re-download
+Canonical x402 purchase + re-download
 GET /api/souls/{id}/download
 
 Strict agent headers
 X-CLIENT-MODE: agent
 X-WALLET-ADDRESS: 0x...
 
-Full contract and error handling
+Full contract + errors
 GET /WEBMCP.md</pre>
           <div class="agent-api-actions">
             <a href="/api/mcp/manifest" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Open MCP Manifest</a>
