@@ -16,7 +16,7 @@
     if (!text) return 'Creator';
     const match = text.match(/0x[a-fA-F0-9]{40}/);
     if (match) {
-      return `Creator ${shortenAddress(match[1])}`;
+      return `Creator ${shortenAddress(match[0])}`;
     }
     if (/^0x[a-fA-F0-9]{40}$/.test(text)) {
       return `Creator ${shortenAddress(text)}`;
