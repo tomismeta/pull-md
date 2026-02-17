@@ -62,6 +62,14 @@ function getWalletCommon() {
   return helper;
 }
 
+function getUiShell() {
+  const helper = window?.SoulStarterUiShell;
+  if (!helper) {
+    throw new Error('UI shell helper unavailable');
+  }
+  return helper;
+}
+
 function getSiweBuilder() {
   const helper = window?.SoulStarterSiwe;
   if (!helper || typeof helper.buildScopedMessage !== 'function') {
@@ -123,13 +131,11 @@ function escapeHtml(value) {
 }
 
 function openWalletModal() {
-  const modal = document.getElementById('walletModal');
-  if (modal) modal.style.display = 'flex';
+  getUiShell().openModal('walletModal');
 }
 
 function closeWalletModal() {
-  const modal = document.getElementById('walletModal');
-  if (modal) modal.style.display = 'none';
+  getUiShell().closeModal('walletModal');
 }
 
 function setWalletOptionsDisabled(disabled) {
@@ -485,37 +491,10 @@ function bindWalletChoiceHandlers() {
 }
 
 function initMobileNav() {
-  const toggle = document.getElementById('navToggle');
-  const nav = document.getElementById('topNav');
-  if (!toggle || !nav) return;
-
-  const closeNav = () => {
-    nav.classList.remove('open');
-    toggle.setAttribute('aria-expanded', 'false');
-  };
-
-  toggle.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const nextOpen = !nav.classList.contains('open');
-    nav.classList.toggle('open', nextOpen);
-    toggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
-  });
-
-  nav.querySelectorAll('a, button').forEach((item) => {
-    item.addEventListener('click', () => {
-      if (window.innerWidth <= 760) closeNav();
-    });
-  });
-
-  document.addEventListener('click', (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (!nav.contains(target) && !toggle.contains(target)) closeNav();
-  });
-
-  window.addEventListener('resize', () => {
-    if (window.innerWidth > 760) closeNav();
+  getUiShell().initMobileNav({
+    toggleId: 'navToggle',
+    navId: 'topNav',
+    mobileMaxWidth: 760
   });
 }
 
