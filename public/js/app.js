@@ -101,6 +101,18 @@ function getX402Helper() {
   return helper;
 }
 
+function getRedownloadHelper() {
+  const helper = window?.SoulStarterRedownloadFlow;
+  if (
+    !helper ||
+    typeof helper.ensureRedownloadSession !== 'function' ||
+    typeof helper.attemptRedownload !== 'function'
+  ) {
+    throw new Error('Redownload helper unavailable');
+  }
+  return helper;
+}
+
 function getUiShell() {
   const helper = window?.SoulStarterUiShell;
   if (!helper) {
@@ -610,39 +622,6 @@ async function getExpectedSellerAddressForSoul(soulId) {
   }
 }
 
-async function ensureRedownloadSession() {
-  if (!walletAddress || !signer) throw new Error('Connect your wallet first');
-  const existing = getStoredRedownloadSession(walletAddress);
-  if (existing) return existing;
-
-  const timestamp = Date.now();
-  const siwe = await buildSiweAuthMessage({
-    wallet: walletAddress,
-    soulId: '*',
-    action: 'session',
-    timestamp
-  });
-  const signature = await signer.signMessage(siwe);
-  const response = await fetchWithTimeout(`${CONFIG.apiBase}/auth/session`, {
-    method: 'GET',
-    headers: {
-      'X-WALLET-ADDRESS': walletAddress,
-      'X-AUTH-SIGNATURE': signature,
-      'X-AUTH-TIMESTAMP': String(timestamp),
-      Accept: 'application/json'
-    }
-  });
-  if (!response.ok) {
-    const error = await readError(response);
-    throw new Error(error || 'Session authentication failed');
-  }
-  const body = await response.json().catch(() => ({}));
-  const token = response.headers.get('X-REDOWNLOAD-SESSION') || body?.token || null;
-  const expiresAtMs = Number(body?.expires_at_ms || Date.now() + 10 * 60 * 1000);
-  if (token) storeRedownloadSession(walletAddress, token, expiresAtMs);
-  return { token, expiresAtMs };
-}
-
 async function createX402SdkEngine({
   wallet,
   activeSigner,
@@ -681,67 +660,24 @@ async function buildX402PaymentSignature(paymentRequired, soulId, x402Engine = n
 }
 
 async function tryRedownload(soulId) {
-  if (!walletAddress || !signer) return { ok: false, requiresPayment: true };
-
-  const receipt = getStoredReceipt(soulId, walletAddress);
-  const createdAccess = isSoulCreated(soulId);
-  if (!receipt && !createdAccess) return { ok: false, requiresPayment: true };
-  const activeSession = getStoredRedownloadSession(walletAddress);
-  const passiveHeaders = {
-    'X-WALLET-ADDRESS': walletAddress,
-    Accept: 'text/markdown'
-  };
-  if (receipt) passiveHeaders['X-PURCHASE-RECEIPT'] = receipt;
-  if (activeSession?.token) passiveHeaders['X-REDOWNLOAD-SESSION'] = activeSession.token;
-
-  const passive = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
-    method: 'GET',
-    headers: passiveHeaders
+  return getRedownloadHelper().attemptRedownload({
+    soulId,
+    wallet: walletAddress,
+    signer,
+    apiBase: CONFIG.apiBase,
+    fetchWithTimeout,
+    readError,
+    getStoredReceipt,
+    storeReceipt,
+    hasCreatorAccess: isSoulCreated,
+    getStoredSession: getStoredRedownloadSession,
+    storeSession: storeRedownloadSession,
+    buildSiweAuthMessage,
+    readSettlementTx,
+    onSuccess: ({ content, tx, soulId: successSoulId }) => {
+      showPaymentSuccess(content, tx, successSoulId, true);
+    }
   });
-
-  if (passive.ok) {
-    const content = await passive.text();
-    const tx = readSettlementTx(passive);
-    const refreshedReceipt = passive.headers.get('X-PURCHASE-RECEIPT');
-    if (refreshedReceipt) storeReceipt(soulId, walletAddress, refreshedReceipt);
-    showPaymentSuccess(content, tx, soulId, true);
-    return { ok: true };
-  }
-
-  if (passive.status !== 401 && passive.status !== 402) {
-    const error = await readError(passive);
-    throw new Error(error || 'Re-download failed');
-  }
-
-  // One-time wallet session bootstrap, then retry wallet entitlement download.
-  await ensureRedownloadSession();
-  const refreshedSession = getStoredRedownloadSession(walletAddress);
-  const retryHeaders = {
-    'X-WALLET-ADDRESS': walletAddress,
-    Accept: 'text/markdown'
-  };
-  if (receipt) retryHeaders['X-PURCHASE-RECEIPT'] = receipt;
-  if (refreshedSession?.token) retryHeaders['X-REDOWNLOAD-SESSION'] = refreshedSession.token;
-
-  const signed = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
-    method: 'GET',
-    headers: retryHeaders
-  });
-
-  if (signed.ok) {
-    const content = await signed.text();
-    const tx = readSettlementTx(signed);
-    const refreshedReceipt = signed.headers.get('X-PURCHASE-RECEIPT');
-    if (refreshedReceipt) storeReceipt(soulId, walletAddress, refreshedReceipt);
-    showPaymentSuccess(content, tx, soulId, true);
-    return { ok: true };
-  }
-
-  if (signed.status === 401 || signed.status === 402) {
-    return { ok: false, requiresPayment: true };
-  }
-  const error = await readError(signed);
-  throw new Error(error || 'Re-download failed');
 }
 
 async function purchaseSoul(soulId) {
