@@ -171,6 +171,14 @@ function getSoulDetailUiHelper() {
   return helper;
 }
 
+function getSellerGuardHelper() {
+  const helper = window?.SoulStarterSellerGuard;
+  if (!helper || typeof helper.normalizeAddress !== 'function' || typeof helper.resolveExpectedSellerAddress !== 'function') {
+    throw new Error('Seller guard helper unavailable');
+  }
+  return helper;
+}
+
 function getUiShell() {
   const helper = window?.SoulStarterUiShell;
   if (!helper) {
@@ -565,36 +573,16 @@ async function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
 }
 
 function normalizeAddress(address) {
-  return getX402Helper().normalizeAddress(address);
-}
-
-function assertExpectedSellerAddress(payTo, expectedPayTo) {
-  const expected = normalizeAddress(expectedPayTo || EXPECTED_SELLER_ADDRESS);
-  const actual = normalizeAddress(payTo);
-  if (!expected || !actual) {
-    throw new Error('Invalid seller address in payment requirements');
-  }
-  if (expected !== actual) {
-    throw new Error(
-      `Security check failed: payment recipient mismatch. Expected ${expected}, got ${actual}. Do not continue.`
-    );
-  }
+  return getSellerGuardHelper().normalizeAddress(address);
 }
 
 async function getExpectedSellerAddressForSoul(soulId) {
-  if (sellerAddressCache.has(soulId)) {
-    return sellerAddressCache.get(soulId);
-  }
-  try {
-    const payload = await mcpToolCall('get_soul_details', { id: soulId });
-    const seller = payload?.soul?.seller_address;
-    const normalized = normalizeAddress(seller || EXPECTED_SELLER_ADDRESS);
-    if (!normalized) throw new Error('invalid seller');
-    sellerAddressCache.set(soulId, normalized);
-    return normalized;
-  } catch (_) {
-    return normalizeAddress(EXPECTED_SELLER_ADDRESS);
-  }
+  return getSellerGuardHelper().resolveExpectedSellerAddress({
+    soulId,
+    defaultSellerAddress: EXPECTED_SELLER_ADDRESS,
+    cache: sellerAddressCache,
+    fetchSoulDetails: (id) => mcpToolCall('get_soul_details', { id })
+  });
 }
 
 async function createX402SdkEngine({
