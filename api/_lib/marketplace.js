@@ -649,6 +649,24 @@ function buildSiweNonce({ scope, action, timestamp }) {
   return crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
 }
 
+function parseAuthTimestamp(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const raw = String(value || '').trim();
+  if (!raw) return Number.NaN;
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) return numeric;
+  const iso = Date.parse(raw);
+  if (Number.isFinite(iso)) return iso;
+  return Number.NaN;
+}
+
+function buildTimestampCandidates(timestamp) {
+  const base = Number(timestamp);
+  if (!Number.isFinite(base)) return [];
+  const sec = Math.floor(base / 1000) * 1000;
+  return [...new Set([base, sec])];
+}
+
 function buildSiweAuthMessage({ wallet, action, timestamp, scope }) {
   const ts = Number(timestamp);
   const address = String(wallet || '').trim().toLowerCase();
@@ -680,15 +698,27 @@ function buildCreatorSiweMessageCandidates({ wallet, action, timestamp }) {
   const lower = raw.toLowerCase();
   const checksummed = safeChecksumAddress(raw);
   const wallets = [...new Set([lower, checksummed].filter(Boolean))];
-  return wallets.map((walletVariant) => ({
-    variant: walletVariant === lower ? 'siwe-lowercase' : 'siwe-checksummed',
-    message: buildSiweAuthMessage({
-      wallet: walletVariant,
-      action,
-      timestamp,
-      scope: 'creator'
-    })
-  }));
+  const timestamps = buildTimestampCandidates(timestamp);
+  const candidates = [];
+  for (const ts of timestamps) {
+    for (const walletVariant of wallets) {
+      const walletVariantLabel = walletVariant === lower ? 'siwe-lowercase' : 'siwe-checksummed';
+      const tsLabel = ts === Number(timestamp) ? 'ts-ms' : 'ts-sec';
+      const baseVariant = `${walletVariantLabel}-${tsLabel}`;
+      const baseMessage = buildSiweAuthMessage({
+        wallet: walletVariant,
+        action,
+        timestamp: ts,
+        scope: 'creator'
+      });
+      candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
+      candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
+      const crlf = baseMessage.replace(/\n/g, '\r\n');
+      candidates.push({ variant: `${baseVariant}-crlf`, message: crlf });
+      candidates.push({ variant: `${baseVariant}-crlf-trailing`, message: `${crlf}\r\n` });
+    }
+  }
+  return candidates;
 }
 
 function buildModeratorSiweMessageCandidates({ wallet, action, timestamp }) {
@@ -696,15 +726,27 @@ function buildModeratorSiweMessageCandidates({ wallet, action, timestamp }) {
   const lower = raw.toLowerCase();
   const checksummed = safeChecksumAddress(raw);
   const wallets = [...new Set([lower, checksummed].filter(Boolean))];
-  return wallets.map((walletVariant) => ({
-    variant: walletVariant === lower ? 'siwe-lowercase' : 'siwe-checksummed',
-    message: buildSiweAuthMessage({
-      wallet: walletVariant,
-      action,
-      timestamp,
-      scope: 'moderator'
-    })
-  }));
+  const timestamps = buildTimestampCandidates(timestamp);
+  const candidates = [];
+  for (const ts of timestamps) {
+    for (const walletVariant of wallets) {
+      const walletVariantLabel = walletVariant === lower ? 'siwe-lowercase' : 'siwe-checksummed';
+      const tsLabel = ts === Number(timestamp) ? 'ts-ms' : 'ts-sec';
+      const baseVariant = `${walletVariantLabel}-${tsLabel}`;
+      const baseMessage = buildSiweAuthMessage({
+        wallet: walletVariant,
+        action,
+        timestamp: ts,
+        scope: 'moderator'
+      });
+      candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
+      candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
+      const crlf = baseMessage.replace(/\n/g, '\r\n');
+      candidates.push({ variant: `${baseVariant}-crlf`, message: crlf });
+      candidates.push({ variant: `${baseVariant}-crlf-trailing`, message: `${crlf}\r\n` });
+    }
+  }
+  return candidates;
 }
 
 export async function listPublishedCatalogEntries() {
@@ -791,7 +833,7 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
     return { ok: false, error: 'Invalid wallet address' };
   }
 
-  const ts = Number(timestamp);
+  const ts = parseAuthTimestamp(timestamp);
   if (!Number.isFinite(ts)) {
     return { ok: false, error: 'Invalid auth timestamp' };
   }
@@ -1034,7 +1076,7 @@ export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
     return { ok: false, error: 'Wallet is not an allowed moderator' };
   }
 
-  const ts = Number(timestamp);
+  const ts = parseAuthTimestamp(timestamp);
   if (!Number.isFinite(ts)) {
     return { ok: false, error: 'Invalid auth timestamp' };
   }

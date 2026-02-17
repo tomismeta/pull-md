@@ -62,6 +62,8 @@ export default function handler(req, res) {
       ownership_auth_signature_preferred: 'eip4361_siwe_message',
       ownership_auth_note:
         'Ownership checks (creator/moderator/session/agent re-download challenge) require SIWE (EIP-4361) message signatures (no token transfer/approval). EOA and EIP-1271 smart-contract wallets are supported.',
+      ownership_auth_timestamp_formats: ['unix_ms', 'iso8601'],
+      ownership_auth_message_tolerance: ['lf', 'crlf', 'trailing_newline'],
       agent_key_boundary:
         'Never send Bankr API keys or signer secrets to SoulStarter. SoulStarter accepts only signed x402 payment headers.'
     },

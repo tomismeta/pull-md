@@ -231,3 +231,52 @@ test('catalog fallback reads Vercel draft directory when MARKETPLACE_DRAFTS_DIR 
     await rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test('creator auth accepts ISO timestamp and CRLF SIWE message variant', async () => {
+  const wallet = ethers.Wallet.createRandom();
+  const ts = Date.now();
+  const iso = new Date(ts).toISOString();
+  const base = buildCreatorAuthMessage({
+    wallet: wallet.address,
+    action: 'list_my_published_listings',
+    timestamp: ts
+  });
+  const signature = await wallet.signMessage(base.replace(/\n/g, '\r\n'));
+  const checked = verifyCreatorAuth({
+    wallet: wallet.address,
+    timestamp: iso,
+    signature,
+    action: 'list_my_published_listings'
+  });
+  assert.equal(checked.ok, true);
+  assert.equal(checked.wallet, wallet.address.toLowerCase());
+  assert.equal(checked.auth_format, 'siwe');
+});
+
+test('moderator auth accepts ISO timestamp and trailing newline SIWE message variant', async () => {
+  const originalModerators = process.env.MODERATOR_WALLETS;
+  const wallet = ethers.Wallet.createRandom();
+  process.env.MODERATOR_WALLETS = wallet.address;
+  try {
+    const ts = Date.now();
+    const iso = new Date(ts).toISOString();
+    const base = buildModeratorAuthMessage({
+      wallet: wallet.address,
+      action: 'list_moderation_listings',
+      timestamp: ts
+    });
+    const signature = await wallet.signMessage(`${base}\n`);
+    const checked = verifyModeratorAuth({
+      wallet: wallet.address,
+      timestamp: iso,
+      signature,
+      action: 'list_moderation_listings'
+    });
+    assert.equal(checked.ok, true);
+    assert.equal(checked.wallet, wallet.address.toLowerCase());
+    assert.equal(checked.auth_format, 'siwe');
+  } finally {
+    if (originalModerators === undefined) delete process.env.MODERATOR_WALLETS;
+    else process.env.MODERATOR_WALLETS = originalModerators;
+  }
+});

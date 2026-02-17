@@ -82,6 +82,10 @@ UI companion:
 - It requires connected allowlisted moderator wallet and signs `SoulStarter Moderator Authentication` messages per moderation action.
 - `/create.html` provides a lightweight creator console for immediate publish and share-link retrieval.
 - Creator/moderator auth requires SIWE (EIP-4361) message signatures with action-scoped timestamps.
+- For creator/moderator SIWE auth:
+  - `auth_timestamp`/`moderator_timestamp` may be Unix milliseconds or ISO-8601.
+  - Sign the exact SIWE message text provided by the server.
+  - LF/CRLF and trailing newline variants are accepted.
 
 ## Download Endpoint
 
