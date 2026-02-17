@@ -61,6 +61,7 @@ export function buildMcpSoulDetailsResponse({ soulId, soul, summary, sellerAddre
       payment_protocol: 'x402',
       auth_headers: {
         purchase: ['PAYMENT-SIGNATURE', 'X-WALLET-ADDRESS', 'X-ASSET-TRANSFER-METHOD'],
+        auth_challenge_tool: ['POST /mcp', 'tools/call', 'name=get_auth_challenge'],
         deprecated_purchase_headers: ['PAYMENT', 'X-PAYMENT'],
         client_mode: ['X-CLIENT-MODE'],
         strict_agent_purchase: ['X-CLIENT-MODE', 'PAYMENT-SIGNATURE'],
@@ -133,6 +134,13 @@ export function buildMcpSoulDetailsResponse({ soulId, soul, summary, sellerAddre
           timestamp: Date.now()
         })
       },
+      auth_timestamp_note:
+        'For SIWE ownership auth, set timestamp to Date.parse(Issued At) from the same server-issued auth template.',
+      common_auth_mistakes: [
+        'Using Date.now() instead of Date.parse(Issued At)',
+        'Rebuilding SIWE text manually instead of signing exact template',
+        'Wallet case mismatch between signed message and request arguments'
+      ],
       seller_address: sellerAddress
     },
     meta: {

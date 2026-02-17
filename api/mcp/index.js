@@ -5,6 +5,12 @@ import {
   getMcpToolsListResult,
   invokeMcpTool
 } from '../_lib/mcp_tools.js';
+import {
+  getMcpPromptsList,
+  getMcpPrompt,
+  getMcpResourcesList,
+  readMcpResource
+} from '../_lib/mcp_contract.js';
 
 const SERVER_INFO = {
   name: 'SoulStarter',
@@ -35,6 +41,23 @@ function sendJsonRpcResult(res, id, result) {
   });
 }
 
+function normalizeToolError(error) {
+  const payload = error?.payload && typeof error.payload === 'object' ? error.payload : {};
+  const message = String(payload.error || payload.message || error?.message || 'Tool execution failed');
+  const code = String(payload.code || 'tool_execution_error');
+  const hint = payload.flow_hint || payload.hint || null;
+  const retryable =
+    typeof payload.retryable === 'boolean' ? payload.retryable : Number(error?.status || 500) >= 500;
+  return {
+    ...payload,
+    ok: false,
+    code,
+    message,
+    hint,
+    retryable
+  };
+}
+
 function parseJsonRpcBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
   if (typeof req.body === 'string' && req.body.trim()) {
@@ -56,8 +79,20 @@ export default async function handler(req, res) {
       name: SERVER_INFO.name,
       protocol: 'mcp',
       transport: 'streamable_http',
+      response_streaming: false,
+      sampling: 'not_supported',
       endpoint: '/mcp',
-      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call'],
+      methods: [
+        'initialize',
+        'notifications/initialized',
+        'ping',
+        'tools/list',
+        'tools/call',
+        'prompts/list',
+        'prompts/get',
+        'resources/list',
+        'resources/read'
+      ],
       note: 'Use POST with JSON-RPC 2.0 payloads.'
     });
   }
@@ -96,11 +131,13 @@ export default async function handler(req, res) {
     return sendJsonRpcResult(res, id, {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: {
-        tools: {}
+        tools: {},
+        prompts: {},
+        resources: {}
       },
       serverInfo: SERVER_INFO,
       instructions:
-        'Use tools/list then tools/call for discovery/orchestration. For x402 payment, use GET /api/souls/{id}/download.'
+        'Use tools/list + tools/call for orchestration. Call get_auth_challenge before authenticated creator/moderator/session/redownload flows. For x402 payment, use GET /api/souls/{id}/download.'
     });
   }
 
@@ -135,15 +172,92 @@ export default async function handler(req, res) {
       });
     } catch (error) {
       if (isAppError(error)) {
+        const normalized = normalizeToolError(error);
         return sendJsonRpcResult(res, id, {
           isError: true,
           content: [
             {
               type: 'text',
-              text: String(error.payload?.error || 'Tool execution failed')
+              text: normalized.hint ? `${normalized.message} Hint: ${normalized.hint}` : normalized.message
             }
           ],
-          structuredContent: error.payload
+          structuredContent: normalized
+        });
+      }
+      return sendJsonRpcError(res, id, -32603, 'Internal error', {
+        detail: error instanceof Error ? error.message : String(error || 'unknown_error')
+      });
+    }
+  }
+
+  if (method === 'prompts/list') {
+    return sendJsonRpcResult(res, id, {
+      prompts: getMcpPromptsList()
+    });
+  }
+
+  if (method === 'prompts/get') {
+    const name = String(params.name || '').trim();
+    const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
+    if (!name) {
+      return sendJsonRpcError(res, id, -32602, 'Invalid params', {
+        detail: 'Missing required params.name'
+      });
+    }
+    try {
+      const prompt = getMcpPrompt(name, args);
+      return sendJsonRpcResult(res, id, prompt);
+    } catch (error) {
+      if (isAppError(error)) {
+        const normalized = normalizeToolError(error);
+        return sendJsonRpcResult(res, id, {
+          isError: true,
+          content: [{ type: 'text', text: normalized.message }],
+          structuredContent: normalized
+        });
+      }
+      return sendJsonRpcError(res, id, -32603, 'Internal error', {
+        detail: error instanceof Error ? error.message : String(error || 'unknown_error')
+      });
+    }
+  }
+
+  if (method === 'resources/list') {
+    try {
+      const resources = await getMcpResourcesList({ headers: req.headers });
+      return sendJsonRpcResult(res, id, { resources });
+    } catch (error) {
+      if (isAppError(error)) {
+        const normalized = normalizeToolError(error);
+        return sendJsonRpcResult(res, id, {
+          isError: true,
+          content: [{ type: 'text', text: normalized.message }],
+          structuredContent: normalized
+        });
+      }
+      return sendJsonRpcError(res, id, -32603, 'Internal error', {
+        detail: error instanceof Error ? error.message : String(error || 'unknown_error')
+      });
+    }
+  }
+
+  if (method === 'resources/read') {
+    const uri = String(params.uri || '').trim();
+    if (!uri) {
+      return sendJsonRpcError(res, id, -32602, 'Invalid params', {
+        detail: 'Missing required params.uri'
+      });
+    }
+    try {
+      const content = await readMcpResource(uri, { headers: req.headers });
+      return sendJsonRpcResult(res, id, { contents: [content] });
+    } catch (error) {
+      if (isAppError(error)) {
+        const normalized = normalizeToolError(error);
+        return sendJsonRpcResult(res, id, {
+          isError: true,
+          content: [{ type: 'text', text: normalized.message }],
+          structuredContent: normalized
         });
       }
       return sendJsonRpcError(res, id, -32603, 'Internal error', {
@@ -154,4 +268,3 @@ export default async function handler(req, res) {
 
   return sendJsonRpcError(res, id ?? null, -32601, 'Method not found', { method });
 }
-

@@ -143,6 +143,9 @@ JSON-RPC methods: initialize, ping, tools/list, tools/call
 MCP discovery manifest
 GET /api/mcp/manifest
 
+Auth challenge (SIWE)
+POST /mcp -> tools/call name=get_auth_challenge
+
 Canonical x402 purchase + re-download
 GET /api/souls/{id}/download
 

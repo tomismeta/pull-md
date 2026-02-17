@@ -44,6 +44,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `POST /mcp` + `tools/call` `name=list_souls`
 - `POST /mcp` + `tools/call` `name=get_soul_details` (`arguments: { "id": "<soul_id>" }`)
 - `POST /mcp` + `tools/call` `name=check_entitlements`
+- `POST /mcp` + `tools/call` `name=get_auth_challenge` (SIWE challenge-first auth helper)
 - `POST /mcp` + `tools/call` `name=get_listing_template`
 - `POST /mcp` + `tools/call` `name=publish_listing` (creator wallet auth, immediate publish)
 - `POST /mcp` + `tools/call` `name=list_my_published_listings` (creator wallet auth)
@@ -54,6 +55,8 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `GET /api/souls/{id}/download`
 - `GET /api/auth/session`
 - `GET /api/health/facilitator`
+- `POST /mcp` + `prompts/list` / `prompts/get`
+- `POST /mcp` + `resources/list` / `resources/read`
 
 ## Creator Publish Model
 
@@ -180,6 +183,42 @@ Re-download auth compatibility note:
 - Human UX optimization:
 bootstrap once with `GET /api/auth/session` using wallet signature (`action: session`), then recovery uses
 `X-WALLET-ADDRESS` + `X-REDOWNLOAD-SESSION` when needed (receipt remains primary whenever available).
+
+Creator/moderator auth discovery note:
+- Use MCP tool `get_auth_challenge` before authenticated creator/moderator calls.
+- Set `auth_timestamp`/`moderator_timestamp` to `Date.parse(Issued At)` from that same challenge.
+- SIWE parser accepts Unix ms or ISO-8601 timestamp values.
+- SIWE parser accepts LF/CRLF/trailing newline message variants.
+
+Common mistakes:
+- Using `Date.now()` for `auth_timestamp` -> use `Date.parse(Issued At)` from the same template.
+- Reconstructing SIWE manually -> sign exact server template text.
+- Mixed wallet casing across args/signature context -> keep wallet lowercase consistently.
+
+Minimal creator auth example:
+```js
+const challenge = await callTool({
+  name: 'get_auth_challenge',
+  arguments: {
+    flow: 'creator',
+    action: 'list_my_published_listings',
+    wallet_address
+  }
+});
+
+const message = challenge.auth_message_template;
+const authTimestamp = Date.parse(challenge.issued_at);
+const signature = await wallet.signMessage(message);
+
+const result = await callTool({
+  name: 'list_my_published_listings',
+  arguments: {
+    wallet_address,
+    auth_signature: signature,
+    auth_timestamp: authTimestamp
+  }
+});
+```
 
 Multi-spend guardrails:
 - In-flight settlement submissions are idempotent by payer+soul+nonce to reduce duplicate settlement attempts.

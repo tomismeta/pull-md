@@ -43,6 +43,10 @@ test('manifest exposes strict agent guardrails and facilitator capability flags'
   assert.match(String(body.facilitator_capabilities?.note || ''), /permit2/i);
   assert.ok(body.error_codes?.x402_method_mismatch);
   assert.equal(body.error_codes?.contract_wallet_not_supported_by_facilitator, undefined);
+  assert.equal(Array.isArray(body.mcp?.methods), true);
+  assert.ok(body.mcp.methods.includes('prompts/list'));
+  assert.ok(body.mcp.methods.includes('resources/list'));
+  assert.ok((body.tools || []).some((tool) => String(tool?.name || '') === 'get_auth_challenge'));
   assert.equal(
     Array.isArray(body.tools) && body.tools.every((tool) => String(tool?.endpoint || '') === '/mcp'),
     true

@@ -64,6 +64,13 @@ export default function handler(req, res) {
         'Ownership checks (creator/moderator/session/agent re-download challenge) require SIWE (EIP-4361) message signatures (no token transfer/approval). EOA and EIP-1271 smart-contract wallets are supported.',
       ownership_auth_timestamp_formats: ['unix_ms', 'iso8601'],
       ownership_auth_message_tolerance: ['lf', 'crlf', 'trailing_newline'],
+      ownership_auth_timestamp_rule:
+        'Use auth_timestamp = Date.parse(Issued At) from the same auth_message_template. Do not use current wall-clock timestamp.',
+      common_auth_mistakes: [
+        'Using Date.now() instead of Date.parse(Issued At)',
+        'Reconstructing SIWE text manually instead of signing exact template',
+        'Wallet casing mismatch between signed message and submitted fields'
+      ],
       agent_key_boundary:
         'Never send Bankr API keys or signer secrets to SoulStarter. SoulStarter accepts only signed x402 payment headers.'
     },
@@ -97,7 +104,33 @@ export default function handler(req, res) {
       endpoint: '/mcp',
       transport: 'streamable_http',
       protocol_version: '2025-06-18',
-      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call']
+      response_streaming: false,
+      sampling: 'not_supported',
+      methods: [
+        'initialize',
+        'notifications/initialized',
+        'ping',
+        'tools/list',
+        'tools/call',
+        'prompts/list',
+        'prompts/get',
+        'resources/list',
+        'resources/read'
+      ]
+    },
+    prompts: {
+      challenge_first_tool: 'get_auth_challenge',
+      note:
+        'Use get_auth_challenge to receive SIWE text + timestamp before signing creator/moderator/session/redownload auth requests.'
+    },
+    resources: {
+      scheme: 'soulstarter://',
+      examples: [
+        'soulstarter://docs/manifest',
+        'soulstarter://docs/webmcp',
+        'soulstarter://souls',
+        'soulstarter://souls/<id>'
+      ]
     },
     tools,
     download_contract: {
@@ -154,6 +187,8 @@ export default function handler(req, res) {
         'Server applies single-flight settlement idempotency by payer+soul+nonce to reduce duplicate charge attempts from repeated submissions.',
       wallet_runtime_note:
         'EmblemVault currently has verified successful purchase + re-download runs. Bankr eip3009 remains experimental.',
+      auth_challenge_recommendation:
+        'For creator/moderator/session/redownload auth, call MCP tool get_auth_challenge first, then sign the exact auth_message_template and set auth_timestamp = Date.parse(Issued At).',
       permit2_pitfalls: [
         'Set top-level network to accepted.network (eip155:8453), not "base".',
         'Use payload.permit2Authorization (not payload.permit2).',

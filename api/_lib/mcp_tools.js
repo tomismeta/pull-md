@@ -7,6 +7,8 @@ import {
 } from './services/souls.js';
 import { executeCreatorMarketplaceAction } from './services/creator_marketplace.js';
 import { AppError } from './errors.js';
+import { buildCreatorAuthMessage, buildModeratorAuthMessage } from './marketplace.js';
+import { buildSiweAuthMessage } from './payments.js';
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
 
@@ -20,6 +22,185 @@ function ensureString(value, field) {
     throw new AppError(400, { error: `Missing required field: ${field}` });
   }
   return normalized;
+}
+
+function ensureWalletAddress(value) {
+  const wallet = String(value || '').trim().toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/i.test(wallet)) {
+    throw new AppError(400, {
+      error: 'Invalid or missing wallet_address',
+      code: 'invalid_wallet_address',
+      flow_hint: 'Provide wallet_address as a valid 0x-prefixed 40-byte EVM address.'
+    });
+  }
+  return wallet;
+}
+
+function parseSiweField(message, label) {
+  const match = String(message || '').match(new RegExp(`^${label}:\\s*([^\\n\\r]+)`, 'm'));
+  return match?.[1]?.trim() || null;
+}
+
+function mapCreatorActionToTool(action) {
+  if (action === 'publish_listing') return 'publish_listing';
+  if (action === 'list_my_published_listings') return 'list_my_published_listings';
+  return 'list_my_published_listings';
+}
+
+function mapModeratorActionToTool(action) {
+  if (action === 'remove_listing_visibility') return 'remove_listing_visibility';
+  if (action === 'list_moderation_listings') return 'list_moderation_listings';
+  return 'list_moderation_listings';
+}
+
+function buildAuthChallengePayload(args = {}) {
+  const parsed = ensureObject(args);
+  const flow = String(parsed.flow || '').trim().toLowerCase();
+  if (!flow) {
+    throw new AppError(400, {
+      error: 'Missing required field: flow',
+      code: 'missing_auth_challenge_flow',
+      flow_hint: 'Set flow to one of: creator, moderator, session, redownload.'
+    });
+  }
+
+  const wallet = ensureWalletAddress(parsed.wallet_address);
+  const timestampMs = Date.now();
+  const soulIdRaw = String(parsed.soul_id || '').trim();
+  const soulId = soulIdRaw || '*';
+
+  let action;
+  let authMessage;
+  let submitVia;
+
+  if (flow === 'creator') {
+    action = String(parsed.action || 'list_my_published_listings').trim() || 'list_my_published_listings';
+    authMessage = buildCreatorAuthMessage({ wallet, action, timestamp: timestampMs });
+    const toolName = mapCreatorActionToTool(action);
+    submitVia = {
+      endpoint: '/mcp',
+      rpc_method: 'tools/call',
+      tool_name: toolName,
+      arguments_template:
+        toolName === 'publish_listing'
+          ? {
+              wallet_address: wallet,
+              auth_signature: '0x<signature_hex>',
+              auth_timestamp: '<Date.parse(Issued At)>',
+              listing: {
+                name: '<name>',
+                description: '<description>',
+                price_usdc: 0.01,
+                soul_markdown: '# SOUL\\n\\n...'
+              }
+            }
+          : {
+              wallet_address: wallet,
+              auth_signature: '0x<signature_hex>',
+              auth_timestamp: '<Date.parse(Issued At)>'
+            }
+    };
+  } else if (flow === 'moderator') {
+    action = String(parsed.action || 'list_moderation_listings').trim() || 'list_moderation_listings';
+    authMessage = buildModeratorAuthMessage({ wallet, action, timestamp: timestampMs });
+    const toolName = mapModeratorActionToTool(action);
+    submitVia = {
+      endpoint: '/mcp',
+      rpc_method: 'tools/call',
+      tool_name: toolName,
+      arguments_template:
+        toolName === 'remove_listing_visibility'
+          ? {
+              moderator_address: wallet,
+              moderator_signature: '0x<signature_hex>',
+              moderator_timestamp: '<Date.parse(Issued At)>',
+              soul_id: '<soul_id>',
+              reason: '<optional_reason>'
+            }
+          : {
+              moderator_address: wallet,
+              moderator_signature: '0x<signature_hex>',
+              moderator_timestamp: '<Date.parse(Issued At)>'
+            }
+    };
+  } else if (flow === 'session') {
+    action = 'session';
+    authMessage = buildSiweAuthMessage({ wallet, soulId: '*', action, timestamp: timestampMs });
+    submitVia = {
+      endpoint: '/api/auth/session',
+      method: 'GET',
+      required_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+      headers_template: {
+        'X-WALLET-ADDRESS': wallet,
+        'X-AUTH-SIGNATURE': '0x<signature_hex>',
+        'X-AUTH-TIMESTAMP': '<Date.parse(Issued At)>'
+      }
+    };
+  } else if (flow === 'redownload') {
+    action = 'redownload';
+    if (!soulIdRaw) {
+      throw new AppError(400, {
+        error: 'Missing required field: soul_id',
+        code: 'missing_redownload_soul_id',
+        flow_hint: 'flow=redownload requires soul_id.'
+      });
+    }
+    authMessage = buildSiweAuthMessage({ wallet, soulId, action, timestamp: timestampMs });
+    submitVia = {
+      endpoint: `/api/souls/${encodeURIComponent(soulId)}/download`,
+      method: 'GET',
+      required_headers: [
+        'X-CLIENT-MODE',
+        'X-WALLET-ADDRESS',
+        'X-PURCHASE-RECEIPT',
+        'X-REDOWNLOAD-SIGNATURE',
+        'X-REDOWNLOAD-TIMESTAMP'
+      ],
+      headers_template: {
+        'X-CLIENT-MODE': 'agent',
+        'X-WALLET-ADDRESS': wallet,
+        'X-PURCHASE-RECEIPT': '<receipt_token>',
+        'X-REDOWNLOAD-SIGNATURE': '0x<signature_hex>',
+        'X-REDOWNLOAD-TIMESTAMP': '<Date.parse(Issued At)>'
+      }
+    };
+  } else {
+    throw new AppError(400, {
+      error: 'Unsupported auth challenge flow',
+      code: 'unsupported_auth_challenge_flow',
+      flow,
+      supported_flows: ['creator', 'moderator', 'session', 'redownload']
+    });
+  }
+
+  const issuedAt = parseSiweField(authMessage, 'Issued At') || new Date(timestampMs).toISOString();
+  const expiresAt = parseSiweField(authMessage, 'Expiration Time') || new Date(timestampMs + 300000).toISOString();
+  const nonce = parseSiweField(authMessage, 'Nonce');
+  const requestId = parseSiweField(authMessage, 'Request ID');
+  const authTimestampMs = Date.parse(issuedAt);
+
+  return {
+    ok: true,
+    auth_format: 'siwe_eip4361_message',
+    flow,
+    action,
+    soul_id: flow === 'redownload' ? soulId : null,
+    wallet_address: wallet,
+    auth_message_template: authMessage,
+    nonce,
+    request_id: requestId,
+    issued_at: issuedAt,
+    expiration_time: expiresAt,
+    auth_timestamp_ms: Number.isFinite(authTimestampMs) ? authTimestampMs : timestampMs,
+    timestamp_requirement:
+      'Use auth_timestamp = Date.parse(Issued At) from this same auth_message_template. Do not use Date.now().',
+    common_mistakes: [
+      'Do not reconstruct SIWE manually. Sign the exact template text.',
+      'Do not use current time for auth_timestamp; use Date.parse(Issued At).',
+      'Use lowercase wallet address in arguments/headers.'
+    ],
+    submit_via: submitVia
+  };
 }
 
 function toolCallHeadersFromArgs(context, args, authShape = 'none') {
@@ -132,6 +313,38 @@ const MCP_TOOL_REGISTRY = [
     }
   },
   {
+    name: 'get_auth_challenge',
+    description: 'Get a SIWE auth challenge upfront for creator, moderator, session, or redownload flows',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: {
+          type: 'string',
+          description: 'One of: creator, moderator, session, redownload'
+        },
+        wallet_address: { type: 'string', description: 'Wallet address used to sign the challenge' },
+        action: { type: 'string', description: 'Action name for creator/moderator flows' },
+        soul_id: { type: 'string', description: 'Required when flow=redownload' }
+      },
+      required: ['flow', 'wallet_address'],
+      additionalProperties: false
+    },
+    manifest: {
+      endpoint: '/mcp',
+      method: 'POST',
+      parameters: {
+        flow: { type: 'string', required: true, description: 'creator|moderator|session|redownload' },
+        wallet_address: { type: 'string', required: true, description: 'Wallet used for SIWE signing' },
+        action: { type: 'string', required: false, description: 'Action name (creator/moderator only)' },
+        soul_id: { type: 'string', required: false, description: 'Required for redownload flow' }
+      },
+      returns: { type: 'object', description: 'SIWE challenge template + exact timestamp/signing guidance' }
+    },
+    async run(args) {
+      return buildAuthChallengePayload(args);
+    }
+  },
+  {
     name: 'get_listing_template',
     description: 'Get immediate publish payload template for creator soul listings',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -172,7 +385,11 @@ const MCP_TOOL_REGISTRY = [
         action: { type: 'string', required: true, description: 'Set action=publish_listing' },
         wallet_address: { type: 'string', required: true, description: 'Creator wallet address' },
         auth_signature: { type: 'string', required: true, description: 'Wallet signature over creator auth message' },
-        auth_timestamp: { type: 'number', required: true, description: 'Unix ms timestamp used in auth message' },
+        auth_timestamp: {
+          type: 'string',
+          required: true,
+          description: 'Timestamp from SIWE Issued At (accepts Unix ms or ISO-8601)'
+        },
         listing: { type: 'object', required: true, description: 'Minimal publish payload: name, price_usdc, description, soul_markdown' }
       },
       returns: { type: 'object', description: 'Published listing summary + share_url + purchase endpoint' }
@@ -212,6 +429,7 @@ const MCP_TOOL_REGISTRY = [
         action: { type: 'string', required: true, description: 'Set action=list_my_published_listings' }
       },
       auth_headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
+      auth_notes: ['X-AUTH-TIMESTAMP accepts Unix ms or ISO-8601 (must match SIWE Issued At)'],
       returns: { type: 'object', description: 'Wallet-scoped list of published listing summaries' }
     },
     async run(args, context) {
@@ -281,6 +499,7 @@ const MCP_TOOL_REGISTRY = [
       method: 'GET',
       admin_only: true,
       auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
+      auth_notes: ['X-MODERATOR-TIMESTAMP accepts Unix ms or ISO-8601 (must match SIWE Issued At)'],
       parameters: {
         action: { type: 'string', required: true, description: 'Set action=list_moderation_listings' }
       },
@@ -315,6 +534,7 @@ const MCP_TOOL_REGISTRY = [
       method: 'POST',
       admin_only: true,
       auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
+      auth_notes: ['X-MODERATOR-TIMESTAMP accepts Unix ms or ISO-8601 (must match SIWE Issued At)'],
       parameters: {
         action: { type: 'string', required: true, description: 'Set action=remove_listing_visibility' },
         soul_id: { type: 'string', required: true, description: 'Published soul identifier to hide' },
@@ -351,6 +571,7 @@ export function getMcpToolsForManifest() {
     rpc_tool_name: tool.name,
     arguments_schema: tool.inputSchema || { type: 'object', properties: {} },
     ...(tool.manifest.auth_headers ? { auth_headers: tool.manifest.auth_headers } : {}),
+    ...(tool.manifest.auth_notes ? { auth_notes: tool.manifest.auth_notes } : {}),
     ...(tool.manifest.admin_only ? { admin_only: true } : {}),
     ...(tool.manifest.returns ? { returns: tool.manifest.returns } : {})
   }));

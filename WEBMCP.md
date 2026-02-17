@@ -43,34 +43,39 @@ Tool invocation contract:
 - Verifies receipt proof(s) for re-download:
 `{ wallet_address, proofs: [{ soul_id, receipt }] }`
 
-4. `name=get_listing_template`
+4. `name=get_auth_challenge`
+- Returns SIWE message template + exact timestamp requirements for:
+`flow=creator|moderator|session|redownload`.
+- Use this first for authenticated flows; do not force a failed request to discover auth text.
+
+5. `name=get_listing_template`
 - Returns template for immediate publish payloads.
 
-5. `name=publish_listing`
+6. `name=publish_listing`
 - Creator wallet-authenticated immediate publish.
 - Request fields:
 `wallet_address`, `auth_signature`, `auth_timestamp`, `listing`.
 - No draft state or approval queue.
 - Success returns `share_url` and `purchase_endpoint`.
 
-6. `name=list_my_published_listings`
+7. `name=list_my_published_listings`
 - Creator wallet-authenticated list of creator-owned listings (includes hidden).
 
-7. `name=list_published_listings`
+8. `name=list_published_listings`
 - Public list of visible listings only.
 - Backed by Postgres JSONB when configured (`MARKETPLACE_DATABASE_URL`/`DATABASE_URL`/`POSTGRES_URL`).
 - On Vercel, creator publish requires one of these DB vars; otherwise `publish_listing` returns `503 marketplace_persistence_unconfigured` to avoid non-durable listings.
 - Response may include `storage_warning` when persistence configuration is incomplete.
 
-8. `name=list_moderators`
+9. `name=list_moderators`
 - Lists allowlisted moderator wallet addresses.
 
-9. `name=list_moderation_listings` (moderator wallet auth)
+10. `name=list_moderation_listings` (moderator wallet auth)
 - Headers:
 `X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
 - Returns `visible[]` and `hidden[]` listing partitions.
 
-10. `name=remove_listing_visibility` (moderator wallet auth)
+11. `name=remove_listing_visibility` (moderator wallet auth)
 - Headers:
 `X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
 - Body:
@@ -84,8 +89,59 @@ UI companion:
 - Creator/moderator auth requires SIWE (EIP-4361) message signatures with action-scoped timestamps.
 - For creator/moderator SIWE auth:
   - `auth_timestamp`/`moderator_timestamp` may be Unix milliseconds or ISO-8601.
+  - `auth_timestamp` must equal `Date.parse(Issued At)` from the same server-issued template.
   - Sign the exact SIWE message text provided by the server.
   - LF/CRLF and trailing newline variants are accepted.
+
+## MCP Prompts and Resources
+
+- `POST /mcp` method `prompts/list` exposes built-in workflow prompts.
+- `POST /mcp` method `prompts/get` supports:
+  - `purchase_soul`
+  - `redownload_soul`
+  - `publish_listing`
+- `POST /mcp` method `resources/list` exposes `soulstarter://` URIs.
+- `POST /mcp` method `resources/read` reads:
+  - `soulstarter://docs/manifest`
+  - `soulstarter://docs/webmcp`
+  - `soulstarter://souls`
+  - `soulstarter://souls/{id}`
+- Response streaming: currently non-streaming responses over Streamable HTTP.
+- Sampling: not supported in this deployment.
+
+## Auth Common Mistakes (Creator/Moderator)
+
+| Mistake | Symptom | Fix |
+| --- | --- | --- |
+| Using current time for `auth_timestamp` | `Authentication message expired` | Use `Date.parse(Issued At)` from the same `auth_message_template` |
+| Reconstructing SIWE manually | `Signature does not match SIWE wallet authentication format` | Sign the exact template text; only replace `0x<your-wallet>` when present |
+| Wallet case mismatch between args and signed message | signature mismatch | Use lowercase wallet in arguments/headers consistently |
+
+Minimal creator example:
+
+```js
+const challenge = await callTool({
+  name: 'get_auth_challenge',
+  arguments: {
+    flow: 'creator',
+    action: 'list_my_published_listings',
+    wallet_address
+  }
+});
+
+const siweMessage = challenge.auth_message_template;
+const authTimestamp = Date.parse(challenge.issued_at); // do not use Date.now()
+const signature = await wallet.signMessage(siweMessage);
+
+const result = await callTool({
+  name: 'list_my_published_listings',
+  arguments: {
+    wallet_address,
+    auth_signature: signature,
+    auth_timestamp: authTimestamp
+  }
+});
+```
 
 ## Download Endpoint
 

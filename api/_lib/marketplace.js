@@ -827,7 +827,11 @@ export function buildCreatorAuthMessage({ wallet, action, timestamp }) {
 
 export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
   if (!wallet || !timestamp || !signature || !action) {
-    return { ok: false, error: 'Missing creator auth fields' };
+    return {
+      ok: false,
+      error: 'Missing creator auth fields',
+      hint: 'Use get_auth_challenge(flow=creator) then submit wallet_address + auth_signature + auth_timestamp.'
+    };
   }
   if (!validateEthAddress(wallet)) {
     return { ok: false, error: 'Invalid wallet address' };
@@ -835,10 +839,18 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
 
   const ts = parseAuthTimestamp(timestamp);
   if (!Number.isFinite(ts)) {
-    return { ok: false, error: 'Invalid auth timestamp' };
+    return {
+      ok: false,
+      error: 'Invalid auth timestamp',
+      hint: 'Use auth_timestamp = Date.parse(Issued At) from auth_message_template.'
+    };
   }
   if (Math.abs(Date.now() - ts) > CREATOR_AUTH_DRIFT_MS) {
-    return { ok: false, error: 'Authentication message expired' };
+    return {
+      ok: false,
+      error: 'Authentication message expired',
+      hint: 'Use auth_timestamp = Date.parse(Issued At) from auth_message_template. Do not use Date.now().'
+    };
   }
 
   const siweCandidates = buildCreatorSiweMessageCandidates({ wallet, action, timestamp: ts });
@@ -854,6 +866,7 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
   return {
     ok: false,
     error: 'Signature does not match SIWE wallet authentication format',
+    hint: 'Sign the exact auth_message_template text (byte-for-byte) and submit matching auth_timestamp.',
     auth_message_template: buildCreatorAuthMessage({
       wallet: '0x<your-wallet>',
       action,
@@ -1065,7 +1078,11 @@ export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
     return { ok: false, error: 'Server configuration error: moderator allowlist is empty' };
   }
   if (!wallet || !timestamp || !signature || !action) {
-    return { ok: false, error: 'Missing moderator auth fields' };
+    return {
+      ok: false,
+      error: 'Missing moderator auth fields',
+      hint: 'Use get_auth_challenge(flow=moderator) then submit moderator_address + moderator_signature + moderator_timestamp.'
+    };
   }
   if (!validateEthAddress(wallet)) {
     return { ok: false, error: 'Invalid wallet address' };
@@ -1078,10 +1095,19 @@ export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
 
   const ts = parseAuthTimestamp(timestamp);
   if (!Number.isFinite(ts)) {
-    return { ok: false, error: 'Invalid auth timestamp' };
+    return {
+      ok: false,
+      error: 'Invalid auth timestamp',
+      hint: 'Use moderator_timestamp = Date.parse(Issued At) from auth_message_template.'
+    };
   }
   if (Math.abs(Date.now() - ts) > MODERATOR_AUTH_DRIFT_MS) {
-    return { ok: false, error: 'Authentication message expired' };
+    return {
+      ok: false,
+      error: 'Authentication message expired',
+      hint:
+        'Use moderator_timestamp = Date.parse(Issued At) from auth_message_template. Do not use Date.now().'
+    };
   }
 
   const siweCandidates = buildModeratorSiweMessageCandidates({ wallet, action, timestamp: ts });
@@ -1097,6 +1123,7 @@ export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
   return {
     ok: false,
     error: 'Signature does not match SIWE wallet authentication format',
+    hint: 'Sign the exact auth_message_template text (byte-for-byte) and submit matching moderator_timestamp.',
     auth_message_template: buildModeratorAuthMessage({
       wallet: '0x<your-wallet>',
       action,

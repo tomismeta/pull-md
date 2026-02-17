@@ -51,6 +51,7 @@ function withShareUrl(baseUrl, listing) {
 function creatorAuthError(action, auth) {
   return {
     error: auth.error,
+    ...(auth?.hint ? { hint: auth.hint } : {}),
     auth_message_template:
       auth.auth_message_template ||
       buildCreatorAuthMessage({
@@ -64,6 +65,7 @@ function creatorAuthError(action, auth) {
 function moderatorAuthError(action, auth) {
   return {
     error: auth.error,
+    ...(auth?.hint ? { hint: auth.hint } : {}),
     auth_message_template:
       auth.auth_message_template ||
       buildModeratorAuthMessage({

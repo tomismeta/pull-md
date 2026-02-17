@@ -74,6 +74,7 @@ function renderWebmcpMarkdown(manifest) {
     '## Canonical Endpoints',
     '- Manifest: `GET /api/mcp/manifest`',
     '- Markdown contract: `GET /WEBMCP.md`',
+    '- MCP transport: `POST /mcp`',
     '- Public catalog: `GET /api/souls`',
     '- Purchase + re-download runtime: `GET /api/souls/{id}/download`',
     '',
@@ -100,6 +101,9 @@ function renderWebmcpMarkdown(manifest) {
     '',
     '## Tools',
     renderToolsTable(tools),
+    '',
+    '## MCP Methods',
+    renderStringList(manifest?.mcp?.methods || []),
     '',
     '## Facilitator Capabilities',
     ...(capabilityLines.length ? capabilityLines : ['- none']),
@@ -136,4 +140,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
