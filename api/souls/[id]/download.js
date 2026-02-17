@@ -122,7 +122,6 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
     redownloadSessionToken,
     paymentSignature,
     legacyPaymentHeader,
-    legacyPaymentHeader,
     hasAnyRedownloadHeaders,
     hasReceiptRedownloadHeaders,
     hasSessionRecoveryHeaders,

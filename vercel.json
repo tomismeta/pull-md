@@ -27,15 +27,15 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/WEBMCP\\.md",
+      "dest": "/api/mcp/webmcp_markdown.js"
+    },
+    {
       "handle": "filesystem"
     },
     {
       "src": "/soul",
       "dest": "/soul.html"
-    },
-    {
-      "src": "/WEBMCP\\.md",
-      "dest": "/api/mcp/webmcp_markdown.js"
     },
     {
       "src": "/(.*)",
