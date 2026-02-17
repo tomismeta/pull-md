@@ -178,9 +178,10 @@ function buildMcpSdkServer({ requestHeaders } = {}) {
       throw new McpError(ErrorCode.InvalidParams, 'Missing required params.uri');
     }
     try {
-      return await readMcpResource(uri, {
+      const content = await readMcpResource(uri, {
         headers: getHeadersFromExtra(extra, requestHeaders)
       });
+      return { contents: [content] };
     } catch (error) {
       if (isAppError(error)) {
         const normalized = normalizeToolError(error);

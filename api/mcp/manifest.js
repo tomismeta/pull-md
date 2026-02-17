@@ -1,4 +1,5 @@
 import { getMcpToolsForManifest } from '../_lib/mcp_tools.js';
+import { getMcpServerMetadata } from '../_lib/mcp_sdk.js';
 
 export default function handler(req, res) {
   const allowedOrigins = [
@@ -21,6 +22,7 @@ export default function handler(req, res) {
   }
 
   const tools = getMcpToolsForManifest();
+  const mcpMetadata = getMcpServerMetadata();
 
   return res.status(200).json({
     schema_version: 'v1',
@@ -101,26 +103,16 @@ export default function handler(req, res) {
         'Bankr EIP-3009 signatures may fail USDC contract verification in this flow (FiatTokenV2: invalid signature). Prefer EmblemVault until upstream signer compatibility is fixed.'
     },
     mcp: {
-      endpoint: '/mcp',
-      transport: 'streamable_http',
-      protocol_version: '2025-06-18',
-      response_streaming: false,
-      sampling: 'not_supported',
+      endpoint: mcpMetadata.endpoint,
+      transport: mcpMetadata.transport,
+      protocol_version: mcpMetadata.protocolVersion,
+      response_streaming: mcpMetadata.response_streaming,
+      sampling: mcpMetadata.sampling,
       required_request_headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream'
       },
-      methods: [
-        'initialize',
-        'notifications/initialized',
-        'ping',
-        'tools/list',
-        'tools/call',
-        'prompts/list',
-        'prompts/get',
-        'resources/list',
-        'resources/read'
-      ]
+      methods: mcpMetadata.methods
     },
     prompts: {
       challenge_first_tool: 'get_auth_challenge',

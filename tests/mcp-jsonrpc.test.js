@@ -229,5 +229,7 @@ test('MCP resources/list and resources/read expose discoverable URIs', async () 
     }
   });
   assert.equal(readRes.statusCode, 200);
-  assert.equal(String(readRes.body?.result?.uri || ''), 'soulstarter://docs/manifest');
+  const contents = readRes.body?.result?.contents || [];
+  assert.equal(Array.isArray(contents), true);
+  assert.equal(String(contents[0]?.uri || ''), 'soulstarter://docs/manifest');
 });
