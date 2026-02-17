@@ -1,5 +1,6 @@
-import { getSoulResolved, soulIdsResolved } from '../../_lib/catalog.js';
-import { setCors, verifyPurchaseReceipt } from '../../_lib/payments.js';
+import { isAppError } from '../../_lib/errors.js';
+import { setCors } from '../../_lib/payments.js';
+import { checkReceiptEntitlements } from '../../_lib/services/souls.js';
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -11,53 +12,17 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  const payload = req.body || {};
-
-  const walletAddress = String(payload.wallet_address || '').trim().toLowerCase();
-  if (!/^0x[a-f0-9]{40}$/i.test(walletAddress)) {
-    return res.status(400).json({ error: 'Invalid or missing wallet_address' });
-  }
-
-  const proofs = Array.isArray(payload.proofs) ? payload.proofs : [];
-  if (proofs.length === 0) {
-    return res.status(400).json({
-      error: 'Missing proofs',
-      message: 'Provide proofs: [{ soul_id, receipt }]'
+  try {
+    const payload = req.body || {};
+    const response = await checkReceiptEntitlements({
+      walletAddress: payload.wallet_address,
+      proofs: payload.proofs
     });
-  }
-
-  const availableSoulIds = await soulIdsResolved();
-  const results = await Promise.all(proofs.map(async (proof) => {
-    const soulId = String(proof?.soul_id || '');
-    const receipt = String(proof?.receipt || '');
-
-    const soul = await getSoulResolved(soulId);
-    if (!soul) {
-      return {
-        soul_id: soulId,
-        entitled: false,
-        reason: 'Unknown soul',
-        available_souls: availableSoulIds
-      };
+    return res.status(200).json(response);
+  } catch (error) {
+    if (isAppError(error)) {
+      return res.status(error.status).json(error.payload);
     }
-
-    const check = verifyPurchaseReceipt({
-      receipt,
-      wallet: walletAddress,
-      soulId
-    });
-
-    return {
-      soul_id: soulId,
-      entitled: check.ok,
-      reason: check.ok ? null : check.error,
-      transaction: check.transaction || null
-    };
-  }));
-
-  return res.status(200).json({
-    wallet_address: walletAddress,
-    entitlements: results,
-    total_entitled: results.filter((item) => item.entitled).length
-  });
+    return res.status(500).json({ error: 'Unable to verify entitlements' });
+  }
 }

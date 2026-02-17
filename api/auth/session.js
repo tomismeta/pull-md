@@ -1,13 +1,8 @@
 import {
-  buildRedownloadSessionSetCookie,
-  createRedownloadSessionToken,
   setCors,
-  verifyRedownloadSessionToken,
-  verifyWalletAuth
 } from '../_lib/payments.js';
-
-const DEFAULT_TTL_SECONDS = Number(process.env.REDOWNLOAD_SESSION_TTL_SECONDS || '43200');
-const SESSION_TTL_SECONDS = Number.isFinite(DEFAULT_TTL_SECONDS) && DEFAULT_TTL_SECONDS > 0 ? DEFAULT_TTL_SECONDS : 43200;
+import { isAppError } from '../_lib/errors.js';
+import { createBrowserRedownloadSession } from '../_lib/services/sessions.js';
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -27,48 +22,21 @@ export default async function handler(req, res) {
     .trim()
     .toLowerCase();
 
-  if (clientMode === 'agent' || clientMode === 'headless-agent' || clientMode === 'strict-agent') {
-    return res.status(410).json({
-      error: 'Session API is deprecated for strict agent mode',
-      code: 'session_api_not_for_agents',
-      flow_hint:
-        'Headless agents should use strict re-download: X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP.',
-      required_headers: ['X-CLIENT-MODE', 'X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP']
-    });
-  }
-
-  const auth = await verifyWalletAuth({
-    wallet,
-    soulId: '*',
-    action: 'session',
-    timestamp,
-    signature
-  });
-
-  if (!auth.ok) {
-    return res.status(401).json({ error: auth.error, auth_debug: auth.auth_debug || null });
-  }
-
-  let token;
   try {
-    token = createRedownloadSessionToken({ wallet: auth.wallet });
+    const session = await createBrowserRedownloadSession({
+      wallet,
+      signature,
+      timestamp,
+      clientMode,
+      reqHost: req.headers.host
+    });
+    res.setHeader('Set-Cookie', session.setCookie);
+    res.setHeader('X-REDOWNLOAD-SESSION', session.token);
+    return res.status(200).json(session.payload);
   } catch (error) {
+    if (isAppError(error)) {
+      return res.status(error.status).json(error.payload);
+    }
     return res.status(500).json({ error: error?.message || 'Failed to create session token' });
   }
-
-  const checked = verifyRedownloadSessionToken({ token, wallet: auth.wallet });
-  if (!checked.ok) {
-    return res.status(500).json({ error: checked.error || 'Failed to verify session token' });
-  }
-
-  const expiresAtMs = Number(checked.exp || Date.now() + SESSION_TTL_SECONDS * 1000);
-  res.setHeader('Set-Cookie', buildRedownloadSessionSetCookie({ token, reqHost: req.headers.host }));
-  res.setHeader('X-REDOWNLOAD-SESSION', token);
-  return res.status(200).json({
-    ok: true,
-    wallet: auth.wallet,
-    token,
-    expires_at_ms: expiresAtMs,
-    ttl_seconds: SESSION_TTL_SECONDS
-  });
 }

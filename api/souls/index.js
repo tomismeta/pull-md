@@ -1,5 +1,6 @@
-import { listSoulsResolved } from '../_lib/catalog.js';
+import { isAppError } from '../_lib/errors.js';
 import { setCors } from '../_lib/payments.js';
+import { buildPublicSoulsResponse, listSoulsCatalog } from '../_lib/services/souls.js';
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
@@ -13,20 +14,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { category } = req.query || {};
-    const souls = await listSoulsResolved();
-    const filtered = category ? souls.filter((soul) => soul.category === category) : souls;
-    return res.status(200).json({
-      souls: filtered,
-      count: filtered.length,
-      meta: {
-        discovery: 'public_catalog',
-        mcp_manifest: '/api/mcp/manifest',
-        mcp_list_endpoint: '/api/mcp/tools/list_souls',
-        purchase_flow: 'GET /api/souls/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE'
-      }
-    });
+    const souls = await listSoulsCatalog({ category: req.query?.category });
+    return res.status(200).json(buildPublicSoulsResponse(souls));
   } catch (error) {
+    if (isAppError(error)) {
+      return res.status(error.status).json(error.payload);
+    }
     return res.status(500).json({
       error: 'Unable to load soul catalog',
       details: error?.message || 'unknown_error'
