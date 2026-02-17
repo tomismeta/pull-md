@@ -28,6 +28,9 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 Tool invocation contract:
 
 - `POST /mcp`
+- Headers:
+`Content-Type: application/json`
+`Accept: application/json, text/event-stream`
 - JSON-RPC method: `tools/call`
 - Params: `{ "name": "<tool_name>", "arguments": { ... } }`
 

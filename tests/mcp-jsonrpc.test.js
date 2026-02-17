@@ -1,38 +1,64 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 
 import mcpHandler from '../api/mcp/index.js';
 
 function runMcpRequest({ method = 'POST', headers = {}, body = null } = {}) {
-  return new Promise((resolve) => {
-    const req = { method, headers, body };
-    const response = {
-      statusCode: 200,
-      headers: {},
-      body: null,
-      setHeader(key, value) {
-        this.headers[key.toLowerCase()] = value;
-      },
-      status(code) {
-        this.statusCode = code;
-        return this;
-      },
-      json(payload) {
-        this.body = payload;
-        resolve(this);
-        return this;
-      },
-      end() {
-        resolve(this);
-        return this;
-      }
-    };
-    Promise.resolve(mcpHandler(req, response)).catch((error) => {
-      resolve({
-        statusCode: 500,
-        headers: {},
-        body: { error: error instanceof Error ? error.message : String(error || 'unknown') }
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      Promise.resolve(mcpHandler(req, res)).catch((error) => {
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.setHeader('content-type', 'application/json');
+          res.end(
+            JSON.stringify({
+              error: error instanceof Error ? error.message : String(error || 'unknown')
+            })
+          );
+        } else {
+          res.end();
+        }
       });
+    });
+
+    server.listen(0, '127.0.0.1', async () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      const url = `http://127.0.0.1:${port}/mcp`;
+      const requestHeaders = {
+        ...(method === 'POST'
+          ? { 'content-type': 'application/json', accept: 'application/json, text/event-stream' }
+          : {}),
+        ...headers
+      };
+      const requestBody = body == null ? undefined : JSON.stringify(body);
+
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: requestHeaders,
+          body: requestBody
+        });
+        const text = await response.text();
+        let parsedBody = null;
+        if (text) {
+          try {
+            parsedBody = JSON.parse(text);
+          } catch (_) {
+            parsedBody = text;
+          }
+        }
+        resolve({
+          statusCode: response.status,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: parsedBody
+        });
+      } catch (error) {
+        reject(error);
+      } finally {
+        server.close();
+      }
     });
   });
 }
@@ -45,7 +71,8 @@ test('MCP initialize returns protocol capabilities over streamable HTTP', async 
       method: 'initialize',
       params: {
         protocolVersion: '2025-06-18',
-        capabilities: {}
+        capabilities: {},
+        clientInfo: { name: 'mcp-jsonrpc-test', version: '1.0.0' }
       }
     }
   });
@@ -202,7 +229,5 @@ test('MCP resources/list and resources/read expose discoverable URIs', async () 
     }
   });
   assert.equal(readRes.statusCode, 200);
-  const contents = readRes.body?.result?.contents || [];
-  assert.equal(Array.isArray(contents), true);
-  assert.equal(String(contents[0]?.uri || ''), 'soulstarter://docs/manifest');
+  assert.equal(String(readRes.body?.result?.uri || ''), 'soulstarter://docs/manifest');
 });

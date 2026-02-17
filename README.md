@@ -39,6 +39,10 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 
 ## API Surface
 
+- MCP streamable HTTP request headers:
+`Content-Type: application/json`
+`Accept: application/json, text/event-stream`
+
 - `GET /api/mcp/manifest`
 - `POST /mcp` (JSON-RPC streamable HTTP endpoint)
 - `POST /mcp` + `tools/call` `name=list_souls`

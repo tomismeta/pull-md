@@ -106,6 +106,10 @@ export default function handler(req, res) {
       protocol_version: '2025-06-18',
       response_streaming: false,
       sampling: 'not_supported',
+      required_request_headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream'
+      },
       methods: [
         'initialize',
         'notifications/initialized',
