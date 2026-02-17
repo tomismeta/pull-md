@@ -55,7 +55,7 @@ const MCP_TOOL_REGISTRY = [
       additionalProperties: false
     },
     manifest: {
-      endpoint: '/api/mcp/tools/list_souls',
+      endpoint: '/mcp',
       method: 'GET',
       parameters: {
         category: { type: 'string', required: false, description: 'Optional category filter' }
@@ -80,7 +80,7 @@ const MCP_TOOL_REGISTRY = [
       additionalProperties: false
     },
     manifest: {
-      endpoint: '/api/mcp/tools/get_soul_details',
+      endpoint: '/mcp',
       method: 'GET',
       parameters: {
         id: { type: 'string', required: true, description: 'Soul identifier' }
@@ -116,7 +116,7 @@ const MCP_TOOL_REGISTRY = [
       additionalProperties: false
     },
     manifest: {
-      endpoint: '/api/mcp/tools/check_entitlements',
+      endpoint: '/mcp',
       method: 'POST',
       parameters: {
         wallet_address: { type: 'string', required: true, description: 'Wallet to check' },
@@ -136,7 +136,7 @@ const MCP_TOOL_REGISTRY = [
     description: 'Get immediate publish payload template for creator soul listings',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     manifest: {
-      endpoint: '/api/mcp/tools/creator_marketplace',
+      endpoint: '/mcp',
       method: 'GET',
       parameters: {
         action: { type: 'string', required: true, description: 'Set action=get_listing_template' }
@@ -166,7 +166,7 @@ const MCP_TOOL_REGISTRY = [
       additionalProperties: false
     },
     manifest: {
-      endpoint: '/api/mcp/tools/creator_marketplace',
+      endpoint: '/mcp',
       method: 'POST',
       parameters: {
         action: { type: 'string', required: true, description: 'Set action=publish_listing' },
@@ -206,7 +206,7 @@ const MCP_TOOL_REGISTRY = [
       additionalProperties: false
     },
     manifest: {
-      endpoint: '/api/mcp/tools/creator_marketplace',
+      endpoint: '/mcp',
       method: 'GET',
       parameters: {
         action: { type: 'string', required: true, description: 'Set action=list_my_published_listings' }
@@ -228,7 +228,7 @@ const MCP_TOOL_REGISTRY = [
     description: 'Public list of currently visible published listings',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     manifest: {
-      endpoint: '/api/mcp/tools/creator_marketplace',
+      endpoint: '/mcp',
       method: 'GET',
       parameters: {
         action: { type: 'string', required: true, description: 'Set action=list_published_listings' }
@@ -248,7 +248,7 @@ const MCP_TOOL_REGISTRY = [
     description: 'List allowlisted moderator wallet addresses',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     manifest: {
-      endpoint: '/api/mcp/tools/creator_marketplace',
+      endpoint: '/mcp',
       method: 'GET',
       parameters: {
         action: { type: 'string', required: true, description: 'Set action=list_moderators' }
@@ -277,7 +277,7 @@ const MCP_TOOL_REGISTRY = [
       additionalProperties: false
     },
     manifest: {
-      endpoint: '/api/mcp/tools/creator_marketplace',
+      endpoint: '/mcp',
       method: 'GET',
       admin_only: true,
       auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
@@ -311,7 +311,7 @@ const MCP_TOOL_REGISTRY = [
       additionalProperties: false
     },
     manifest: {
-      endpoint: '/api/mcp/tools/creator_marketplace',
+      endpoint: '/mcp',
       method: 'POST',
       admin_only: true,
       auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
@@ -345,9 +345,11 @@ export function getMcpToolsForManifest() {
   return MCP_TOOL_REGISTRY.map((tool) => ({
     name: tool.name,
     description: tool.description,
-    endpoint: tool.manifest.endpoint,
-    method: tool.manifest.method,
-    ...(tool.manifest.parameters ? { parameters: tool.manifest.parameters } : {}),
+    endpoint: '/mcp',
+    method: 'POST',
+    rpc_method: 'tools/call',
+    rpc_tool_name: tool.name,
+    arguments_schema: tool.inputSchema || { type: 'object', properties: {} },
     ...(tool.manifest.auth_headers ? { auth_headers: tool.manifest.auth_headers } : {}),
     ...(tool.manifest.admin_only ? { admin_only: true } : {}),
     ...(tool.manifest.returns ? { returns: tool.manifest.returns } : {})
@@ -373,4 +375,3 @@ export async function invokeMcpTool(name, args, context = {}) {
   }
   return tool.run(args || {}, context);
 }
-

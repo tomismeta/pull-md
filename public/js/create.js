@@ -1,4 +1,4 @@
-const API_BASE = '/api/mcp/tools/creator_marketplace';
+const MCP_ENDPOINT = '/mcp';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
 const SIWE_DOMAIN = 'soulstarter.vercel.app';
@@ -14,6 +14,41 @@ const STATE = {
   walletType: null,
   connecting: false
 };
+
+let mcpRpcSequence = 0;
+
+async function mcpRpcCall(method, params = {}) {
+  const response = await fetch(MCP_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: `create-${Date.now()}-${++mcpRpcSequence}`,
+      method,
+      params
+    })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Request failed (${response.status})`);
+  if (!payload || payload.jsonrpc !== '2.0') throw new Error('Invalid MCP response');
+  if (payload.error) throw new Error(payload.error.message || 'MCP request failed');
+  return payload.result || {};
+}
+
+async function mcpToolCall(name, args = {}) {
+  const result = await mcpRpcCall('tools/call', {
+    name: String(name || '').trim(),
+    arguments: args && typeof args === 'object' ? args : {}
+  });
+  if (result?.isError) {
+    const detail = result?.structuredContent?.error || result?.content?.[0]?.text || 'MCP tool error';
+    throw new Error(String(detail));
+  }
+  return result?.structuredContent || {};
+}
 
 function toast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
@@ -283,9 +318,7 @@ async function restoreWalletSession() {
 
 async function loadModeratorAllowlist() {
   try {
-    const response = await fetch(`${API_BASE}?action=list_moderators`);
-    if (!response.ok) throw new Error('moderator lookup failed');
-    const payload = await response.json();
+    const payload = await mcpToolCall('list_moderators', {});
     moderatorAllowlist = new Set(
       (Array.isArray(payload?.moderators) ? payload.moderators : [])
         .map((wallet) => String(wallet || '').toLowerCase())
@@ -365,14 +398,29 @@ function normalizeTemplateMarkdown(value) {
 }
 
 async function api(action, { method = 'GET', body, headers = {} } = {}) {
-  const response = await fetch(`${API_BASE}?action=${encodeURIComponent(action)}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || payload.auth_message_template || `Request failed (${response.status})`);
-  return payload;
+  const normalizedAction = String(action || '').trim();
+  const normalizedMethod = String(method || '').toUpperCase();
+  if (normalizedAction === 'get_listing_template') {
+    return mcpToolCall('get_listing_template', {});
+  }
+
+  if (normalizedAction === 'publish_listing') {
+    if (normalizedMethod !== 'POST') {
+      throw new Error('publish_listing requires POST');
+    }
+    return mcpToolCall('publish_listing', body && typeof body === 'object' ? body : {});
+  }
+
+  if (normalizedAction === 'list_my_published_listings') {
+    const args = {
+      wallet_address: String(headers['X-WALLET-ADDRESS'] || body?.wallet_address || '').trim(),
+      auth_signature: String(headers['X-AUTH-SIGNATURE'] || body?.auth_signature || '').trim(),
+      auth_timestamp: headers['X-AUTH-TIMESTAMP'] || body?.auth_timestamp
+    };
+    return mcpToolCall('list_my_published_listings', args);
+  }
+
+  throw new Error(`Unsupported create action: ${normalizedAction}`);
 }
 
 async function loadTemplate() {

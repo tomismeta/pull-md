@@ -28,7 +28,8 @@ export function buildPublicSoulsResponse(souls) {
     meta: {
       discovery: 'public_catalog',
       mcp_manifest: '/api/mcp/manifest',
-      mcp_list_endpoint: '/api/mcp/tools/list_souls',
+      mcp_endpoint: '/mcp',
+      mcp_list_tool: 'list_souls',
       purchase_flow: 'GET /api/souls/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE'
     }
   };
@@ -199,4 +200,3 @@ export async function checkReceiptEntitlements({ walletAddress, proofs }) {
     total_entitled: results.filter((item) => item.entitled).length
   };
 }
-

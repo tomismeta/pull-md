@@ -92,7 +92,7 @@ function creatorAuthFromHeaders({ headers, body, action }) {
 function ensureAction(action) {
   const normalized = String(action || '').trim();
   if (!normalized) {
-    throw new AppError(400, { error: 'Missing required action', endpoint: '/api/mcp/tools/creator_marketplace' });
+    throw new AppError(400, { error: 'Missing required action', endpoint: '/mcp', rpc_method: 'tools/call' });
   }
   return normalized;
 }
@@ -146,7 +146,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
       error: 'Method not allowed for publish_listing',
       code: 'publish_listing_requires_post',
       flow_hint:
-        'Use POST /api/mcp/tools/creator_marketplace?action=publish_listing with wallet auth fields and listing payload.',
+        'Use POST /mcp with JSON-RPC method tools/call and name=publish_listing.',
       required_method: 'POST'
     });
   }
@@ -265,4 +265,3 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     method: normalizedMethod
   });
 }
-

@@ -40,16 +40,17 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 ## API Surface
 
 - `GET /api/mcp/manifest`
-- `GET /api/mcp/tools/list_souls`
-- `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
-- `POST /api/mcp/tools/check_entitlements`
-- `GET /api/mcp/tools/creator_marketplace?action=get_listing_template`
-- `POST /api/mcp/tools/creator_marketplace?action=publish_listing` (creator wallet auth, immediate publish)
-- `GET /api/mcp/tools/creator_marketplace?action=list_my_published_listings` (creator wallet auth)
-- `GET /api/mcp/tools/creator_marketplace?action=list_moderators`
-- `GET /api/mcp/tools/creator_marketplace?action=list_moderation_listings` (moderator wallet auth)
-- `POST /api/mcp/tools/creator_marketplace?action=remove_listing_visibility` (moderator wallet auth)
-- `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
+- `POST /mcp` (JSON-RPC streamable HTTP endpoint)
+- `POST /mcp` + `tools/call` `name=list_souls`
+- `POST /mcp` + `tools/call` `name=get_soul_details` (`arguments: { "id": "<soul_id>" }`)
+- `POST /mcp` + `tools/call` `name=check_entitlements`
+- `POST /mcp` + `tools/call` `name=get_listing_template`
+- `POST /mcp` + `tools/call` `name=publish_listing` (creator wallet auth, immediate publish)
+- `POST /mcp` + `tools/call` `name=list_my_published_listings` (creator wallet auth)
+- `POST /mcp` + `tools/call` `name=list_moderators`
+- `POST /mcp` + `tools/call` `name=list_moderation_listings` (moderator wallet auth)
+- `POST /mcp` + `tools/call` `name=remove_listing_visibility` (moderator wallet auth)
+- `POST /mcp` + `tools/call` `name=list_published_listings`
 - `GET /api/souls/{id}/download`
 - `GET /api/auth/session`
 - `GET /api/health/facilitator`
@@ -57,12 +58,12 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 ## Creator Publish Model
 
 - Immediate publish only:
-`POST /api/mcp/tools/creator_marketplace?action=publish_listing` publishes directly with creator wallet auth.
+`POST /mcp` with JSON-RPC `tools/call` `name=publish_listing` publishes directly with creator wallet auth.
 - No drafts, no approval queue, no intermediate states.
 - Successful publish response includes:
 `soul_id`, `share_url`, and `purchase_endpoint`.
 - Published listings are immediately discoverable in:
-`GET /api/mcp/tools/list_souls` and purchasable through `GET /api/souls/{id}/download`.
+`POST /mcp` `tools/call` `name=list_souls` and purchasable through `GET /api/souls/{id}/download`.
 - Catalog persistence:
 when `MARKETPLACE_DATABASE_URL` (or `DATABASE_URL`/`POSTGRES_URL`) is configured, published catalog and moderation audit data are stored in Postgres JSONB tables for Vercel-safe durability.
 On Vercel, creator publish requires one of these DB vars. Without DB config, publish now returns `503 marketplace_persistence_unconfigured` to prevent non-durable ghost listings.

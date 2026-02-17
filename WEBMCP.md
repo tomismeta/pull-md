@@ -25,46 +25,52 @@ prefer EmblemVault for production purchase runs until Bankr signer compatibility
 
 ## Tools
 
-1. `GET /api/mcp/tools/list_souls`
+Tool invocation contract:
+
+- `POST /mcp`
+- JSON-RPC method: `tools/call`
+- Params: `{ "name": "<tool_name>", "arguments": { ... } }`
+
+1. `name=list_souls`
 - Lists available souls and pricing metadata.
 - Returns DB-backed published listings by default.
 - Bundled static souls are returned only when `ENABLE_BUNDLED_SOULS=1`.
 
-2. `GET /api/mcp/tools/get_soul_details?id=<soul_id>`
+2. `name=get_soul_details` with `arguments.id=<soul_id>`
 - Returns detailed metadata and endpoint usage details for one soul.
 
-3. `POST /api/mcp/tools/check_entitlements`
+3. `name=check_entitlements`
 - Verifies receipt proof(s) for re-download:
 `{ wallet_address, proofs: [{ soul_id, receipt }] }`
 
-4. `GET /api/mcp/tools/creator_marketplace?action=get_listing_template`
+4. `name=get_listing_template`
 - Returns template for immediate publish payloads.
 
-5. `POST /api/mcp/tools/creator_marketplace?action=publish_listing`
+5. `name=publish_listing`
 - Creator wallet-authenticated immediate publish.
 - Request fields:
 `wallet_address`, `auth_signature`, `auth_timestamp`, `listing`.
 - No draft state or approval queue.
 - Success returns `share_url` and `purchase_endpoint`.
 
-6. `GET /api/mcp/tools/creator_marketplace?action=list_my_published_listings`
+6. `name=list_my_published_listings`
 - Creator wallet-authenticated list of creator-owned listings (includes hidden).
 
-7. `GET /api/mcp/tools/creator_marketplace?action=list_published_listings`
+7. `name=list_published_listings`
 - Public list of visible listings only.
 - Backed by Postgres JSONB when configured (`MARKETPLACE_DATABASE_URL`/`DATABASE_URL`/`POSTGRES_URL`).
 - On Vercel, creator publish requires one of these DB vars; otherwise `publish_listing` returns `503 marketplace_persistence_unconfigured` to avoid non-durable listings.
 - Response may include `storage_warning` when persistence configuration is incomplete.
 
-8. `GET /api/mcp/tools/creator_marketplace?action=list_moderators`
+8. `name=list_moderators`
 - Lists allowlisted moderator wallet addresses.
 
-9. `GET /api/mcp/tools/creator_marketplace?action=list_moderation_listings` (moderator wallet auth)
+9. `name=list_moderation_listings` (moderator wallet auth)
 - Headers:
 `X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
 - Returns `visible[]` and `hidden[]` listing partitions.
 
-10. `POST /api/mcp/tools/creator_marketplace?action=remove_listing_visibility` (moderator wallet auth)
+10. `name=remove_listing_visibility` (moderator wallet auth)
 - Headers:
 `X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
 - Body:

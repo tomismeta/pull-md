@@ -44,7 +44,7 @@ test('manifest exposes strict agent guardrails and facilitator capability flags'
   assert.ok(body.error_codes?.x402_method_mismatch);
   assert.equal(body.error_codes?.contract_wallet_not_supported_by_facilitator, undefined);
   assert.equal(
-    Array.isArray(body.tools) && body.tools.some((tool) => String(tool?.endpoint || '') === '/api/mcp/tools/purchase_soul'),
-    false
+    Array.isArray(body.tools) && body.tools.every((tool) => String(tool?.endpoint || '') === '/mcp'),
+    true
   );
 });

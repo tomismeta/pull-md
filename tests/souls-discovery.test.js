@@ -39,5 +39,6 @@ test('public souls discovery endpoint returns a stable response shape', async ()
   assert.equal(typeof res.body.count, 'number');
   assert.equal(res.body.count, res.body.souls.length);
   assert.equal(res.body.meta?.mcp_manifest, '/api/mcp/manifest');
+  assert.equal(res.body.meta?.mcp_endpoint, '/mcp');
+  assert.equal(res.body.meta?.mcp_list_tool, 'list_souls');
 });
-

@@ -346,6 +346,47 @@ function collectStoredProofs(wallet) {
   return proofs;
 }
 
+let mcpRpcSequence = 0;
+
+async function mcpRpcCall(method, params = {}) {
+  const response = await fetchWithTimeout('/mcp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: `web-${Date.now()}-${++mcpRpcSequence}`,
+      method,
+      params
+    })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || `MCP request failed (${response.status})`);
+  }
+  if (!payload || payload.jsonrpc !== '2.0') {
+    throw new Error('Invalid MCP response');
+  }
+  if (payload.error) {
+    throw new Error(payload.error.message || 'MCP request failed');
+  }
+  return payload.result || {};
+}
+
+async function mcpToolCall(name, args = {}) {
+  const result = await mcpRpcCall('tools/call', {
+    name: String(name || '').trim(),
+    arguments: args && typeof args === 'object' ? args : {}
+  });
+  if (result?.isError) {
+    const detail = result?.structuredContent?.error || result?.content?.[0]?.text || 'MCP tool error';
+    throw new Error(String(detail));
+  }
+  return result?.structuredContent || {};
+}
+
 async function refreshEntitlementsForWallet(wallet) {
   if (!wallet) return;
   const proofs = collectStoredProofs(wallet);
@@ -354,16 +395,10 @@ async function refreshEntitlementsForWallet(wallet) {
     return;
   }
   try {
-    const response = await fetchWithTimeout(`${CONFIG.apiBase}/mcp/tools/check_entitlements`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        wallet_address: wallet.toLowerCase(),
-        proofs
-      })
+    const payload = await mcpToolCall('check_entitlements', {
+      wallet_address: wallet.toLowerCase(),
+      proofs
     });
-    if (!response.ok) throw new Error('entitlement check failed');
-    const payload = await response.json();
     const owned = new Set(
       (Array.isArray(payload?.entitlements) ? payload.entitlements : [])
         .filter((entry) => entry?.entitled && entry?.soul_id)
@@ -381,15 +416,7 @@ async function refreshEntitlementsForWallet(wallet) {
 async function refreshCreatedSoulsForWallet(wallet) {
   if (!wallet) return;
   try {
-    const response = await fetchWithTimeout(
-      `${CONFIG.apiBase}/mcp/tools/creator_marketplace?action=list_published_listings`,
-      {
-        method: 'GET',
-        headers: { Accept: 'application/json' }
-      }
-    );
-    if (!response.ok) throw new Error('published listing lookup failed');
-    const payload = await response.json();
+    const payload = await mcpToolCall('list_published_listings', {});
     const created = new Set(
       (Array.isArray(payload?.listings) ? payload.listings : [])
         .filter((entry) => String(entry?.wallet_address || '').toLowerCase() === wallet.toLowerCase())
@@ -519,9 +546,7 @@ async function hydrateSoulDetailPage() {
   }
 
   try {
-    const response = await fetchWithTimeout(`${CONFIG.apiBase}/mcp/tools/get_soul_details?id=${encodeURIComponent(soulId)}`);
-    if (!response.ok) throw new Error('Soul not found');
-    const payload = await response.json();
+    const payload = await mcpToolCall('get_soul_details', { id: soulId });
     const soul = payload?.soul || null;
     if (!soul) throw new Error('Soul metadata unavailable');
     soulCatalogCache = [soul, ...(Array.isArray(soulCatalogCache) ? soulCatalogCache.filter((item) => item.id !== soul.id) : [])];
@@ -670,9 +695,7 @@ async function getExpectedSellerAddressForSoul(soulId) {
     return sellerAddressCache.get(soulId);
   }
   try {
-    const response = await fetchWithTimeout(`${CONFIG.apiBase}/mcp/tools/get_soul_details?id=${encodeURIComponent(soulId)}`);
-    if (!response.ok) throw new Error('details lookup failed');
-    const payload = await response.json();
+    const payload = await mcpToolCall('get_soul_details', { id: soulId });
     const seller = payload?.soul?.seller_address;
     const normalized = normalizeAddress(seller || EXPECTED_SELLER_ADDRESS);
     if (!normalized) throw new Error('invalid seller');
@@ -1588,12 +1611,7 @@ async function loadSouls() {
 
 async function loadModeratorAllowlist() {
   try {
-    const response = await fetchWithTimeout(`${CONFIG.apiBase}/mcp/tools/creator_marketplace?action=list_moderators`, {
-      method: 'GET',
-      headers: { Accept: 'application/json' }
-    });
-    if (!response.ok) throw new Error('moderator lookup failed');
-    const payload = await response.json();
+    const payload = await mcpToolCall('list_moderators', {});
     moderatorAllowlist = new Set(
       (Array.isArray(payload?.moderators) ? payload.moderators : [])
         .map((wallet) => String(wallet || '').toLowerCase())

@@ -1,4 +1,4 @@
-const API_BASE = '/api/mcp/tools/creator_marketplace';
+const MCP_ENDPOINT = '/mcp';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
 const SIWE_DOMAIN = 'soulstarter.vercel.app';
@@ -14,6 +14,41 @@ const state = {
   moderators: [],
   connecting: false
 };
+
+let mcpRpcSequence = 0;
+
+async function mcpRpcCall(method, params = {}) {
+  const response = await fetch(MCP_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: `admin-${Date.now()}-${++mcpRpcSequence}`,
+      method,
+      params
+    })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || `Request failed (${response.status})`);
+  if (!payload || payload.jsonrpc !== '2.0') throw new Error('Invalid MCP response');
+  if (payload.error) throw new Error(payload.error.message || 'MCP request failed');
+  return payload.result || {};
+}
+
+async function mcpToolCall(name, args = {}) {
+  const result = await mcpRpcCall('tools/call', {
+    name: String(name || '').trim(),
+    arguments: args && typeof args === 'object' ? args : {}
+  });
+  if (result?.isError) {
+    const detail = result?.structuredContent?.error || result?.content?.[0]?.text || 'MCP tool error';
+    throw new Error(String(detail));
+  }
+  return result?.structuredContent || {};
+}
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toastContainer');
@@ -309,15 +344,31 @@ async function signModeratorHeaders(action) {
 }
 
 async function apiCall(action, { method = 'GET', body, moderatorAuth = false } = {}) {
-  const headers = moderatorAuth ? await signModeratorHeaders(action) : {};
-  const response = await fetch(`${API_BASE}?action=${encodeURIComponent(action)}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
-  return payload;
+  const normalizedAction = String(action || '').trim();
+  if (normalizedAction === 'list_moderators') {
+    return mcpToolCall('list_moderators', {});
+  }
+
+  const headers = moderatorAuth ? await signModeratorHeaders(normalizedAction) : {};
+  const authArgs = {
+    moderator_address: String(headers['X-MODERATOR-ADDRESS'] || '').trim(),
+    moderator_signature: String(headers['X-MODERATOR-SIGNATURE'] || '').trim(),
+    moderator_timestamp: headers['X-MODERATOR-TIMESTAMP']
+  };
+
+  if (normalizedAction === 'list_moderation_listings') {
+    return mcpToolCall('list_moderation_listings', authArgs);
+  }
+
+  if (normalizedAction === 'remove_listing_visibility') {
+    return mcpToolCall('remove_listing_visibility', {
+      ...authArgs,
+      soul_id: String(body?.soul_id || '').trim(),
+      reason: typeof body?.reason === 'string' ? body.reason : ''
+    });
+  }
+
+  throw new Error(`Unsupported moderation action: ${normalizedAction}`);
 }
 
 function renderModeratorList() {

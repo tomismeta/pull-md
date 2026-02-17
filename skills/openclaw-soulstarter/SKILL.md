@@ -32,8 +32,9 @@ Use this skill for agent workflows against a deployed SoulStarter instance.
 ## 1. Discover
 
 - `GET {base_url}/api/mcp/manifest`
-- `GET {base_url}/api/mcp/tools/list_souls`
-- `GET {base_url}/api/mcp/tools/get_soul_details?id={soul_id}`
+- `POST {base_url}/mcp` with method `tools/list`
+- `POST {base_url}/mcp` with method `tools/call`, params `{ "name": "list_souls", "arguments": {} }`
+- `POST {base_url}/mcp` with method `tools/call`, params `{ "name": "get_soul_details", "arguments": { "id": "{soul_id}" } }`
 
 Domain rule:
 - Use `https://soulstarter.vercel.app` for production runs.
@@ -41,39 +42,20 @@ Domain rule:
 
 ## 2. Re-download First (No Repay)
 
-Build and sign:
+Strict headless agent mode requires a live SIWE proof on every re-download call.
 
-```text
-SoulStarter Wallet Authentication
-address:<wallet_lowercase>
-soul:<soul_id>
-action:redownload
-timestamp:<unix_ms>
-```
-
-Call:
-
+1. Call:
 - `GET {base_url}/api/souls/{soul_id}/download`
 - Headers:
-`X-WALLET-ADDRESS`, `X-AUTH-SIGNATURE`, `X-AUTH-TIMESTAMP`, `X-PURCHASE-RECEIPT`
+`X-CLIENT-MODE: agent`, `X-WALLET-ADDRESS`, `X-PURCHASE-RECEIPT`
 
-If `200`, save returned content and update stored receipt from `X-PURCHASE-RECEIPT` if present.
-If `401` or `402`, continue to purchase flow.
+2. If response is `401` with `auth_message_template`:
+- Sign the exact SIWE message string returned by server (no edits).
+- Send retry headers:
+`X-CLIENT-MODE: agent`, `X-WALLET-ADDRESS`, `X-PURCHASE-RECEIPT`, `X-REDOWNLOAD-SIGNATURE`, `X-REDOWNLOAD-TIMESTAMP`
 
-Preferred session mode:
-
-1. Bootstrap session:
-- `GET {base_url}/api/auth/session`
-- Headers: `X-WALLET-ADDRESS`, `X-AUTH-SIGNATURE`, `X-AUTH-TIMESTAMP`
-2. Re-download:
-- `GET {base_url}/api/souls/{soul_id}/download`
-- Headers:
-  - Preferred: `X-WALLET-ADDRESS`, `X-PURCHASE-RECEIPT`, `X-REDOWNLOAD-SESSION`
-  - Recovery if receipt unavailable: `X-WALLET-ADDRESS`, `X-REDOWNLOAD-SESSION`
-
-Server behavior:
-- Receipt mode is primary.
-- Session-only recovery is accepted for prior on-chain buyers and creator-owned souls.
+3. If `200`, save returned content and update stored receipt from `X-PURCHASE-RECEIPT` if present.
+4. If `401`/`402` after signed retry, continue to purchase flow.
 
 ## 3. Purchase Flow (Strict x402)
 
@@ -89,8 +71,6 @@ Server behavior:
 3. Retry same endpoint with header:
 - Preferred:
 `PAYMENT-SIGNATURE: <base64-json-payload>`
-- Also accepted:
-`PAYMENT: <base64-json-payload>` or `X-PAYMENT: <base64-json-payload>`
 4. On success:
 - Read soul content from response body.
 - Read settlement details from `PAYMENT-RESPONSE`.
@@ -167,7 +147,7 @@ Important:
 
 Use:
 
-- `POST {base_url}/api/mcp/tools/check_entitlements`
+- `POST {base_url}/mcp` with method `tools/call`, params `{ "name": "check_entitlements", "arguments": { ... } }`
 - Body:
 `{ "wallet_address": "...", "proofs": [{ "soul_id": "...", "receipt": "..." }] }`
 
