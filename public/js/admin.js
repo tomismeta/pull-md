@@ -15,39 +15,19 @@ const state = {
   connecting: false
 };
 
-let mcpRpcSequence = 0;
-
-async function mcpRpcCall(method, params = {}) {
-  const response = await fetch(MCP_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json'
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: `admin-${Date.now()}-${++mcpRpcSequence}`,
-      method,
-      params
-    })
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.error?.message || `Request failed (${response.status})`);
-  if (!payload || payload.jsonrpc !== '2.0') throw new Error('Invalid MCP response');
-  if (payload.error) throw new Error(payload.error.message || 'MCP request failed');
-  return payload.result || {};
+function getMcpClient() {
+  const client = window?.SoulStarterMcp;
+  if (!client || typeof client.callTool !== 'function') {
+    throw new Error('MCP client unavailable');
+  }
+  return client;
 }
 
 async function mcpToolCall(name, args = {}) {
-  const result = await mcpRpcCall('tools/call', {
-    name: String(name || '').trim(),
-    arguments: args && typeof args === 'object' ? args : {}
+  return getMcpClient().callTool(name, args, {
+    endpoint: MCP_ENDPOINT,
+    idPrefix: 'admin'
   });
-  if (result?.isError) {
-    const detail = result?.structuredContent?.error || result?.content?.[0]?.text || 'MCP tool error';
-    throw new Error(String(detail));
-  }
-  return result?.structuredContent || {};
 }
 
 function showToast(message, type = 'info') {

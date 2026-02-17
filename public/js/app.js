@@ -346,45 +346,19 @@ function collectStoredProofs(wallet) {
   return proofs;
 }
 
-let mcpRpcSequence = 0;
-
-async function mcpRpcCall(method, params = {}) {
-  const response = await fetchWithTimeout('/mcp', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json'
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: `web-${Date.now()}-${++mcpRpcSequence}`,
-      method,
-      params
-    })
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || `MCP request failed (${response.status})`);
+function getMcpClient() {
+  const client = window?.SoulStarterMcp;
+  if (!client || typeof client.callTool !== 'function') {
+    throw new Error('MCP client unavailable');
   }
-  if (!payload || payload.jsonrpc !== '2.0') {
-    throw new Error('Invalid MCP response');
-  }
-  if (payload.error) {
-    throw new Error(payload.error.message || 'MCP request failed');
-  }
-  return payload.result || {};
+  return client;
 }
 
 async function mcpToolCall(name, args = {}) {
-  const result = await mcpRpcCall('tools/call', {
-    name: String(name || '').trim(),
-    arguments: args && typeof args === 'object' ? args : {}
+  return getMcpClient().callTool(name, args, {
+    timeoutMs: CONFIG.requestTimeout,
+    idPrefix: 'web'
   });
-  if (result?.isError) {
-    const detail = result?.structuredContent?.error || result?.content?.[0]?.text || 'MCP tool error';
-    throw new Error(String(detail));
-  }
-  return result?.structuredContent || {};
 }
 
 async function refreshEntitlementsForWallet(wallet) {
