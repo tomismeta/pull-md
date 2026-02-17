@@ -113,6 +113,23 @@ function getRedownloadHelper() {
   return helper;
 }
 
+function getSoulCardsHelper() {
+  const helper = window?.SoulStarterSoulCards;
+  if (
+    !helper ||
+    typeof helper.escapeHtml !== 'function' ||
+    typeof helper.formatCardDescription !== 'function' ||
+    typeof helper.formatSoulPriceLabel !== 'function' ||
+    typeof helper.getSoulGlyph !== 'function' ||
+    typeof helper.renderInventorySummary !== 'function' ||
+    typeof helper.buildOwnedSoulCardsHtml !== 'function' ||
+    typeof helper.buildCatalogSoulCardsHtml !== 'function'
+  ) {
+    throw new Error('Soul cards helper unavailable');
+  }
+  return helper;
+}
+
 function getUiShell() {
   const helper = window?.SoulStarterUiShell;
   if (!helper) {
@@ -523,41 +540,13 @@ function renderOwnedSouls() {
   }
 
   const byId = new Map((Array.isArray(soulCatalogCache) ? soulCatalogCache : []).map((soul) => [soul.id, soul]));
-  const cards = [...allSoulIds].map((soulId) => {
-    const soul = byId.get(soulId) || { id: soulId, name: soulId, description: 'Soul access available' };
-    const cardDescription = formatCardDescription(soul.description, 'Soul access available');
-    const isOwned = owned.has(soulId);
-    const isCreated = created.has(soulId);
-    const sourceLabel = isOwned && isCreated ? 'Purchased and created' : isCreated ? 'Creator access' : 'Wallet entitlement';
-    return `
-      <article class="soul-card" data-owned-soul-id="${escapeHtml(soul.id)}">
-        <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
-        <h3>${escapeHtml(soul.name || soul.id)}</h3>
-        <p>${escapeHtml(cardDescription)}</p>
-        <div class="soul-card-meta">
-          <div class="soul-lineage">
-            ${
-              isOwned
-                ? '<span class="badge badge-organic">Owned</span>'
-                : ''
-            }
-            ${
-              isCreated
-                ? '<span class="badge badge-synthetic">Created</span>'
-                : ''
-            }
-            <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(sourceLabel)}</span>
-          </div>
-        </div>
-        <div class="soul-card-actions">
-          <a class="btn btn-ghost" href="${escapeHtml(soulListingHref(soul.id))}">View Listing</a>
-          <button class="btn btn-primary" onclick="downloadOwnedSoul('${escapeHtml(soul.id)}')">Download SOUL.md</button>
-        </div>
-      </article>
-    `;
+  grid.innerHTML = getSoulCardsHelper().buildOwnedSoulCardsHtml({
+    soulIds: [...allSoulIds],
+    ownedSet: owned,
+    createdSet: created,
+    soulsById: byId,
+    listingHrefBuilder: soulListingHref
   });
-
-  grid.innerHTML = cards.join('');
 }
 
 async function restoreWalletSession() {
@@ -1098,74 +1087,27 @@ function showPaymentSuccess(content, txRef, soulId, redownload, expectedSettleme
 }
 
 function escapeHtml(text) {
-  if (typeof text !== 'string') return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  return getSoulCardsHelper().escapeHtml(text);
 }
 
 function formatCardDescription(value, fallback) {
-  const raw = String(value || '').replace(/\r?\n+/g, ' ').trim();
-  if (!raw) return fallback;
-  const cleaned = raw
-    .replace(/https?:\/\/\S+/gi, '')
-    .replace(/[*_`~>#]+/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([:;,.!?])/g, '$1')
-    .trim();
-  return cleaned || fallback;
+  return getSoulCardsHelper().formatCardDescription(value, fallback);
 }
 
 function formatSoulPriceLabel(soul) {
-  const numericAmount = Number(soul?.price?.amount);
-  if (Number.isFinite(numericAmount) && numericAmount >= 0) {
-    return `$${numericAmount.toFixed(2)}`;
-  }
-  const fallback = String(soul?.price?.display || soul?.priceDisplay || '').replace(/\s*USDC$/i, '').trim();
-  return fallback || '$0.00';
+  return getSoulCardsHelper().formatSoulPriceLabel(soul);
 }
 
 function renderInventorySummary(souls, errorMessage = '') {
-  const container = document.getElementById('liveInventorySummary');
-  if (!container) return;
-  const copy = container.querySelector('.hero-inventory-copy span');
-  if (!copy) return;
-  if (errorMessage) {
-    copy.textContent = errorMessage;
-    return;
-  }
-  if (!Array.isArray(souls) || souls.length === 0) {
-    copy.textContent = 'No public souls listed yet.';
-    return;
-  }
-  const topNames = souls
-    .slice(0, 3)
-    .map((soul) => String(soul?.name || '').trim())
-    .filter(Boolean)
-    .join(', ');
-  const minPrice = souls.reduce((min, soul) => {
-    const amount = Number(soul?.price?.amount);
-    if (!Number.isFinite(amount)) return min;
-    return Math.min(min, amount);
-  }, Number.POSITIVE_INFINITY);
-  const minPriceLabel = Number.isFinite(minPrice) ? `$${minPrice.toFixed(2)}` : null;
-  copy.textContent = `${souls.length} public soul${souls.length === 1 ? '' : 's'}${minPriceLabel ? ` · from ${minPriceLabel} USDC` : ''}${topNames ? ` · ${topNames}` : ''}`;
+  getSoulCardsHelper().renderInventorySummary({
+    souls,
+    errorMessage,
+    containerId: 'liveInventorySummary'
+  });
 }
 
 function getSoulGlyph(soul) {
-  const name = String(soul?.name || soul?.id || 'Soul').trim();
-  const clean = name.replace(/[^a-zA-Z0-9 ]/g, '');
-  const parts = clean.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  }
-  if (parts.length === 1 && parts[0].length >= 2) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-  if (parts.length === 1 && parts[0].length === 1) {
-    return `${parts[0].toUpperCase()}S`;
-  }
-  return 'SS';
+  return getSoulCardsHelper().getSoulGlyph(soul);
 }
 
 async function loadSouls() {
@@ -1190,46 +1132,12 @@ async function loadSouls() {
       return;
     }
 
-    grid.innerHTML = souls
-      .map(
-        (soul) => {
-          const owned = isSoulAccessible(soul.id);
-          const cta = owned ? 'Download SOUL.md' : 'Purchase SOUL.md';
-          const lineageLabel = formatCreatorLabel(soul.provenance?.raised_by || '');
-          const type = String((soul.provenance?.type || 'hybrid')).toLowerCase();
-          const cardDescription = formatCardDescription(soul.description, 'Soul listing available.');
-          const priceLabel = formatSoulPriceLabel(soul);
-          return `
-      <article class="soul-card ${soul.id === 'sassy-starter-v1' ? 'soul-card-featured' : ''}" data-soul-id="${escapeHtml(soul.id)}">
-        <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
-        <h3>${escapeHtml(soul.name)}</h3>
-        <p>${escapeHtml(cardDescription)}</p>
-        ${
-          soul.source_url
-            ? `<a class="soul-source-link" href="${escapeHtml(soul.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
-                soul.source_label || 'Source'
-              )}</a>`
-            : ''
-        }
-        <div class="soul-card-meta">
-          <div class="soul-lineage">
-            <span class="badge badge-${escapeHtml(type)}">${escapeHtml(type)}</span>
-            <span class="lineage-mini">${escapeHtml(lineageLabel || 'Unknown lineage')}</span>
-          </div>
-          <div>
-            <span class="price">${escapeHtml(priceLabel)}</span>
-            <span class="currency">USDC</span>
-          </div>
-        </div>
-        <div class="soul-card-actions">
-          <a class="btn btn-ghost" href="${escapeHtml(soulListingHref(soul.id))}">View Listing</a>
-          <button class="btn btn-primary" onclick="${owned ? `downloadOwnedSoul('${escapeHtml(soul.id)}')` : `purchaseSoul('${escapeHtml(soul.id)}')`}">${escapeHtml(cta)}</button>
-        </div>
-      </article>
-    `;
-        }
-      )
-      .join('');
+    grid.innerHTML = getSoulCardsHelper().buildCatalogSoulCardsHtml({
+      souls,
+      isAccessible: isSoulAccessible,
+      listingHrefBuilder: soulListingHref,
+      lineageLabelForSoul: (soul) => formatCreatorLabel(soul?.provenance?.raised_by || '')
+    });
     renderOwnedSouls();
   } catch (error) {
     console.error('Catalog load failed:', error);
