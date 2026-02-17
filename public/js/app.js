@@ -179,6 +179,19 @@ function getSellerGuardHelper() {
   return helper;
 }
 
+function getAppBootstrapHelper() {
+  const helper = window?.SoulStarterAppBootstrap;
+  if (
+    !helper ||
+    typeof helper.bindWalletOptionHandlers !== 'function' ||
+    typeof helper.runStartup !== 'function' ||
+    typeof helper.bindBeforeUnload !== 'function'
+  ) {
+    throw new Error('App bootstrap helper unavailable');
+  }
+  return helper;
+}
+
 function getUiShell() {
   const helper = window?.SoulStarterUiShell;
   if (!helper) {
@@ -1067,22 +1080,20 @@ function showToast(message, type = 'info') {
 }
 
 function bindWalletOptionHandlers() {
-  const options = document.querySelectorAll('.wallet-option[data-wallet-kind]');
-  options.forEach((option) => {
-    option.addEventListener('click', async () => {
-        const kind = option.getAttribute('data-wallet-kind');
-        try {
-          if (kind === 'metamask') {
-            await connectMetaMask();
-          } else if (kind === 'rabby') {
-            await connectRabby();
-          } else if (kind === 'bankr') {
-            await connectBankr();
-          }
-      } catch (error) {
-        showToast(error?.message || 'Wallet connection failed', 'error');
+  getAppBootstrapHelper().bindWalletOptionHandlers({
+    selector: '.wallet-option[data-wallet-kind]',
+    connectByKind: async (kind) => {
+      if (kind === 'metamask') {
+        await connectMetaMask();
+      } else if (kind === 'rabby') {
+        await connectRabby();
+      } else if (kind === 'bankr') {
+        await connectBankr();
       }
-    });
+    },
+    onError: (error) => {
+      showToast(error?.message || 'Wallet connection failed', 'error');
+    }
   });
 }
 
@@ -1094,18 +1105,18 @@ function initMobileNav() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-  initProviderDiscovery();
-  initMobileNav();
-  await loadModeratorAllowlist();
-  bindWalletOptionHandlers();
-  updateWalletUI();
-  await restoreWalletSession();
-  await refreshEntitlementsForWallet(walletAddress);
-  await refreshCreatedSoulsForWallet(walletAddress);
-  await hydrateSoulDetailPage();
-  loadSouls();
-  updateSoulPagePurchaseState();
+getAppBootstrapHelper().runStartup({
+  initProviderDiscovery,
+  initMobileNav,
+  loadModeratorAllowlist,
+  bindWalletOptions: bindWalletOptionHandlers,
+  updateWalletUI,
+  restoreWalletSession,
+  refreshEntitlements: () => refreshEntitlementsForWallet(walletAddress),
+  refreshCreatedSouls: () => refreshCreatedSoulsForWallet(walletAddress),
+  hydrateSoulDetailPage,
+  loadSouls,
+  updateSoulPagePurchaseState
 });
 
 window.openWalletModal = openWalletModal;
@@ -1117,7 +1128,7 @@ window.connectBankr = connectBankr;
 window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
 window.downloadOwnedSoul = downloadOwnedSoul;
-window.addEventListener('beforeunload', () => {
+getAppBootstrapHelper().bindBeforeUnload(() => {
   revokeActiveSuccessDownloadUrl();
 });
 window.showToast = showToast;
