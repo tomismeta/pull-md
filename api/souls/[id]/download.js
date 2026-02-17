@@ -43,14 +43,14 @@ const ONCHAIN_ENTITLEMENT_UNAVAILABLE_TTL_MS = Number(process.env.ONCHAIN_ENTITL
 const BASE_MAINNET_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const ERC20_TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
 
-function normalizeAssetTransferMethod(value) {
+export function normalizeAssetTransferMethod(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (raw === 'permit2') return 'permit2';
   if (raw === 'eip3009') return 'eip3009';
   return null;
 }
 
-async function resolveAssetTransferMethodForRequest(req, { strictAgentMode, wallet }) {
+export function resolveAssetTransferMethodForRequest(req, { strictAgentMode, wallet }) {
   const explicit =
     normalizeAssetTransferMethod(req.headers['x-asset-transfer-method']) ||
     normalizeAssetTransferMethod(req.query?.asset_transfer_method);
@@ -531,7 +531,7 @@ export default async function handler(req, res) {
         error: 'Unable to resolve transfer method for strict agent flow',
         code: 'agent_transfer_method_unresolved',
         flow_hint:
-          'Provide X-WALLET-ADDRESS and retry. If wallet-type detection is unavailable, set X-ASSET-TRANSFER-METHOD explicitly to eip3009 or permit2.',
+          'Provide X-WALLET-ADDRESS and retry. Strict agent mode defaults to eip3009 unless X-ASSET-TRANSFER-METHOD is explicitly set.',
         required_headers: ['X-CLIENT-MODE: agent', 'X-WALLET-ADDRESS'],
         optional_headers: ['X-ASSET-TRANSFER-METHOD'],
         transfer_method_selection: transferMethodSelection
@@ -1133,7 +1133,7 @@ function rewriteIncomingPaymentHeader(req) {
   req.headers[headerKey] = Buffer.from(JSON.stringify(canonical)).toString('base64');
 }
 
-function canonicalizeSubmittedPayment(submitted) {
+export function canonicalizeSubmittedPayment(submitted) {
   if (!submitted || typeof submitted !== 'object') return submitted;
   if (!submitted.payload || typeof submitted.payload !== 'object') return submitted;
 
@@ -1170,12 +1170,16 @@ function canonicalizeSubmittedPayment(submitted) {
   };
 }
 
-function getTransferMethodFromSubmittedPayment(submitted) {
+export function getTransferMethodFromSubmittedPayment(submitted) {
   const fromAccepted = String(submitted?.accepted?.extra?.assetTransferMethod || '')
     .trim()
     .toLowerCase();
   if (fromAccepted === 'permit2' || fromAccepted === 'eip3009') return fromAccepted;
+  const hasAuthorization = Boolean(submitted?.payload?.authorization);
+  const hasEip3009Signature = Boolean(submitted?.payload?.signature || submitted?.payload?.authorization?.signature);
+  if (hasAuthorization && hasEip3009Signature) return 'eip3009';
   if (submitted?.payload?.permit2Authorization || submitted?.payload?.permit2) return 'permit2';
+  if (hasAuthorization) return 'eip3009';
   return 'eip3009';
 }
 
@@ -1417,7 +1421,7 @@ function buildPaymentSigningInstructions(paymentRequired) {
     required_header: 'PAYMENT-SIGNATURE',
     header_format: 'base64(JSON.stringify(x402_payload))',
     accepted_must_match: 'accepted must exactly equal PAYMENT-REQUIRED.accepts[0]',
-    wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests for wallet-type-aware method selection.',
+    wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests. Strict agent mode defaults to eip3009 unless X-ASSET-TRANSFER-METHOD is set.',
     method_rules: {
       eip3009: {
         typed_data_primary_type: 'TransferWithAuthorization',
@@ -1448,7 +1452,7 @@ function buildPaymentSigningInstructionsForMethod(method) {
     required_header: 'PAYMENT-SIGNATURE',
     header_format: 'base64(JSON.stringify(x402_payload))',
     accepted_must_match: 'accepted must exactly equal PAYMENT-REQUIRED.accepts[0]',
-    wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests for wallet-type-aware method selection.',
+    wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests. Strict agent mode defaults to eip3009 unless X-ASSET-TRANSFER-METHOD is set.',
     method_rules: {
       eip3009: {
         typed_data_primary_type: 'TransferWithAuthorization',
@@ -1641,7 +1645,7 @@ function shouldIncludeDebug(req) {
   return String(process.env.X402_VERBOSE_DEBUG || '').toLowerCase() === 'true';
 }
 
-function validatePaymentPayloadContract({ paymentPayload, paymentRequirements }) {
+export function validatePaymentPayloadContract({ paymentPayload, paymentRequirements }) {
   const transferMethod = String(paymentRequirements?.extra?.assetTransferMethod || 'eip3009').toLowerCase();
   const payload = paymentPayload?.payload && typeof paymentPayload.payload === 'object' ? paymentPayload.payload : null;
 

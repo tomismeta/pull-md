@@ -14,20 +14,8 @@ const CONFIG = {
 const SIWE_DOMAIN = 'soulstarter.vercel.app';
 const SIWE_URI = 'https://soulstarter.vercel.app';
 
-const TRANSFER_WITH_AUTHORIZATION_TYPE = {
-  TransferWithAuthorization: [
-    { name: 'from', type: 'address' },
-    { name: 'to', type: 'address' },
-    { name: 'value', type: 'uint256' },
-    { name: 'validAfter', type: 'uint256' },
-    { name: 'validBefore', type: 'uint256' },
-    { name: 'nonce', type: 'bytes32' }
-  ]
-};
-
-const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
-const X402_EXACT_PERMIT2_PROXY = '0x4020615294c913F045dc10f0a5cdEbd86c280001';
-const MAX_UINT256_DEC = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
+const X402_FETCH_SDK_VERSION = '2.3.0';
+const X402_EVM_SDK_VERSION = '2.3.1';
 const EXPECTED_SELLER_ADDRESS = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
 const BASE_PUBLIC_RPC_URL = 'https://mainnet.base.org';
 const ERC20_TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
@@ -41,25 +29,6 @@ const createdSoulCacheByWallet = new Map();
 let moderatorAllowlist = new Set();
 let soulCatalogCache = [];
 
-const PERMIT2_WITNESS_TYPES = {
-  PermitWitnessTransferFrom: [
-    { name: 'permitted', type: 'TokenPermissions' },
-    { name: 'spender', type: 'address' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
-    { name: 'witness', type: 'Witness' }
-  ],
-  TokenPermissions: [
-    { name: 'token', type: 'address' },
-    { name: 'amount', type: 'uint256' }
-  ],
-  Witness: [
-    { name: 'to', type: 'address' },
-    { name: 'validAfter', type: 'uint256' },
-    { name: 'extra', type: 'bytes' }
-  ]
-};
-
 let provider = null;
 let signer = null;
 let walletAddress = null;
@@ -71,6 +40,7 @@ let latestSoulDownload = null;
 let baseRpcProvider = null;
 let settlementVerificationSequence = 0;
 let currentSoulDetailId = null;
+let x402SdkModulesPromise = null;
 
 function initProviderDiscovery() {
   if (providerDiscoveryInitialized || typeof window === 'undefined') return;
@@ -746,103 +716,135 @@ async function ensureRedownloadSession() {
   return { token, expiresAtMs };
 }
 
-async function buildX402PaymentSignature(paymentRequired, soulId) {
+function normalizeTypedDataTypesForEthers(types) {
+  const source = types && typeof types === 'object' ? types : {};
+  const result = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'EIP712Domain') continue;
+    result[key] = value;
+  }
+  return result;
+}
+
+async function loadX402SdkModules() {
+  if (!x402SdkModulesPromise) {
+    x402SdkModulesPromise = Promise.all([
+      import(`https://esm.sh/@x402/fetch@${X402_FETCH_SDK_VERSION}?bundle`),
+      import(`https://esm.sh/@x402/evm@${X402_EVM_SDK_VERSION}?bundle`)
+    ]).then(([fetchSdk, evmSdk]) => ({
+      x402Client: fetchSdk.x402Client,
+      x402HTTPClient: fetchSdk.x402HTTPClient,
+      ExactEvmScheme: evmSdk.ExactEvmScheme,
+      toClientEvmSigner: evmSdk.toClientEvmSigner
+    }));
+  }
+  return x402SdkModulesPromise;
+}
+
+function selectPaymentRequirement({
+  accepts,
+  expectedSeller,
+  preferredAssetTransferMethod = 'eip3009'
+}) {
+  const options = Array.isArray(accepts) ? accepts : [];
+  if (options.length === 0) {
+    throw new Error('No payment requirements available');
+  }
+  const expected = normalizeAddress(expectedSeller || EXPECTED_SELLER_ADDRESS);
+  const sellerMatches = options.filter((option) => normalizeAddress(option?.payTo) === expected);
+  if (expected && sellerMatches.length === 0) {
+    throw new Error(
+      `Security check failed: payment recipient mismatch. Expected ${expected}. Do not continue.`
+    );
+  }
+  const method = String(preferredAssetTransferMethod || 'eip3009').trim().toLowerCase();
+  const target = method === 'permit2' ? 'permit2' : 'eip3009';
+  const preferredMatches = (sellerMatches.length ? sellerMatches : options).filter(
+    (option) => String(option?.extra?.assetTransferMethod || 'eip3009').toLowerCase() === target
+  );
+  if (preferredMatches.length > 0) return preferredMatches[0];
+  const available = [...new Set((sellerMatches.length ? sellerMatches : options).map((option) =>
+    String(option?.extra?.assetTransferMethod || 'eip3009').toLowerCase()
+  ))];
+  throw new Error(
+    `No ${target} payment option available for this quote. Available methods: ${available.join(', ') || 'none'}.`
+  );
+}
+
+async function createX402SdkEngine({
+  wallet,
+  activeSigner,
+  expectedSeller,
+  preferredAssetTransferMethod = 'eip3009'
+}) {
+  const sdk = await loadX402SdkModules();
+  const clientSigner = sdk.toClientEvmSigner({
+    address: wallet,
+    signTypedData: async ({ domain, types, message }) => {
+      const normalizedTypes = normalizeTypedDataTypesForEthers(types);
+      return activeSigner.signTypedData(domain || {}, normalizedTypes, message || {});
+    }
+  });
+  const paymentRequirementsSelector = (_version, accepts) =>
+    selectPaymentRequirement({
+      accepts,
+      expectedSeller,
+      preferredAssetTransferMethod
+    });
+  const client = sdk.x402Client.fromConfig({
+    schemes: [
+      {
+        network: 'eip155:*',
+        client: new sdk.ExactEvmScheme(clientSigner)
+      }
+    ],
+    paymentRequirementsSelector
+  });
+  return {
+    client,
+    httpClient: new sdk.x402HTTPClient(client)
+  };
+}
+
+async function decodePaymentRequiredWithSdk(response, httpClient) {
+  let body;
+  try {
+    const text = await response.clone().text();
+    if (text) {
+      body = JSON.parse(text);
+    }
+  } catch (_) {}
+  return httpClient.getPaymentRequiredResponse((name) => response.headers.get(name), body);
+}
+
+async function buildX402PaymentSignature(paymentRequired, soulId, x402Engine = null) {
   if (!paymentRequired || paymentRequired.x402Version !== 2) {
     throw new Error('Unsupported x402 version');
   }
-
-  const accepted = Array.isArray(paymentRequired.accepts) ? paymentRequired.accepts[0] : null;
-  if (!accepted) {
+  const accepted = Array.isArray(paymentRequired.accepts) ? paymentRequired.accepts : [];
+  if (accepted.length === 0) {
     throw new Error('No payment requirements available');
   }
   const expectedSeller = await getExpectedSellerAddressForSoul(soulId);
-  assertExpectedSellerAddress(accepted.payTo, expectedSeller);
+  const selected = selectPaymentRequirement({
+    accepts: accepted,
+    expectedSeller,
+    preferredAssetTransferMethod: 'eip3009'
+  });
+  const engine =
+    x402Engine ||
+    (await createX402SdkEngine({
+      wallet: walletAddress,
+      activeSigner: signer,
+      expectedSeller,
+      preferredAssetTransferMethod: 'eip3009'
+    }));
 
-  if (!accepted.extra?.name || !accepted.extra?.version) {
-    throw new Error('Missing EIP-712 domain parameters in payment requirements');
-  }
-
-  const chainId = Number(String(accepted.network).split(':')[1]);
-  if (!Number.isFinite(chainId)) {
-    throw new Error('Invalid payment network');
-  }
-
-  const transferMethod = String(accepted.extra?.assetTransferMethod || 'eip3009').toLowerCase();
-  const now = Math.floor(Date.now() / 1000);
-  if (transferMethod === 'permit2') {
-    const permitNonceHex = ethers.hexlify(ethers.randomBytes(32));
-    const permit2Authorization = {
-      from: walletAddress,
-      permitted: {
-        token: accepted.asset,
-        amount: accepted.amount
-      },
-      spender: X402_EXACT_PERMIT2_PROXY,
-      nonce: BigInt(permitNonceHex).toString(),
-      deadline: String(now + (accepted.maxTimeoutSeconds || 300)),
-      witness: {
-        to: accepted.payTo,
-        validAfter: String(now - 600),
-        extra: '0x'
-      }
-    };
-
-    const permitDomain = {
-      name: 'Permit2',
-      chainId,
-      verifyingContract: PERMIT2_ADDRESS
-    };
-    const permitSignature = await signer.signTypedData(permitDomain, PERMIT2_WITNESS_TYPES, permit2Authorization);
-    const approveData = new ethers.Interface(['function approve(address spender, uint256 amount)']).encodeFunctionData(
-      'approve',
-      [PERMIT2_ADDRESS, MAX_UINT256_DEC]
-    );
-
-    return {
-      x402Version: paymentRequired.x402Version,
-      scheme: accepted.scheme,
-      network: accepted.network,
-      payload: {
-        permit2Authorization,
-        signature: permitSignature,
-        transaction: {
-          to: accepted.asset,
-          data: approveData
-        }
-      },
-      accepted,
-      resource: paymentRequired.resource,
-      extensions: paymentRequired.extensions
-    };
-  }
-
-  const authorization = {
-    from: walletAddress,
-    to: accepted.payTo,
-    value: accepted.amount,
-    validAfter: String(now - 600),
-    validBefore: String(now + (accepted.maxTimeoutSeconds || 300)),
-    nonce: ethers.hexlify(ethers.randomBytes(32))
+  const normalizedPaymentRequired = {
+    ...paymentRequired,
+    accepts: [selected]
   };
-  const domain = {
-    name: accepted.extra.name,
-    version: accepted.extra.version,
-    chainId,
-    verifyingContract: accepted.asset
-  };
-  const signature = await signer.signTypedData(domain, TRANSFER_WITH_AUTHORIZATION_TYPE, authorization);
-  return {
-    x402Version: paymentRequired.x402Version,
-    scheme: accepted.scheme,
-    network: accepted.network,
-    payload: {
-      authorization,
-      signature
-    },
-    accepted,
-    resource: paymentRequired.resource,
-    extensions: paymentRequired.extensions
-  };
+  return engine.client.createPaymentPayload(normalizedPaymentRequired);
 }
 
 async function tryRedownload(soulId) {
@@ -939,11 +941,19 @@ async function purchaseSoul(soulId) {
     }
 
     if (btn) btn.textContent = 'Requesting x402 terms...';
+    const expectedSeller = await getExpectedSellerAddressForSoul(soulId);
+    const x402Engine = await createX402SdkEngine({
+      wallet: walletAddress,
+      activeSigner: signer,
+      expectedSeller,
+      preferredAssetTransferMethod: 'eip3009'
+    });
     const initial = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        'X-WALLET-ADDRESS': walletAddress
+        'X-WALLET-ADDRESS': walletAddress,
+        'X-ASSET-TRANSFER-METHOD': 'eip3009'
       }
     });
 
@@ -952,14 +962,9 @@ async function purchaseSoul(soulId) {
       throw new Error(error || `Expected 402 payment required (got ${initial.status})`);
     }
 
-    const paymentRequiredHeader = initial.headers.get('PAYMENT-REQUIRED');
-    if (!paymentRequiredHeader) {
-      throw new Error('Missing PAYMENT-REQUIRED header');
-    }
-
-    const paymentRequired = JSON.parse(atob(paymentRequiredHeader));
+    const paymentRequired = await decodePaymentRequiredWithSdk(initial, x402Engine.httpClient);
     if (btn) btn.textContent = 'Signing x402 payment...';
-    const paymentPayload = await buildX402PaymentSignature(paymentRequired, soulId);
+    const paymentPayload = await buildX402PaymentSignature(paymentRequired, soulId, x402Engine);
 
     if (btn) btn.textContent = 'Submitting payment...';
     const paid = await fetchWithTimeout(`${CONFIG.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
@@ -967,6 +972,7 @@ async function purchaseSoul(soulId) {
       headers: {
         'PAYMENT-SIGNATURE': btoa(JSON.stringify(paymentPayload)),
         'X-WALLET-ADDRESS': walletAddress,
+        'X-ASSET-TRANSFER-METHOD': 'eip3009',
         Accept: 'text/markdown'
       }
     });
