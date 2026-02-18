@@ -486,6 +486,16 @@ function sharePathForSoul(soulId) {
   return sharePathForAsset(soulId);
 }
 
+function canonicalSharePath(value, id) {
+  const fallback = sharePathForAsset(id);
+  const raw = asString(value);
+  if (!raw) return fallback;
+  if (/^\/soul\.html\?/i.test(raw)) {
+    return raw.replace(/^\/soul\.html\?/i, '/asset.html?');
+  }
+  return raw;
+}
+
 function normalizeVisibility(value) {
   const mode = String(value || '').trim().toLowerCase();
   return mode === 'hidden' ? 'hidden' : 'public';
@@ -1522,7 +1532,7 @@ function summarizePublishedListing(entry) {
   const id = asString(listing.id);
   const assetType = normalizeAssetType(listing.assetType || listing.asset_type) || 'soul';
   const fileName = normalizeMarkdownFileName(listing.fileName || listing.file_name, defaultFileNameForAssetType(assetType));
-  const sharePath = asString(listing.sharePath || sharePathForAsset(id));
+  const sharePath = canonicalSharePath(listing.sharePath, id);
   return {
     asset_id: id,
     soul_id: id,
