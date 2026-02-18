@@ -438,7 +438,6 @@ main {
 
 .badge-asset,
 .badge-soul,
-.badge-skill,
 .badge-playbook,
 .badge-policy,
 .badge-prompt,
@@ -447,6 +446,11 @@ main {
 .badge-knowledge {
   color: #1f5cae;
   background: #ebf2ff;
+}
+
+.badge-skill {
+  color: #7b4db5;
+  background: #f2eaff;
 }
 
 .badge-hybrid {
@@ -632,6 +636,16 @@ main {
   text-align: center;
   font-size: 0.75rem;
   background: #fbfdff;
+}
+
+.footer a {
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.footer a:hover {
+  text-decoration: underline;
 }
 
 .admin-main,
@@ -1582,7 +1596,6 @@ body {
 
 .badge-asset,
 .badge-soul,
-.badge-skill,
 .badge-playbook,
 .badge-policy,
 .badge-prompt,
@@ -1592,6 +1605,11 @@ body {
 .badge-synthetic {
   color: #9fc7ff;
   background: rgba(88, 166, 255, 0.12);
+}
+
+.badge-skill {
+  color: #d2a8ff;
+  background: rgba(210, 168, 255, 0.16);
 }
 
 .badge-hybrid {
@@ -1649,6 +1667,13 @@ body {
   border-color: #5b8fd4;
   background: #17345a;
   color: #cce4ff;
+}
+
+.filter-pill[data-asset-type='skill'].active,
+.filter-pill[data-filter-type='skill'].active {
+  border-color: #8260b8;
+  background: #2a2140;
+  color: #d2a8ff;
 }
 
 .listing-search {
