@@ -1,7 +1,7 @@
 const MCP_ENDPOINT = '/mcp';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
-const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'soulstarter.vercel.app';
+const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'pull.md';
 const SIWE_URI = (typeof window !== 'undefined' && window.location?.origin) || `https://${SIWE_DOMAIN}`;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 const state = {

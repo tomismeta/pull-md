@@ -11,7 +11,7 @@ const CONFIG = {
     blockExplorerUrls: ['https://basescan.org']
   }
 };
-const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'soulstarter.vercel.app';
+const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'pull.md';
 const SIWE_URI = (typeof window !== 'undefined' && window.location?.origin) || `https://${SIWE_DOMAIN}`;
 
 const X402_FETCH_SDK_VERSION = '2.3.0';
@@ -25,6 +25,7 @@ const entitlementCacheByWallet = new Map();
 const createdSoulCacheByWallet = new Map();
 let moderatorAllowlist = new Set();
 let soulCatalogCache = [];
+let currentAssetTypeFilter = 'all';
 
 let provider = null;
 let signer = null;
@@ -752,6 +753,36 @@ function getSoulGlyph(soul) {
   return getSoulCardsHelper().getSoulGlyph(soul);
 }
 
+function bindAssetTypeFilters() {
+  const register = () => {
+    const root = document.getElementById('assetTypeFilters');
+    if (!root) return;
+    const buttons = [...root.querySelectorAll('.filter-pill[data-asset-type]')];
+    if (!buttons.length) return;
+    const applyState = () => {
+      buttons.forEach((button) => {
+        const value = String(button.getAttribute('data-asset-type') || '').toLowerCase();
+        button.classList.toggle('active', value === currentAssetTypeFilter);
+      });
+    };
+    buttons.forEach((button) => {
+      button.addEventListener('click', async () => {
+        const next = String(button.getAttribute('data-asset-type') || 'all').toLowerCase();
+        if (!next || next === currentAssetTypeFilter) return;
+        currentAssetTypeFilter = next;
+        applyState();
+        await loadSouls();
+      });
+    });
+    applyState();
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', register, { once: true });
+  } else {
+    register();
+  }
+}
+
 async function loadSouls() {
   await getCatalogUiHelper().loadSouls({
     fetchWithTimeout,
@@ -771,7 +802,8 @@ async function loadSouls() {
       soul?.seller_address ||
       ''
     ),
-    soulsGridId: 'soulsGrid'
+    soulsGridId: 'soulsGrid',
+    assetType: currentAssetTypeFilter
   });
 }
 
@@ -838,6 +870,7 @@ getAppBootstrapHelper().runStartup({
   loadSouls,
   updateSoulPagePurchaseState
 });
+bindAssetTypeFilters();
 
 window.openWalletModal = openWalletModal;
 window.closeWalletModal = closeWalletModal;

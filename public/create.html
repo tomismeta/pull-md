@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PULL.md Creator Portal</title>
-  <meta name="description" content="Publish markdown assets instantly with wallet authentication on PULL.md.">
+  <meta name="description" content="Publish SOUL.md and SKILL.md assets instantly with wallet authentication on PULL.md.">
   <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,7 +46,7 @@
       <div class="container">
         <div class="agent-api-card creator-header-card">
           <h1>Publish Markdown Asset</h1>
-          <p>Immediate publish only. No drafts. No approval queue. You get a shareable link as soon as publish succeeds.</p>
+          <p>Immediate publish only. No drafts. No approval queue. Publish and share in one step.</p>
         </div>
       </div>
     </section>
@@ -59,6 +59,13 @@
             <label>Name<input id="name" class="creator-input" placeholder="My Markdown Asset"></label>
             <label>Price (USDC)<input id="priceUsdc" class="creator-input" type="number" step="0.01" min="0.01" placeholder="0.49"></label>
           </div>
+          <label>Markdown Type
+            <select id="assetType" class="creator-input">
+              <option value="soul">SOUL.md</option>
+              <option value="skill">SKILL.md</option>
+            </select>
+          </label>
+          <p id="assetTypeHint" class="creator-status">Publishing as SOUL.md</p>
           <label>Description<textarea id="description" class="creator-textarea" rows="3" placeholder="Short summary shown to buyers."></textarea></label>
           <label>Markdown Content<textarea id="soulMarkdown" class="creator-textarea" rows="14" placeholder="# SOUL.md&#10;&#10;## Core Principles&#10;..."></textarea></label>
           <div class="creator-action-row">

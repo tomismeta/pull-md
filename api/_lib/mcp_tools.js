@@ -241,7 +241,7 @@ const MCP_TOOL_REGISTRY = [
       type: 'object',
       properties: {
         category: { type: 'string', description: 'Optional category filter' },
-        asset_type: { type: 'string', description: 'Optional asset type filter (soul, skill, playbook, ...)' }
+        asset_type: { type: 'string', description: 'Optional asset type filter (soul, skill)' }
       },
       additionalProperties: false
     },

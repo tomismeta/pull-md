@@ -9,6 +9,18 @@ import {
 import { buildSiweAuthMessage, getSellerAddress, verifyPurchaseReceipt } from '../payments.js';
 import { AppError } from '../errors.js';
 
+function enabledAssetTypes() {
+  const raw = String(process.env.ENABLED_MARKDOWN_ASSET_TYPES || 'soul,skill')
+    .split(',')
+    .map((item) => String(item || '').trim().toLowerCase())
+    .filter(Boolean);
+  return new Set(raw.length ? raw : ['soul', 'skill']);
+}
+
+function isEnabledAssetType(value) {
+  return enabledAssetTypes().has(String(value || '').trim().toLowerCase());
+}
+
 function matchesAssetType(item, assetType) {
   const target = String(assetType || '').trim().toLowerCase();
   if (!target) return true;
@@ -18,6 +30,7 @@ function matchesAssetType(item, assetType) {
 export async function listAssetsCatalog({ category, assetType } = {}) {
   const assets = await listAssetsResolved();
   return assets.filter((asset) => {
+    if (!isEnabledAssetType(asset.asset_type)) return false;
     if (category && asset.category !== category) return false;
     return matchesAssetType(asset, assetType);
   });
@@ -58,6 +71,7 @@ export function buildPublicAssetsResponse(assets) {
       mcp_manifest: '/api/mcp/manifest',
       mcp_endpoint: '/mcp',
       mcp_list_tool: 'list_assets',
+      enabled_asset_types: [...enabledAssetTypes()],
       purchase_flow: 'GET /api/assets/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE'
     }
   };
@@ -89,6 +103,13 @@ export async function resolveAssetDetails(id) {
       error: 'Asset not found',
       available_assets: ids,
       available_souls: ids
+    });
+  }
+  if (!isEnabledAssetType(asset.asset_type)) {
+    throw new AppError(404, {
+      error: 'Asset not found',
+      reason: 'asset_type_not_enabled',
+      enabled_asset_types: [...enabledAssetTypes()]
     });
   }
 

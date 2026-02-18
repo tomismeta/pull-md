@@ -1,7 +1,7 @@
 const MCP_ENDPOINT = '/mcp';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
-const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'soulstarter.vercel.app';
+const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'pull.md';
 const SIWE_URI = (typeof window !== 'undefined' && window.location?.origin) || `https://${SIWE_DOMAIN}`;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 let moderatorAllowlist = new Set();
@@ -301,8 +301,12 @@ function collectListing() {
   const name = document.getElementById('name')?.value.trim() || '';
   const description = document.getElementById('description')?.value.trim() || '';
   const price = Number(document.getElementById('priceUsdc')?.value);
+  const assetType = String(document.getElementById('assetType')?.value || 'soul').trim().toLowerCase();
   const soulMarkdown = document.getElementById('soulMarkdown')?.value || '';
+  const fileName = assetType === 'skill' ? 'SKILL.md' : 'SOUL.md';
   return {
+    asset_type: assetType,
+    file_name: fileName,
     name,
     price_usdc: Number.isFinite(price) ? price : 0,
     description,
@@ -312,10 +316,30 @@ function collectListing() {
 
 function applyTemplate(template) {
   const payload = template && typeof template === 'object' ? template : {};
+  const assetType = String(payload.asset_type || document.getElementById('assetType')?.value || 'soul')
+    .trim()
+    .toLowerCase();
+  const normalizedType = assetType === 'skill' ? 'skill' : 'soul';
+  const fileName = normalizedType === 'skill' ? 'SKILL.md' : 'SOUL.md';
+  const templateTitle = normalizedType === 'skill' ? '# SKILL.md' : '# SOUL.md';
+  const templateBody =
+    normalizeTemplateMarkdown(payload.content_markdown || payload.soul_markdown || '').trim() ||
+    `${templateTitle}\n\n## Core Principles\n- Define your non-negotiable values and decision rules.\n\n## Operating Pattern\n- Describe how this markdown asset plans, executes, and iterates.\n\n## Boundaries\n- Clarify what this asset should not do and when to refuse.\n\n## Communication\n- Specify tone, brevity, formatting, and interaction style.\n\n## Continuity\n- Define memory expectations, handoff behavior, and long-term consistency rules.`;
+
+  const transformedBody = templateBody.replace(/^#\s+[^\n\r]+/i, templateTitle);
+  const textareaPlaceholder =
+    normalizedType === 'skill'
+      ? '# SKILL.md\n\n## Purpose\n...'
+      : '# SOUL.md\n\n## Core Principles\n...';
+
+  document.getElementById('assetType').value = normalizedType;
   document.getElementById('name').value = payload.name || '';
   document.getElementById('description').value = payload.description || '';
   document.getElementById('priceUsdc').value = payload.price_usdc || '';
-  document.getElementById('soulMarkdown').value = normalizeTemplateMarkdown(payload.content_markdown || payload.soul_markdown || '');
+  document.getElementById('soulMarkdown').value = transformedBody;
+  document.getElementById('soulMarkdown').setAttribute('placeholder', textareaPlaceholder);
+  const typeHint = document.getElementById('assetTypeHint');
+  if (typeHint) typeHint.textContent = `Publishing as ${fileName}`;
 }
 
 function normalizeTemplateMarkdown(value) {
@@ -352,9 +376,11 @@ async function api(action, { method = 'GET', body, headers = {} } = {}) {
 
 async function loadTemplate() {
   const payload = await api('get_listing_template');
-  applyTemplate(payload.template);
+  const selectedType = String(document.getElementById('assetType')?.value || 'soul').toLowerCase();
+  const template = { ...(payload?.template || {}), asset_type: selectedType };
+  applyTemplate(template);
   setOutput(payload);
-  setStatus('Example loaded.');
+  setStatus('Template loaded.');
 }
 
 function renderPublishedList(items) {
@@ -408,13 +434,13 @@ function renderPublishedList(items) {
 }
 
 function getSoulGlyph(item) {
-  const name = String(item?.name || item?.soul_id || 'Soul').trim();
+  const name = String(item?.name || item?.asset_id || item?.soul_id || 'Asset').trim();
   const clean = name.replace(/[^a-zA-Z0-9 ]/g, '');
   const parts = clean.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
-  if (parts.length === 1 && parts[0].length === 1) return `${parts[0].toUpperCase()}S`;
-  return 'SS';
+  if (parts.length === 1 && parts[0].length === 1) return `${parts[0].toUpperCase()}M`;
+  return 'MD';
 }
 
 function shortenAddress(value) {
@@ -483,6 +509,11 @@ async function copyShareUrl(url) {
 }
 
 function bindEvents() {
+  document.getElementById('assetType')?.addEventListener('change', () => {
+    const type = String(document.getElementById('assetType')?.value || 'soul').toLowerCase();
+    const hint = document.getElementById('assetTypeHint');
+    if (hint) hint.textContent = `Publishing as ${type === 'skill' ? 'SKILL.md' : 'SOUL.md'}`;
+  });
   document.getElementById('loadTemplateBtn')?.addEventListener('click', async () => {
     try {
       await loadTemplate();
@@ -526,6 +557,8 @@ function initDefaults() {
   initProviderDiscovery();
   initMobileNav();
   setWalletButton();
+  const hint = document.getElementById('assetTypeHint');
+  if (hint) hint.textContent = 'Publishing as SOUL.md';
   setStatus('Ready to publish.');
   setOutput('No publish response yet.');
   renderPublishedList([]);

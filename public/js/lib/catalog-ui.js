@@ -46,9 +46,9 @@
     const currentSoulDetailId = String(soul.id);
     const btn = document.getElementById(buyButtonId);
     if (btn) btn.dataset.soulId = currentSoulDetailId;
-    document.title = `${String(soul.name || soul.id)} — SoulStarter`;
+    document.title = `${String(soul.name || soul.id)} — PULL.md`;
     const descMeta = document.querySelector('meta[name="description"]');
-    if (descMeta) descMeta.setAttribute('content', String(soul.description || 'SoulStarter listing details.'));
+    if (descMeta) descMeta.setAttribute('content', String(soul.description || 'PULL.md listing details.'));
     return currentSoulDetailId;
   }
 
@@ -155,7 +155,7 @@ async function hydrateSoulDetailPage({
     });
   }
 
-  async function loadSouls({
+async function loadSouls({
     fetchWithTimeout,
     soulCardsHelper,
     soulCatalogCache = [],
@@ -165,7 +165,8 @@ async function hydrateSoulDetailPage({
     isSoulAccessible,
     listingHrefBuilder,
     lineageLabelForSoul,
-    soulsGridId = 'soulsGrid'
+    soulsGridId = 'soulsGrid',
+    assetType = 'all'
   } = {}) {
     const grid = document.getElementById(soulsGridId);
     if (!grid) {
@@ -174,7 +175,11 @@ async function hydrateSoulDetailPage({
     }
 
     try {
-      const response = await fetchWithTimeout('/api/assets');
+      const normalizedType = String(assetType || 'all').trim().toLowerCase();
+      const query = normalizedType && normalizedType !== 'all'
+        ? `?asset_type=${encodeURIComponent(normalizedType)}`
+        : '';
+      const response = await fetchWithTimeout(`/api/assets${query}`);
       if (!response.ok) throw new Error('Failed to load asset catalog');
       const payload = await response.json();
       const souls = payload.assets || payload.souls || [];

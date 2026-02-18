@@ -53,7 +53,7 @@
         successCard.style.display = 'block';
         const heading = successCard.querySelector('h3');
         if (heading) {
-          heading.textContent = redownload ? 'Soul Restored!' : 'Soul Acquired!';
+          heading.textContent = redownload ? 'Asset Restored' : 'Asset Acquired';
         }
 
         const firstP = successCard.querySelector('p');
@@ -290,7 +290,7 @@
           return;
         }
         if (typeof options.showToast === 'function') {
-          options.showToast('No purchase or creator entitlement found for this soul on this wallet.', 'warning');
+          options.showToast('No purchase or creator entitlement found for this asset on this wallet.', 'warning');
         }
       } catch (error) {
         if (typeof options.showToast === 'function') {

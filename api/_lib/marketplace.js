@@ -5,7 +5,7 @@ import { ethers } from 'ethers';
 import { Pool } from 'pg';
 
 const SOUL_TYPES = new Set(['synthetic', 'organic', 'hybrid']);
-const ASSET_TYPES = new Set(['soul', 'skill', 'playbook', 'policy', 'prompt', 'guide', 'workflow', 'knowledge']);
+const ASSET_TYPES = new Set(['soul', 'skill']);
 const MAX_SOUL_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
@@ -61,13 +61,7 @@ function defaultFileNameForAssetType(assetType) {
   const normalized = normalizeAssetType(assetType);
   const mapping = {
     soul: 'SOUL.md',
-    skill: 'SKILL.md',
-    playbook: 'PLAYBOOK.md',
-    policy: 'POLICY.md',
-    prompt: 'PROMPT.md',
-    guide: 'GUIDE.md',
-    workflow: 'WORKFLOW.md',
-    knowledge: 'KNOWLEDGE.md'
+    skill: 'SKILL.md'
   };
   return mapping[normalized] || 'ASSET.md';
 }
@@ -852,7 +846,7 @@ export function getMarketplaceDraftTemplate() {
     name: 'Example Soul',
     description: 'Short summary buyers see before purchase.',
     price_usdc: 0.49,
-    content_markdown: `# SOUL
+    content_markdown: `# SOUL.md
 
 ## Core Principles
 - Define your non-negotiable values and decision rules.
@@ -869,7 +863,7 @@ export function getMarketplaceDraftTemplate() {
 ## Continuity
 - Define memory expectations, handoff behavior, and long-term consistency rules.`,
     // Legacy alias preserved for existing clients.
-    soul_markdown: `# SOUL
+    soul_markdown: `# SOUL.md
 
 ## Core Principles
 - Define your non-negotiable values and decision rules.
@@ -886,6 +880,7 @@ export function getMarketplaceDraftTemplate() {
 ## Continuity
 - Define memory expectations, handoff behavior, and long-term consistency rules.`,
     notes: {
+      enabled_asset_types: ['soul', 'skill'],
       auto_fields: [
         'soul_id (derived from name)',
         'seller_address (set to connected creator wallet)',

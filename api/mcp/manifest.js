@@ -1,6 +1,14 @@
 import { getMcpToolsForManifest } from '../_lib/mcp_tools.js';
 import { getMcpServerMetadata } from '../_lib/mcp_sdk.js';
 
+function enabledAssetTypes() {
+  const raw = String(process.env.ENABLED_MARKDOWN_ASSET_TYPES || 'soul,skill')
+    .split(',')
+    .map((item) => String(item || '').trim().toLowerCase())
+    .filter(Boolean);
+  return raw.length ? raw : ['soul', 'skill'];
+}
+
 export default function handler(req, res) {
   const allowedOrigins = [
     'https://soulstarter.vercel.app',
@@ -35,6 +43,10 @@ export default function handler(req, res) {
     name: 'PULL.md',
     description: 'Markdown asset marketplace with x402 payments and receipt-first redownloads',
     url: baseUrl,
+    marketplace: {
+      enabled_asset_types: enabledAssetTypes(),
+      ethos: ['plain_text_first', 'portable', 'diff_friendly', 'agent_ready', 'human_readable']
+    },
     auth: {
       type: 'x402',
       network: 'eip155:8453',

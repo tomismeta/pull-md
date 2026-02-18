@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PULL.md — Markdown Asset Marketplace for Agents</title>
-  <meta name="description" content="Buy, sell, and re-download agent-ready markdown assets with x402 on Base.">
+  <title>PULL.md — Markdown Asset Commerce for Humans and Agents</title>
+  <meta name="description" content="Markdown-native marketplace for SOUL.md and SKILL.md assets. Built for humans and headless agents equally.">
 
   <meta name="mcp:version" content="1.0">
   <meta name="mcp:endpoint" content="/mcp">
@@ -53,14 +53,14 @@
     <section class="hero">
       <div class="container">
         <div class="hero-shell">
-          <p class="hero-kicker">Markdown Commerce for Agent Teams</p>
-          <h1 class="hero-title">Buy, Sell, and Reuse Agent-Ready Markdown</h1>
+          <p class="hero-kicker">Markdown-Native Asset Marketplace</p>
+          <h1 class="hero-title">Plain Text Assets for Humans and Agents</h1>
           <p class="hero-subtitle">
-            PULL.md is a clean marketplace for SOUL.md, SKILL.md, and other markdown assets.
-            Pay once with x402, then re-download with wallet proof.
+            PULL.md is built on markdown principles: readable source, portable files, and clean diffs.
+            Humans and headless agents use the same catalog, the same x402 payment path, and the same wallet-proof re-download model.
           </p>
           <div class="hero-actions">
-            <a href="#assets" class="btn btn-primary btn-lg">Explore Assets</a>
+            <a href="#assets" class="btn btn-primary btn-lg">Explore Listings</a>
             <a href="/create.html" class="btn btn-ghost btn-lg">Publish Asset</a>
           </div>
           <div class="hero-inventory" id="liveInventorySummary">
@@ -73,7 +73,7 @@
           <div class="hero-metrics">
             <div><strong>x402</strong><span>verifiable payment handshake</span></div>
             <div><strong>base + usdc</strong><span>mainnet settlement</span></div>
-            <div><strong>soul.md</strong><span>single-file delivery</span></div>
+            <div><strong>markdown first</strong><span>readable raw, no lock-in</span></div>
             <div><strong>re-download</strong><span>wallet-proof, no repay</span></div>
             <div><strong>instant publish</strong><span>create and share in one step</span></div>
           </div>
@@ -85,13 +85,13 @@
       <div class="container">
         <div class="section-head">
           <h2>How It Works</h2>
-          <p>Three steps for buyers and creators. Human-friendly UI, agent-ready APIs.</p>
-          <p>SIWE (EIP-4361) handles wallet sign-in. x402 handles payment.</p>
+          <p>Three steps for buyers and creators. Same contract for browser and API clients.</p>
+          <p>SIWE (EIP-4361) handles wallet auth. x402 handles payment and settlement.</p>
         </div>
         <div class="workflow-grid">
           <article class="workflow-card">
-            <h3>1. Choose an Asset</h3>
-            <p>Browse public markdown listings and pick the one that fits your workflow.</p>
+            <h3>1. Choose a Markdown Asset</h3>
+            <p>Browse SOUL.md and SKILL.md listings and select what your workflow needs.</p>
           </article>
           <article class="workflow-card">
             <h3>2. Pay Through x402</h3>
@@ -99,7 +99,7 @@
           </article>
           <article class="workflow-card">
             <h3>3. Download and Reuse</h3>
-            <p>Receive the markdown file immediately, then re-download later without paying twice.</p>
+            <p>Receive markdown instantly, then re-download later with wallet-proof entitlement.</p>
           </article>
         </div>
       </div>
@@ -108,8 +108,13 @@
     <section class="souls-section" id="assets">
       <div class="container">
         <div class="section-head">
-          <h2>Available Markdown Assets</h2>
-          <p>Each listing is priced in USDC and delivered as one markdown file after settlement.</p>
+          <h2>Available Listings</h2>
+          <p>Filter by markdown file type. Current marketplace scope is SOUL.md and SKILL.md.</p>
+        </div>
+        <div class="listing-filters" id="assetTypeFilters" role="group" aria-label="Filter listings by markdown type">
+          <button class="filter-pill active" type="button" data-asset-type="all">All Markdown</button>
+          <button class="filter-pill" type="button" data-asset-type="soul">SOUL.md</button>
+          <button class="filter-pill" type="button" data-asset-type="skill">SKILL.md</button>
         </div>
         <div class="souls-grid" id="soulsGrid"></div>
       </div>
@@ -119,7 +124,7 @@
       <div class="container">
         <div class="section-head">
           <h2>My Assets</h2>
-          <p>Connect your wallet to view purchased and created assets, then re-download without repay.</p>
+          <p>Connect wallet once to view purchased and created listings, then re-download without repay.</p>
         </div>
         <div class="souls-grid" id="ownedSoulsGrid"></div>
       </div>
@@ -129,7 +134,7 @@
       <div class="container">
         <div class="agent-api-card">
           <h3>For Agents</h3>
-          <p>Use Streamable HTTP MCP for discovery and orchestration. Use canonical x402 HTTP for settlement.</p>
+          <p>MCP handles discovery and orchestration. Canonical x402 HTTP handles payment and delivery.</p>
           <div class="agent-quickstart">
             <p><strong>Quickstart</strong></p>
             <code>POST /mcp</code>
