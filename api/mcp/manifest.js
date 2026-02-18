@@ -68,6 +68,8 @@ export default function handler(req, res) {
       ownership_auth_message_tolerance: ['lf', 'crlf', 'trailing_newline'],
       ownership_auth_timestamp_rule:
         'Use auth_timestamp = Date.parse(Issued At) from the same auth_message_template. Do not use current wall-clock timestamp.',
+      purchase_receipt_security:
+        'Persist X-PURCHASE-RECEIPT securely per wallet+soul. Treat it as sensitive proof material. Never publish, share, or store in plaintext logs.',
       common_auth_mistakes: [
         'Using Date.now() instead of Date.parse(Issued At)',
         'Reconstructing SIWE text manually instead of signing exact template',
@@ -149,6 +151,8 @@ export default function handler(req, res) {
       first_request:
         'No payment headers -> returns 402 + PAYMENT-REQUIRED. Include X-WALLET-ADDRESS on this first request for strict wallet binding and deterministic retries.',
       claim_request: 'Include PAYMENT-SIGNATURE with base64-encoded x402 payload to claim entitlement and download',
+      receipt_persistence:
+        'Persist X-PURCHASE-RECEIPT from successful 200 responses in secure storage keyed by wallet+soul. Do not treat receipt values as public.',
       signing_instructions_field:
         '402 response bodies include payment_signing_instructions with transfer-method-specific required/forbidden fields and typed-data primary type.',
       payment_payload_contract: {

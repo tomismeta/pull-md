@@ -99,6 +99,9 @@ function ensureAction(action) {
   return normalized;
 }
 
+const AUTO_GENERATED_FIELDS = ['soul_id', 'share_path', 'seller_address'];
+const CREATOR_PROVIDED_FIELDS = ['name', 'description', 'price_usdc', 'soul_markdown'];
+
 export function getCreatorMarketplaceSupportedActions() {
   return [
     'get_listing_template',
@@ -165,6 +168,28 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
         : requestBody.publish && typeof requestBody.publish === 'object'
           ? requestBody.publish
           : requestBody;
+    const dryRun = requestBody.dry_run === true;
+
+    if (dryRun) {
+      const result = await publishCreatorListingDirect({
+        walletAddress: auth.wallet,
+        payload: listingPayload,
+        dryRun: true
+      });
+      return {
+        ok: result.ok,
+        dry_run: true,
+        code: result.code || (result.ok ? 'validated' : 'validation_failed'),
+        wallet_address: auth.wallet,
+        errors: result.errors || [],
+        field_errors: result.field_errors || [],
+        warnings: result.warnings || [],
+        draft_id: result.draft_id || null,
+        ...(result.normalized ? { normalized: result.normalized } : {}),
+        auto_generated: AUTO_GENERATED_FIELDS,
+        creator_provided: CREATOR_PROVIDED_FIELDS
+      };
+    }
 
     const result = await publishCreatorListingDirect({
       walletAddress: auth.wallet,
@@ -176,16 +201,25 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
         code: result.code || 'publish_failed',
         ok: false,
         errors: result.errors,
+        field_errors: result.field_errors || [],
         warnings: result.warnings,
         draft_id: result.draft_id
       });
     }
 
     const listing = withShareUrl(baseUrl, result.listing);
+    const listingCreated = {
+      soul_id: listing.soul_id,
+      auto_generated: AUTO_GENERATED_FIELDS,
+      creator_provided: CREATOR_PROVIDED_FIELDS
+    };
     return {
       ok: true,
       wallet_address: auth.wallet,
       listing,
+      listing_created: listingCreated,
+      auto_generated: AUTO_GENERATED_FIELDS,
+      creator_provided: CREATOR_PROVIDED_FIELDS,
       share_url: listing.share_url,
       purchase_endpoint: `/api/souls/${listing.soul_id}/download`,
       warnings: result.warnings || [],

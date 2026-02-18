@@ -50,6 +50,7 @@ Tool invocation contract:
 - Returns SIWE message template + exact timestamp requirements for:
 `flow=creator|moderator|session|redownload`.
 - Use this first for authenticated flows; do not force a failed request to discover auth text.
+- For `flow=creator` + `action=publish_listing`, response includes `suggested_listing`.
 
 5. `name=get_listing_template`
 - Returns template for immediate publish payloads.
@@ -57,9 +58,10 @@ Tool invocation contract:
 6. `name=publish_listing`
 - Creator wallet-authenticated immediate publish.
 - Request fields:
-`wallet_address`, `auth_signature`, `auth_timestamp`, `listing`.
+`wallet_address`, `auth_signature`, `auth_timestamp`, `listing`, optional `dry_run`.
 - No draft state or approval queue.
 - Success returns `share_url` and `purchase_endpoint`.
+- `dry_run=true` validates payload and returns `field_errors` without persisting.
 
 7. `name=list_my_published_listings`
 - Creator wallet-authenticated list of creator-owned listings (includes hidden).
@@ -241,6 +243,7 @@ Only the SoulStarter server needs facilitator credentials.
 5. Build x402 JSON payload, base64-encode it, and send:
    `PAYMENT-SIGNATURE: <base64(JSON payload)>`
 6. Save `X-PURCHASE-RECEIPT` from the `200` response for re-downloads.
+   Treat the receipt as sensitive wallet-scoped proof. Persist securely and do not publish/share/log it.
 
 ### Headless Agent Quickstart (Redacted)
 
@@ -315,6 +318,7 @@ Required base headers:
 This receipt + signature challenge set is the strict canonical flow for headless agents.
 If receipt is valid for wallet+soul, response is `200` with soul file.
 If re-download headers are present, server prioritizes entitlement delivery over purchase processing, even if a payment header is also present.
+Treat `X-PURCHASE-RECEIPT` as sensitive proof material; keep it in secure storage keyed by wallet+soul.
 
 Strict agent mode rules:
 - `X-CLIENT-MODE: agent` disables browser recovery branches.

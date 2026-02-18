@@ -7,7 +7,7 @@ import {
 } from './services/souls.js';
 import { executeCreatorMarketplaceAction } from './services/creator_marketplace.js';
 import { AppError } from './errors.js';
-import { buildCreatorAuthMessage, buildModeratorAuthMessage } from './marketplace.js';
+import { buildCreatorAuthMessage, buildModeratorAuthMessage, getMarketplaceDraftTemplate } from './marketplace.js';
 import { buildSiweAuthMessage } from './payments.js';
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
@@ -72,6 +72,7 @@ function buildAuthChallengePayload(args = {}) {
   let action;
   let authMessage;
   let submitVia;
+  let suggestedListing = null;
 
   if (flow === 'creator') {
     action = String(parsed.action || 'list_my_published_listings').trim() || 'list_my_published_listings';
@@ -100,6 +101,9 @@ function buildAuthChallengePayload(args = {}) {
               auth_timestamp: '<Date.parse(Issued At)>'
             }
     };
+    if (mapCreatorActionToTool(action) === 'publish_listing') {
+      suggestedListing = getMarketplaceDraftTemplate();
+    }
   } else if (flow === 'moderator') {
     action = String(parsed.action || 'list_moderation_listings').trim() || 'list_moderation_listings';
     authMessage = buildModeratorAuthMessage({ wallet, action, timestamp: timestampMs });
@@ -199,6 +203,7 @@ function buildAuthChallengePayload(args = {}) {
       'Do not use current time for auth_timestamp; use Date.parse(Issued At).',
       'Use lowercase wallet address in arguments/headers.'
     ],
+    ...(suggestedListing ? { suggested_listing: suggestedListing } : {}),
     submit_via: submitVia
   };
 }
@@ -275,7 +280,7 @@ const MCP_TOOL_REGISTRY = [
   },
   {
     name: 'check_entitlements',
-    description: 'Verify receipt proofs for wallet re-download entitlement',
+    description: 'Verify receipt proofs for wallet re-download entitlement (receipt values are sensitive; do not log/share them)',
     inputSchema: {
       type: 'object',
       properties: {
@@ -301,7 +306,11 @@ const MCP_TOOL_REGISTRY = [
       method: 'POST',
       parameters: {
         wallet_address: { type: 'string', required: true, description: 'Wallet to check' },
-        proofs: { type: 'array', required: true, description: 'List of { soul_id, receipt } proofs' }
+        proofs: {
+          type: 'array',
+          required: true,
+          description: 'List of { soul_id, receipt } proofs (treat receipt as wallet-scoped secret)'
+        }
       },
       returns: { type: 'object', description: 'Per-proof entitlement status' }
     },
@@ -373,7 +382,22 @@ const MCP_TOOL_REGISTRY = [
         wallet_address: { type: 'string' },
         auth_signature: { type: 'string' },
         auth_timestamp: { type: ['number', 'string'] },
-        listing: { type: 'object' }
+        dry_run: {
+          type: 'boolean',
+          description: 'Validate listing payload without persisting a new published listing.'
+        },
+        listing: {
+          type: 'object',
+          description: 'Creator listing payload. Use get_listing_template for canonical structure.',
+          properties: {
+            name: { type: 'string', minLength: 3, maxLength: 80 },
+            description: { type: 'string', minLength: 12, maxLength: 240 },
+            price_usdc: { type: 'number', minimum: 0.000001 },
+            soul_markdown: { type: 'string', minLength: 1, maxLength: 65536 }
+          },
+          required: ['name', 'description', 'price_usdc', 'soul_markdown'],
+          additionalProperties: true
+        }
       },
       required: ['wallet_address', 'auth_signature', 'auth_timestamp', 'listing'],
       additionalProperties: false
@@ -390,6 +414,11 @@ const MCP_TOOL_REGISTRY = [
           required: true,
           description: 'Timestamp from SIWE Issued At (accepts Unix ms or ISO-8601)'
         },
+        dry_run: {
+          type: 'boolean',
+          required: false,
+          description: 'When true, validates payload and returns structured validation result without publishing.'
+        },
         listing: { type: 'object', required: true, description: 'Minimal publish payload: name, price_usdc, description, soul_markdown' }
       },
       returns: { type: 'object', description: 'Published listing summary + share_url + purchase endpoint' }
@@ -404,6 +433,7 @@ const MCP_TOOL_REGISTRY = [
           wallet_address: ensureString(parsed.wallet_address, 'wallet_address'),
           auth_signature: ensureString(parsed.auth_signature, 'auth_signature'),
           auth_timestamp: parsed.auth_timestamp,
+          dry_run: parsed.dry_run === true,
           listing: ensureObject(parsed.listing)
         }
       });

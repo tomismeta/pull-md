@@ -16,7 +16,9 @@ export function buildMcpListSoulsResponse(souls) {
       access_type: 'x402_paywall',
       flow: 'GET /api/souls/{id}/download -> 402 PAYMENT-REQUIRED -> GET with PAYMENT-SIGNATURE',
       reauth_flow:
-        'Strict headless agent: X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP. Human recovery: X-WALLET-ADDRESS + X-REDOWNLOAD-SESSION (or signed fallback).'
+        'Strict headless agent: X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP. Human recovery: X-WALLET-ADDRESS + X-REDOWNLOAD-SESSION (or signed fallback).',
+      receipt_handling:
+        'Persist X-PURCHASE-RECEIPT securely per wallet+soul. Treat it as sensitive proof material and do not log/share plaintext values.'
     }
   };
 }
@@ -81,7 +83,10 @@ export function buildMcpSoulDetailsResponse({ soulId, soul, summary, sellerAddre
       strict_agent_mode: {
         header: 'X-CLIENT-MODE',
         value: 'agent',
-        note: 'Strict headless mode requires receipt + wallet signature challenge for re-download. Session/auth recovery headers are not used.'
+        note:
+          'Strict headless mode requires receipt + wallet signature challenge for re-download. Session/auth recovery headers are not used.',
+        receipt_security:
+          'Store X-PURCHASE-RECEIPT securely and never expose it in logs, analytics, prompts, or shared transcripts.'
       },
       payment_payload_contract: {
         top_level_required: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
@@ -95,6 +100,8 @@ export function buildMcpSoulDetailsResponse({ soulId, soul, summary, sellerAddre
         required_top_level_fields: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
         accepted_must_match: 'accepted must exactly equal PAYMENT-REQUIRED.accepts[0]',
         wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests for strict wallet binding and deterministic retries.',
+        receipt_persistence_hint:
+          'After successful purchase, persist X-PURCHASE-RECEIPT in secure storage. This wallet-scoped proof is required for strict no-repay re-download.',
         method_rules: {
           eip3009: {
             typed_data_primary_type: 'TransferWithAuthorization',

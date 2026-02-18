@@ -118,7 +118,11 @@ const MCP_PROMPTS = [
     arguments: [
       { name: 'soul_id', required: true, description: 'Soul identifier' },
       { name: 'wallet_address', required: true, description: 'Buyer wallet address' },
-      { name: 'purchase_receipt', required: true, description: 'Saved X-PURCHASE-RECEIPT value' }
+      {
+        name: 'purchase_receipt',
+        required: true,
+        description: 'Saved X-PURCHASE-RECEIPT value (persist securely and do not expose in logs)'
+      }
     ]
   },
   {
@@ -157,7 +161,8 @@ export function getMcpPrompt(name, args = {}) {
               '1) GET /api/souls/{id}/download with X-CLIENT-MODE: agent + X-WALLET-ADDRESS.',
               '2) Read 402 PAYMENT-REQUIRED and sign per payment_signing_instructions.',
               '3) Retry GET /api/souls/{id}/download with PAYMENT-SIGNATURE.',
-              '4) Persist X-PURCHASE-RECEIPT from successful 200 response.'
+              '4) Persist X-PURCHASE-RECEIPT from successful 200 response.',
+              '5) Treat X-PURCHASE-RECEIPT as wallet-scoped secret proof for re-download. Do not print, publish, or share it.'
             ].join('\n')
           }
         }
@@ -180,7 +185,8 @@ export function getMcpPrompt(name, args = {}) {
               `Re-download soul ${soulId} with wallet ${wallet} without repaying.`,
               '1) Get SIWE template from get_auth_challenge(flow=redownload).',
               '2) Sign exact SIWE message text.',
-              '3) Send GET /api/souls/{id}/download with X-CLIENT-MODE, X-WALLET-ADDRESS, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP.'
+              '3) Send GET /api/souls/{id}/download with X-CLIENT-MODE, X-WALLET-ADDRESS, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP.',
+              '4) Keep X-PURCHASE-RECEIPT in secure storage; it is required proof for strict no-repay re-download.'
             ].join('\n')
           }
         }

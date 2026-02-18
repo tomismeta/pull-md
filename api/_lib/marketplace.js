@@ -875,8 +875,28 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
   };
 }
 
+function summarizeReceived(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') return value.length > 160 ? `${value.slice(0, 157)}...` : value;
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) return `[array:${value.length}]`;
+  if (typeof value === 'object') return '[object]';
+  return String(value);
+}
+
+function addFieldError({ errors, fieldErrors, field, expected, received, fix, message }) {
+  errors.push(String(message || `${field} is invalid.`));
+  fieldErrors.push({
+    field,
+    expected,
+    received: summarizeReceived(received),
+    fix
+  });
+}
+
 export function validateMarketplaceDraft(input, options = {}) {
   const errors = [];
+  const fieldErrors = [];
   const warnings = [];
   const prepared = buildDraftInput(input, options);
   const listing = prepared.listing || {};
@@ -895,33 +915,168 @@ export function validateMarketplaceDraft(input, options = {}) {
   const sourceLabel = asString(assets.source_label);
   const soulMarkdown = typeof assets.soul_markdown === 'string' ? assets.soul_markdown : '';
 
-  if (!validateSoulId(soulId)) errors.push('listing.soul_id must be kebab-case alphanumeric (example-soul-v1).');
-  if (name.length < 3 || name.length > 80) errors.push('listing.name must be between 3 and 80 characters.');
-  if (description.length < 12 || description.length > 240)
-    errors.push('listing.description must be between 12 and 240 characters.');
-  if (longDescription.length < 12 || longDescription.length > 2000)
-    errors.push('listing.long_description must be between 12 and 2000 characters.');
-  if (!category) errors.push('listing.category is required.');
-  if (!SOUL_TYPES.has(soulType)) errors.push('listing.soul_type must be synthetic, organic, or hybrid.');
-  if (!validateEthAddress(sellerAddress)) errors.push('listing.seller_address must be a valid EVM address.');
-  if (!soulMarkdown.trim()) errors.push('assets.soul_markdown is required.');
-  if (Buffer.byteLength(soulMarkdown, 'utf8') > MAX_SOUL_MD_BYTES)
-    errors.push(`assets.soul_markdown exceeds ${MAX_SOUL_MD_BYTES} bytes.`);
+  if (!validateSoulId(soulId)) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.soul_id',
+      expected: 'kebab-case string like "example-soul-v1"',
+      received: listing.soul_id,
+      fix: 'Provide a valid soul_id or allow it to auto-derive from name.',
+      message: 'listing.soul_id must be kebab-case alphanumeric (example-soul-v1).'
+    });
+  }
+  if (name.length < 3 || name.length > 80) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.name',
+      expected: 'string (3-80 chars)',
+      received: listing.name,
+      fix: 'Set listing.name between 3 and 80 characters.',
+      message: 'listing.name must be between 3 and 80 characters.'
+    });
+  }
+  if (description.length < 12 || description.length > 240) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.description',
+      expected: 'string (12-240 chars)',
+      received: listing.description,
+      fix: 'Set listing.description between 12 and 240 characters.',
+      message: 'listing.description must be between 12 and 240 characters.'
+    });
+  }
+  if (longDescription.length < 12 || longDescription.length > 2000) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.long_description',
+      expected: 'string (12-2000 chars)',
+      received: listing.long_description,
+      fix: 'Set listing.long_description between 12 and 2000 characters.',
+      message: 'listing.long_description must be between 12 and 2000 characters.'
+    });
+  }
+  if (!category) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.category',
+      expected: 'non-empty string',
+      received: listing.category,
+      fix: 'Provide listing.category (or omit to accept default category).',
+      message: 'listing.category is required.'
+    });
+  }
+  if (!SOUL_TYPES.has(soulType)) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.soul_type',
+      expected: 'one of: synthetic | organic | hybrid',
+      received: listing.soul_type,
+      fix: 'Set listing.soul_type to synthetic, organic, or hybrid.',
+      message: 'listing.soul_type must be synthetic, organic, or hybrid.'
+    });
+  }
+  if (!validateEthAddress(sellerAddress)) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.seller_address',
+      expected: 'valid 0x-prefixed EVM address',
+      received: listing.seller_address,
+      fix: 'Use a valid EVM address (connected creator wallet is recommended).',
+      message: 'listing.seller_address must be a valid EVM address.'
+    });
+  }
+  if (!soulMarkdown.trim()) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.soul_markdown',
+      expected: `string (markdown content, 1-${MAX_SOUL_MD_BYTES} bytes)`,
+      received: assets.soul_markdown ?? input?.soul_markdown ?? null,
+      fix: 'Include listing.soul_markdown (or soul_markdown in payload) with SOUL.md content.',
+      message: 'assets.soul_markdown is required.'
+    });
+  }
+  if (Buffer.byteLength(soulMarkdown, 'utf8') > MAX_SOUL_MD_BYTES) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.soul_markdown',
+      expected: `string <= ${MAX_SOUL_MD_BYTES} bytes`,
+      received: `bytes:${Buffer.byteLength(soulMarkdown, 'utf8')}`,
+      fix: 'Shorten listing.soul_markdown content.',
+      message: `assets.soul_markdown exceeds ${MAX_SOUL_MD_BYTES} bytes.`
+    });
+  }
 
   const priceMicroUsdc = normalizeUsdPriceToMicroUsdc(Number(listing.price_usdc));
-  if (!priceMicroUsdc) errors.push('listing.price_usdc must be a positive number.');
+  if (!priceMicroUsdc) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.price_usdc',
+      expected: 'positive number (USDC)',
+      received: listing.price_usdc,
+      fix: 'Set listing.price_usdc to a positive numeric value.',
+      message: 'listing.price_usdc must be a positive number.'
+    });
+  }
   if (tags.length === 0) warnings.push('listing.tags is empty; discovery quality may be poor.');
-  if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) errors.push('assets.source_url must be http(s) if set.');
+  if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'assets.source_url',
+      expected: 'http(s) URL',
+      received: assets.source_url,
+      fix: 'Set assets.source_url to a valid http:// or https:// URL.',
+      message: 'assets.source_url must be http(s) if set.'
+    });
+  }
   if (sourceLabel && !sourceUrl) warnings.push('assets.source_label provided without assets.source_url.');
 
   const creatorRoyaltyBps = Number.isFinite(Number(listing.creator_royalty_bps)) ? Number(listing.creator_royalty_bps) : 0;
   const platformFeeBps = Number.isFinite(Number(listing.platform_fee_bps))
     ? Number(listing.platform_fee_bps)
     : normalizePlatformFeeBps();
-  if (creatorRoyaltyBps < 0 || creatorRoyaltyBps > 10000) errors.push('listing.creator_royalty_bps must be 0..10000.');
-  if (platformFeeBps < 0 || platformFeeBps > 10000) errors.push('listing.platform_fee_bps must be 0..10000.');
+  if (creatorRoyaltyBps < 0 || creatorRoyaltyBps > 10000) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.creator_royalty_bps',
+      expected: 'integer between 0 and 10000',
+      received: listing.creator_royalty_bps,
+      fix: 'Set listing.creator_royalty_bps within 0..10000.',
+      message: 'listing.creator_royalty_bps must be 0..10000.'
+    });
+  }
+  if (platformFeeBps < 0 || platformFeeBps > 10000) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.platform_fee_bps',
+      expected: 'integer between 0 and 10000',
+      received: listing.platform_fee_bps,
+      fix: 'Set listing.platform_fee_bps within 0..10000.',
+      message: 'listing.platform_fee_bps must be 0..10000.'
+    });
+  }
   if (creatorRoyaltyBps + platformFeeBps !== 10000) {
-    errors.push('listing.creator_royalty_bps + listing.platform_fee_bps must equal 10000.');
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.creator_royalty_bps,listing.platform_fee_bps',
+      expected: 'sum equals 10000',
+      received: `${creatorRoyaltyBps + platformFeeBps}`,
+      fix: 'Adjust bps values so creator_royalty_bps + platform_fee_bps = 10000.',
+      message: 'listing.creator_royalty_bps + listing.platform_fee_bps must equal 10000.'
+    });
   }
 
   const normalized = {
@@ -954,6 +1109,7 @@ export function validateMarketplaceDraft(input, options = {}) {
   return {
     ok: errors.length === 0,
     errors,
+    field_errors: fieldErrors,
     warnings,
     draft_id: draftId,
     normalized
@@ -1273,7 +1429,7 @@ function summarizePublishedListing(entry) {
   };
 }
 
-export async function publishCreatorListingDirect({ walletAddress, payload }) {
+export async function publishCreatorListingDirect({ walletAddress, payload, dryRun = false }) {
   if (process.env.VERCEL && !getMarketplaceDatabaseUrl()) {
     return {
       ok: false,
@@ -1281,17 +1437,30 @@ export async function publishCreatorListingDirect({ walletAddress, payload }) {
       errors: [
         'Marketplace publish is unavailable: persistent database is not configured on Vercel. Set MARKETPLACE_DATABASE_URL (or DATABASE_URL/POSTGRES_URL).'
       ],
+      field_errors: [],
       warnings: []
     };
   }
 
   const wallet = String(walletAddress || '').toLowerCase();
   const result = validateMarketplaceDraft(payload, { walletAddress: wallet });
+  if (dryRun) {
+    return {
+      ok: result.ok,
+      code: result.ok ? 'validated' : 'validation_failed',
+      errors: result.errors,
+      field_errors: result.field_errors || [],
+      warnings: result.warnings,
+      draft_id: result.draft_id,
+      normalized: result.normalized
+    };
+  }
   if (!result.ok) {
     return {
       ok: false,
       code: 'validation_failed',
       errors: result.errors,
+      field_errors: result.field_errors || [],
       warnings: result.warnings,
       draft_id: result.draft_id
     };

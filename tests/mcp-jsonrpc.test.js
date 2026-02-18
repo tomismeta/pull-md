@@ -100,6 +100,16 @@ test('MCP tools/list exposes expected tool names', async () => {
   assert.ok(names.includes('get_auth_challenge'));
   assert.ok(names.includes('publish_listing'));
   assert.ok(names.includes('remove_listing_visibility'));
+
+  const publishTool = (res.body?.result?.tools || []).find((tool) => String(tool?.name || '') === 'publish_listing');
+  assert.ok(publishTool);
+  const listingSchema = publishTool?.inputSchema?.properties?.listing || {};
+  assert.equal(Array.isArray(listingSchema.required), true);
+  assert.ok(listingSchema.required.includes('name'));
+  assert.ok(listingSchema.required.includes('description'));
+  assert.ok(listingSchema.required.includes('price_usdc'));
+  assert.ok(listingSchema.required.includes('soul_markdown'));
+  assert.equal(publishTool?.inputSchema?.properties?.dry_run?.type, 'boolean');
 });
 
 test('MCP tools/call executes list_souls and returns structured content', async () => {
@@ -144,6 +154,29 @@ test('MCP get_auth_challenge returns SIWE template and timestamp guidance', asyn
   assert.equal(payload.flow, 'creator');
   assert.equal(typeof payload.auth_message_template, 'string');
   assert.match(String(payload.timestamp_requirement || ''), /Date\.parse/i);
+});
+
+test('MCP get_auth_challenge returns suggested listing for creator publish action', async () => {
+  const res = await runMcpRequest({
+    body: {
+      jsonrpc: '2.0',
+      id: 34,
+      method: 'tools/call',
+      params: {
+        name: 'get_auth_challenge',
+        arguments: {
+          flow: 'creator',
+          action: 'publish_listing',
+          wallet_address: '0x2420888eAaA361c0e919C4F942D154BD47924793'
+        }
+      }
+    }
+  });
+  assert.equal(res.statusCode, 200);
+  const payload = res.body?.result?.structuredContent || {};
+  assert.equal(payload.ok, true);
+  assert.equal(typeof payload?.suggested_listing?.name, 'string');
+  assert.equal(typeof payload?.suggested_listing?.soul_markdown, 'string');
 });
 
 test('MCP tools/call returns tool error payload for unknown tool', async () => {

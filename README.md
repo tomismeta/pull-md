@@ -50,7 +50,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `POST /mcp` + `tools/call` `name=check_entitlements`
 - `POST /mcp` + `tools/call` `name=get_auth_challenge` (SIWE challenge-first auth helper)
 - `POST /mcp` + `tools/call` `name=get_listing_template`
-- `POST /mcp` + `tools/call` `name=publish_listing` (creator wallet auth, immediate publish)
+- `POST /mcp` + `tools/call` `name=publish_listing` (creator wallet auth, immediate publish; optional `dry_run=true` for validation-only)
 - `POST /mcp` + `tools/call` `name=list_my_published_listings` (creator wallet auth)
 - `POST /mcp` + `tools/call` `name=list_moderators`
 - `POST /mcp` + `tools/call` `name=list_moderation_listings` (moderator wallet auth)
@@ -66,6 +66,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 
 - Immediate publish only:
 `POST /mcp` with JSON-RPC `tools/call` `name=publish_listing` publishes directly with creator wallet auth.
+`get_auth_challenge(flow=creator, action=publish_listing)` includes a `suggested_listing` payload scaffold.
 - No drafts, no approval queue, no intermediate states.
 - Successful publish response includes:
 `soul_id`, `share_url`, and `purchase_endpoint`.
@@ -181,6 +182,8 @@ Re-download auth compatibility note:
 - If re-download headers are present, server prioritizes entitlement delivery and skips payment processing.
 - Strict agent no-repay path:
 `X-CLIENT-MODE: agent` + `X-WALLET-ADDRESS` + `X-PURCHASE-RECEIPT` + `X-REDOWNLOAD-SIGNATURE` + `X-REDOWNLOAD-TIMESTAMP` (no session bootstrap required).
+- Receipt security:
+treat `X-PURCHASE-RECEIPT` as sensitive wallet-scoped proof. Persist securely and avoid logs/transcripts.
 - In strict agent mode, `X-REDOWNLOAD-SESSION`, `X-AUTH-SIGNATURE`, and `X-AUTH-TIMESTAMP` are rejected.
 - In strict agent mode, `/api/auth/session` is deprecated and returns `410` (`session_api_not_for_agents`).
 - In strict agent mode, re-download calls require live signature proof-of-control on each request.
@@ -297,5 +300,6 @@ An OpenClaw-ready skill is included at:
 `/Users/tom/dev/soulstarter/skills/openclaw-soulstarter/SKILL.md`
 3. Provide:
 `base_url`, `wallet_address`, signing capability, and (optionally) stored receipts.
+Stored receipts should be treated as sensitive proof material and kept out of logs.
 4. Run the skill flow:
 discovery -> receipt re-download attempt -> strict x402 purchase fallback.

@@ -153,6 +153,69 @@ test('immediate publish + visibility removal flow', async () => {
   }
 });
 
+test('publishCreatorListingDirect dry_run returns field-level errors and does not persist listings', async () => {
+  const originalCwd = process.cwd();
+  const originalDraftDir = process.env.MARKETPLACE_DRAFTS_DIR;
+  const originalMarketplaceDbUrl = process.env.MARKETPLACE_DATABASE_URL;
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalPostgresUrl = process.env.POSTGRES_URL;
+
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'soulstarter-marketplace-dryrun-test-'));
+  process.chdir(tempDir);
+  process.env.MARKETPLACE_DRAFTS_DIR = path.join(tempDir, '.marketplace-drafts');
+  delete process.env.MARKETPLACE_DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  delete process.env.POSTGRES_URL;
+
+  try {
+    const wallet = ethers.Wallet.createRandom();
+    const invalid = await publishCreatorListingDirect({
+      walletAddress: wallet.address.toLowerCase(),
+      payload: {
+        name: 'x',
+        description: 'short',
+        price_usdc: 0
+      },
+      dryRun: true
+    });
+    assert.equal(invalid.ok, false);
+    assert.equal(invalid.code, 'validation_failed');
+    assert.equal(Array.isArray(invalid.field_errors), true);
+    assert.ok(invalid.field_errors.some((item) => String(item?.field || '') === 'listing.soul_markdown'));
+
+    const template = getMarketplaceDraftTemplate();
+    template.name = 'Dry Run Soul';
+    template.description = 'This listing is only validated and not persisted.';
+    template.price_usdc = 0.05;
+    template.soul_markdown = '# SOUL\n\nDry-run validation only.';
+
+    const validDryRun = await publishCreatorListingDirect({
+      walletAddress: wallet.address.toLowerCase(),
+      payload: template,
+      dryRun: true
+    });
+    assert.equal(validDryRun.ok, true);
+    assert.equal(validDryRun.code, 'validated');
+
+    const listings = await listPublishedListingSummaries({
+      includeHidden: true,
+      publishedBy: wallet.address.toLowerCase()
+    });
+    assert.equal(listings.length, 0);
+  } finally {
+    process.chdir(originalCwd);
+    if (originalDraftDir === undefined) delete process.env.MARKETPLACE_DRAFTS_DIR;
+    else process.env.MARKETPLACE_DRAFTS_DIR = originalDraftDir;
+    if (originalMarketplaceDbUrl === undefined) delete process.env.MARKETPLACE_DATABASE_URL;
+    else process.env.MARKETPLACE_DATABASE_URL = originalMarketplaceDbUrl;
+    if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = originalDatabaseUrl;
+    if (originalPostgresUrl === undefined) delete process.env.POSTGRES_URL;
+    else process.env.POSTGRES_URL = originalPostgresUrl;
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('catalog fallback reads Vercel draft directory when MARKETPLACE_DRAFTS_DIR is unset', async () => {
   const originalCwd = process.cwd();
   const originalDraftDir = process.env.MARKETPLACE_DRAFTS_DIR;
