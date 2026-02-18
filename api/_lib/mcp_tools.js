@@ -49,8 +49,11 @@ function mapCreatorActionToTool(action) {
   return 'list_my_published_listings';
 }
 
-function mapModeratorActionToTool(action) {
+function normalizeModeratorAction(action) {
   if (action === 'remove_listing_visibility') return 'remove_listing_visibility';
+  if (action === 'restore_listing_visibility') return 'restore_listing_visibility';
+  if (action === 'update_listing') return 'update_listing';
+  if (action === 'delete_listing') return 'delete_listing';
   if (action === 'list_moderation_listings') return 'list_moderation_listings';
   return 'list_moderation_listings';
 }
@@ -107,27 +110,45 @@ function buildAuthChallengePayload(args = {}) {
       suggestedListing = getMarketplaceDraftTemplate();
     }
   } else if (flow === 'moderator') {
-    action = String(parsed.action || 'list_moderation_listings').trim() || 'list_moderation_listings';
+    action = normalizeModeratorAction(String(parsed.action || 'list_moderation_listings').trim() || 'list_moderation_listings');
     authMessage = buildModeratorAuthMessage({ wallet, action, timestamp: timestampMs });
-    const toolName = mapModeratorActionToTool(action);
+    const commonHeaders = {
+      moderator_address: wallet,
+      moderator_signature: '0x<signature_hex>',
+      moderator_timestamp: '<Date.parse(Issued At)>'
+    };
+    const moderationEndpoint = `/api/moderation?action=${encodeURIComponent(action)}`;
     submitVia = {
-      endpoint: '/mcp',
-      rpc_method: 'tools/call',
-      tool_name: toolName,
-      arguments_template:
-        toolName === 'remove_listing_visibility'
+      endpoint: moderationEndpoint,
+      method: action === 'list_moderation_listings' ? 'GET' : 'POST',
+      headers_template: commonHeaders,
+      body_template:
+        action === 'remove_listing_visibility'
           ? {
-              moderator_address: wallet,
-              moderator_signature: '0x<signature_hex>',
-              moderator_timestamp: '<Date.parse(Issued At)>',
               soul_id: '<soul_id>',
               reason: '<optional_reason>'
             }
-          : {
-              moderator_address: wallet,
-              moderator_signature: '0x<signature_hex>',
-              moderator_timestamp: '<Date.parse(Issued At)>'
-            }
+          : action === 'restore_listing_visibility'
+            ? {
+                soul_id: '<soul_id>',
+                reason: '<optional_reason>'
+              }
+            : action === 'update_listing'
+              ? {
+                soul_id: '<soul_id>',
+                listing: {
+                  name: '<updated_name>',
+                    description: '<updated_description>',
+                    price_usdc: 0.01,
+                    content_markdown: '# ASSET\\n\\nUpdated content.'
+                  }
+                }
+              : action === 'delete_listing'
+                ? {
+                    soul_id: '<soul_id>',
+                    reason: '<optional_reason>'
+                  }
+                : null
     };
   } else if (flow === 'session') {
     action = 'session';
@@ -554,103 +575,6 @@ const MCP_TOOL_REGISTRY = [
       });
     }
   },
-  {
-    name: 'list_moderators',
-    description: 'List allowlisted moderator wallet addresses',
-    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-    manifest: {
-      endpoint: '/mcp',
-      method: 'GET',
-      parameters: {
-        action: { type: 'string', required: true, description: 'Set action=list_moderators' }
-      },
-      returns: { type: 'object', description: 'Allowlisted moderator wallet addresses' }
-    },
-    async run(_args, context) {
-      return executeCreatorMarketplaceAction({
-        action: 'list_moderators',
-        method: 'GET',
-        headers: toolCallHeadersFromArgs(context, {})
-      });
-    }
-  },
-  {
-    name: 'list_moderation_listings',
-    description: 'Moderator-only list of visible and hidden listings',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        moderator_address: { type: 'string' },
-        moderator_signature: { type: 'string' },
-        moderator_timestamp: { type: ['number', 'string'] }
-      },
-      required: ['moderator_address', 'moderator_signature', 'moderator_timestamp'],
-      additionalProperties: false
-    },
-    manifest: {
-      endpoint: '/mcp',
-      method: 'GET',
-      admin_only: true,
-      auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
-      auth_notes: ['X-MODERATOR-TIMESTAMP accepts Unix ms or ISO-8601 (must match SIWE Issued At)'],
-      parameters: {
-        action: { type: 'string', required: true, description: 'Set action=list_moderation_listings' }
-      },
-      returns: { type: 'object', description: 'Listing partitions for moderation visibility actions' }
-    },
-    async run(args, context) {
-      const parsed = ensureObject(args);
-      return executeCreatorMarketplaceAction({
-        action: 'list_moderation_listings',
-        method: 'GET',
-        headers: toolCallHeadersFromArgs(context, parsed, 'moderator')
-      });
-    }
-  },
-  {
-    name: 'remove_listing_visibility',
-    description: 'Moderator-only action to remove a listing from public visibility',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        moderator_address: { type: 'string' },
-        moderator_signature: { type: 'string' },
-        moderator_timestamp: { type: ['number', 'string'] },
-        asset_id: { type: 'string' },
-        soul_id: { type: 'string' },
-        reason: { type: 'string' }
-      },
-      required: ['moderator_address', 'moderator_signature', 'moderator_timestamp'],
-      additionalProperties: false
-    },
-    manifest: {
-      endpoint: '/mcp',
-      method: 'POST',
-      admin_only: true,
-      auth_headers: ['X-MODERATOR-ADDRESS', 'X-MODERATOR-SIGNATURE', 'X-MODERATOR-TIMESTAMP'],
-      auth_notes: ['X-MODERATOR-TIMESTAMP accepts Unix ms or ISO-8601 (must match SIWE Issued At)'],
-      parameters: {
-        action: { type: 'string', required: true, description: 'Set action=remove_listing_visibility' },
-        asset_id: { type: 'string', required: true, description: 'Published asset identifier to hide (soul_id accepted as alias)' },
-        soul_id: { type: 'string', required: false, description: 'Legacy alias for asset_id' },
-        reason: { type: 'string', required: false, description: 'Optional moderation reason for audit trail' }
-      },
-      returns: { type: 'object', description: 'Updated listing visibility state' }
-    },
-    async run(args, context) {
-      const parsed = ensureObject(args);
-      return executeCreatorMarketplaceAction({
-        action: 'remove_listing_visibility',
-        method: 'POST',
-        headers: toolCallHeadersFromArgs(context, parsed, 'moderator'),
-        body: {
-          asset_id: ensureString(parsed.asset_id || parsed.soul_id, 'asset_id'),
-          soul_id: ensureString(parsed.asset_id || parsed.soul_id, 'asset_id'),
-          reason: typeof parsed.reason === 'string' ? parsed.reason : ''
-        }
-      });
-    }
-  }
 ];
 
 export function getMcpToolRegistry() {

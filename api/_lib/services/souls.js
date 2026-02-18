@@ -105,7 +105,11 @@ export async function resolveAssetDetails(id) {
       available_souls: ids
     });
   }
-  if (!isEnabledAssetType(asset.asset_type)) {
+  const summary = (await listAssetsResolved()).find((item) => item.id === assetId) || null;
+  const resolvedAssetType = String(asset.asset_type || asset.assetType || summary?.asset_type || '')
+    .trim()
+    .toLowerCase();
+  if (!isEnabledAssetType(resolvedAssetType)) {
     throw new AppError(404, {
       error: 'Asset not found',
       reason: 'asset_type_not_enabled',
@@ -113,7 +117,6 @@ export async function resolveAssetDetails(id) {
     });
   }
 
-  const summary = (await listAssetsResolved()).find((item) => item.id === assetId) || null;
   const sellerAddress = asset.sellerAddress || getSellerAddress();
   return { assetId, soulId: assetId, asset, soul: asset, summary, sellerAddress };
 }

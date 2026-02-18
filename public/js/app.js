@@ -11,8 +11,6 @@ const CONFIG = {
     blockExplorerUrls: ['https://basescan.org']
   }
 };
-const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'pull.md';
-const SIWE_URI = (typeof window !== 'undefined' && window.location?.origin) || `https://${SIWE_DOMAIN}`;
 
 const X402_FETCH_SDK_VERSION = '2.3.0';
 const X402_EVM_SDK_VERSION = '2.3.1';
@@ -200,7 +198,6 @@ function getSellerGuardHelper() { return requireHelper('sellerGuard'); }
 function getNetworkHelper() { return requireHelper('network'); }
 function getAppBootstrapHelper() { return requireHelper('appBootstrap'); }
 function getUiShell() { return requireHelper('uiShell'); }
-function getSiweBuilder() { return requireHelper('siwe'); }
 
 function getPurchaseFlowController() {
   if (purchaseFlowController) return purchaseFlowController;
@@ -550,15 +547,26 @@ async function restoreWalletSession() {
 }
 
 async function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
-  return getSiweBuilder().buildSoulActionMessage({
-    domain: SIWE_DOMAIN,
-    uri: SIWE_URI,
-    chainId: CONFIG.baseChainIdDec,
-    wallet,
-    soulId,
-    action,
-    timestamp
-  });
+  const flow = String(action || '').trim() === 'session' ? 'session' : 'redownload';
+  const challengeArgs = {
+    flow,
+    wallet_address: wallet
+  };
+  if (flow === 'redownload') {
+    challengeArgs.asset_id = String(soulId || '').trim();
+  }
+  const challenge = await mcpToolCall('get_auth_challenge', challengeArgs);
+  const message = String(challenge?.auth_message_template || '').trim();
+  const issuedAt = String(challenge?.issued_at || '').trim();
+  const challengeTimestamp = Number(challenge?.auth_timestamp_ms);
+  const authTimestamp = Number.isFinite(challengeTimestamp) ? challengeTimestamp : Date.parse(issuedAt);
+  if (!message || !Number.isFinite(authTimestamp)) {
+    throw new Error('Failed to build wallet authentication challenge');
+  }
+  return {
+    message,
+    timestamp: authTimestamp
+  };
 }
 
 function normalizeAddress(address) {

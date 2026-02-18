@@ -85,7 +85,11 @@
         (structured && typeof structured.error === 'string' && structured.error) ||
         (typeof contentMessage === 'string' && contentMessage) ||
         'MCP tool error';
-      throw new Error(detail);
+      const toolError = new Error(detail);
+      if (structured && typeof structured === 'object') {
+        Object.assign(toolError, structured);
+      }
+      throw toolError;
     }
 
     return result?.structuredContent || {};

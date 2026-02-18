@@ -1,11 +1,14 @@
 import {
   buildModeratorAuthMessage,
   buildCreatorAuthMessage,
+  deletePublishedListingByModerator,
   getMarketplaceDraftTemplate,
+  listModerationListingDetails,
   listModeratorWallets,
   listPublishedListingSummaries,
   publishCreatorListingDirect,
   setListingVisibility,
+  updatePublishedListingByModerator,
   verifyCreatorAuth,
   verifyModeratorAuth
 } from '../marketplace.js';
@@ -110,7 +113,10 @@ export function getCreatorMarketplaceSupportedActions() {
     'list_published_listings',
     'list_moderators',
     'list_moderation_listings',
-    'remove_listing_visibility'
+    'remove_listing_visibility',
+    'restore_listing_visibility',
+    'update_listing',
+    'delete_listing'
   ];
 }
 
@@ -257,7 +263,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     if (!moderator.ok) {
       throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
     }
-    const listings = await listPublishedListingSummaries({ includeHidden: true });
+    const listings = await listModerationListingDetails();
     const visible = listings
       .filter((item) => item.visibility !== 'hidden')
       .map((item) => withShareUrl(baseUrl, item));
@@ -293,6 +299,93 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     }
     return {
       ok: true,
+      listing: withShareUrl(baseUrl, result.listing)
+    };
+  }
+
+  if (normalizedAction === 'restore_listing_visibility' && normalizedMethod === 'POST') {
+    const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
+    if (!moderator.ok) {
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
+    }
+    const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
+    const reason = typeof requestBody.reason === 'string' ? requestBody.reason : '';
+    if (!soulId) throw new AppError(400, { error: 'Missing required field: asset_id (or soul_id alias)' });
+
+    const result = await setListingVisibility({
+      soulId,
+      visibility: 'public',
+      moderator: moderator.wallet,
+      reason
+    });
+    if (!result.ok) {
+      const statusCode = /not found/i.test(result.error) ? 404 : 400;
+      throw new AppError(statusCode, { ok: false, error: result.error });
+    }
+    return {
+      ok: true,
+      listing: withShareUrl(baseUrl, result.listing)
+    };
+  }
+
+  if (normalizedAction === 'update_listing' && normalizedMethod === 'POST') {
+    const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
+    if (!moderator.ok) {
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
+    }
+    const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
+    const listingPayload =
+      requestBody.listing && typeof requestBody.listing === 'object'
+        ? requestBody.listing
+        : requestBody.update && typeof requestBody.update === 'object'
+          ? requestBody.update
+          : requestBody;
+    if (!soulId) throw new AppError(400, { error: 'Missing required field: asset_id (or soul_id alias)' });
+
+    const result = await updatePublishedListingByModerator({
+      soulId,
+      updates: listingPayload,
+      moderator: moderator.wallet
+    });
+    if (!result.ok) {
+      const statusCode = /not found/i.test(String(result.error || '')) ? 404 : 400;
+      throw new AppError(statusCode, {
+        ok: false,
+        code: result.code || 'update_failed',
+        error: result.error || 'Update failed',
+        errors: result.errors || [],
+        field_errors: result.field_errors || [],
+        warnings: result.warnings || []
+      });
+    }
+    return {
+      ok: true,
+      listing: withShareUrl(baseUrl, result.listing),
+      warnings: result.warnings || []
+    };
+  }
+
+  if (normalizedAction === 'delete_listing' && normalizedMethod === 'POST') {
+    const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
+    if (!moderator.ok) {
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
+    }
+    const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
+    const reason = typeof requestBody.reason === 'string' ? requestBody.reason : '';
+    if (!soulId) throw new AppError(400, { error: 'Missing required field: asset_id (or soul_id alias)' });
+
+    const result = await deletePublishedListingByModerator({
+      soulId,
+      moderator: moderator.wallet,
+      reason
+    });
+    if (!result.ok) {
+      const statusCode = /not found/i.test(result.error) ? 404 : 400;
+      throw new AppError(statusCode, { ok: false, error: result.error });
+    }
+    return {
+      ok: true,
+      deleted: true,
       listing: withShareUrl(baseUrl, result.listing)
     };
   }

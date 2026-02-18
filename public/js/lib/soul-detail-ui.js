@@ -133,6 +133,7 @@
     const accessible =
       typeof isSoulAccessible === 'function' ? Boolean(isSoulAccessible(resolvedSoulId)) : Boolean(walletAddress);
     btn.textContent = accessible ? `Download ${fileName}` : `Purchase ${fileName}`;
+    btn.className = accessible ? 'btn btn-ghost btn-lg btn-full' : 'btn btn-primary btn-lg btn-full';
   }
 
   globalScope.SoulStarterSoulDetailUi = {

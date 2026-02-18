@@ -101,7 +101,12 @@ test('MCP tools/list exposes expected tool names', async () => {
   assert.ok(names.includes('get_soul_details'));
   assert.ok(names.includes('get_auth_challenge'));
   assert.ok(names.includes('publish_listing'));
-  assert.ok(names.includes('remove_listing_visibility'));
+  assert.equal(names.includes('list_moderators'), false);
+  assert.equal(names.includes('list_moderation_listings'), false);
+  assert.equal(names.includes('remove_listing_visibility'), false);
+  assert.equal(names.includes('restore_listing_visibility'), false);
+  assert.equal(names.includes('update_listing'), false);
+  assert.equal(names.includes('delete_listing'), false);
 
   const publishTool = (res.body?.result?.tools || []).find((tool) => String(tool?.name || '') === 'publish_listing');
   assert.ok(publishTool);

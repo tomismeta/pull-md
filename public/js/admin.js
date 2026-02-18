@@ -8,8 +8,48 @@ const state = {
   wallet: null,
   walletType: null,
   moderators: [],
-  connecting: false
+  connecting: false,
+  visibleListings: [],
+  hiddenListings: [],
+  assetTypeFilter: 'all',
+  searchQuery: ''
 };
+
+function normalizeSearchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function applyListingFilters(items) {
+  const list = Array.isArray(items) ? items : [];
+  const typeFilter = String(state.assetTypeFilter || 'all').trim().toLowerCase();
+  const search = normalizeSearchText(state.searchQuery);
+  const terms = search ? search.split(/\s+/).filter(Boolean) : [];
+
+  return list.filter((item) => {
+    const assetType = String(item?.asset_type || '').toLowerCase();
+    if (typeFilter && typeFilter !== 'all' && assetType !== typeFilter) return false;
+    if (!terms.length) return true;
+    const haystack = normalizeSearchText(
+      [
+        item?.asset_id,
+        item?.soul_id,
+        item?.name,
+        item?.description,
+        item?.wallet_address,
+        item?.seller_address,
+        item?.category,
+        item?.soul_type,
+        ...(Array.isArray(item?.tags) ? item.tags : [])
+      ]
+        .filter(Boolean)
+        .join(' ')
+    );
+    return terms.every((term) => haystack.includes(term));
+  });
+}
 
 function getMcpClient() {
   const client = window?.SoulStarterMcp;
@@ -260,32 +300,36 @@ async function signModeratorHeaders(action) {
   };
 }
 
+async function moderationRequest(action, { method = 'GET', headers = {}, body } = {}) {
+  const normalizedAction = String(action || '').trim();
+  const normalizedMethod = String(method || '').toUpperCase();
+  const response = await fetch(`/api/moderation?action=${encodeURIComponent(normalizedAction)}`, {
+    method: normalizedMethod,
+    headers: {
+      Accept: 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...headers
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(String(payload?.error || payload?.message || `Request failed (${response.status})`));
+    if (payload && typeof payload === 'object') Object.assign(error, payload);
+    throw error;
+  }
+  return payload || {};
+}
+
 async function apiCall(action, { method = 'GET', body, moderatorAuth = false } = {}) {
   const normalizedAction = String(action || '').trim();
-  if (normalizedAction === 'list_moderators') {
-    return mcpToolCall('list_moderators', {});
-  }
-
   const headers = moderatorAuth ? await signModeratorHeaders(normalizedAction) : {};
-  const authArgs = {
-    moderator_address: String(headers['X-MODERATOR-ADDRESS'] || '').trim(),
-    moderator_signature: String(headers['X-MODERATOR-SIGNATURE'] || '').trim(),
-    moderator_timestamp: headers['X-MODERATOR-TIMESTAMP']
-  };
-
-  if (normalizedAction === 'list_moderation_listings') {
-    return mcpToolCall('list_moderation_listings', authArgs);
-  }
-
-  if (normalizedAction === 'remove_listing_visibility') {
-    return mcpToolCall('remove_listing_visibility', {
-      ...authArgs,
-      asset_id: String(body?.asset_id || body?.soul_id || '').trim(),
-      reason: typeof body?.reason === 'string' ? body.reason : ''
-    });
-  }
-
-  throw new Error(`Unsupported moderation action: ${normalizedAction}`);
+  return moderationRequest(normalizedAction, {
+    method,
+    headers,
+    body
+  });
 }
 
 function renderModeratorList() {
@@ -315,10 +359,13 @@ function renderVisible(items) {
           </div>
           <p class="admin-line">asset_id: <code>${escapeHtml(item.asset_id || item.soul_id || '-')}</code></p>
           <p class="admin-line">creator: <code>${escapeHtml(item.wallet_address || '-')}</code></p>
+          <p class="admin-line">type: <code>${escapeHtml(String(item.asset_type || 'soul').toUpperCase())}</code></p>
           <p class="admin-line">published: <code>${escapeHtml(formatDate(item.published_at))}</code></p>
           <div class="admin-card-actions">
             ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
+            <button class="btn btn-ghost" data-action="edit-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">edit</button>
             <button class="btn btn-primary" data-action="hide-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">remove visibility</button>
+            <button class="btn btn-ghost btn-danger" data-action="delete-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">delete</button>
           </div>
         </article>
       `
@@ -342,9 +389,16 @@ function renderHidden(items) {
             <span class="badge badge-hybrid">hidden</span>
           </div>
           <p class="admin-line">asset_id: <code>${escapeHtml(item.asset_id || item.soul_id || '-')}</code></p>
+          <p class="admin-line">type: <code>${escapeHtml(String(item.asset_type || 'soul').toUpperCase())}</code></p>
           <p class="admin-line">hidden_by: <code>${escapeHtml(item.hidden_by || '-')}</code></p>
           <p class="admin-line">hidden_at: <code>${escapeHtml(formatDate(item.hidden_at))}</code></p>
           <p class="admin-line">reason: <code>${escapeHtml(item.hidden_reason || '-')}</code></p>
+          <div class="admin-card-actions">
+            ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
+            <button class="btn btn-ghost" data-action="edit-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">edit</button>
+            <button class="btn btn-primary" data-action="restore-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">restore visibility</button>
+            <button class="btn btn-ghost btn-danger" data-action="delete-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">delete</button>
+          </div>
         </article>
       `
     )
@@ -362,6 +416,8 @@ function disconnectWallet() {
   state.signer = null;
   state.wallet = null;
   state.walletType = null;
+  state.visibleListings = [];
+  state.hiddenListings = [];
   clearWalletSession();
   setConnectButton();
   setStatus('Connect wallet to continue.');
@@ -378,8 +434,9 @@ async function requireAllowedModerator() {
 async function loadModerationListings() {
   await requireAllowedModerator();
   const data = await apiCall('list_moderation_listings', { moderatorAuth: true });
-  renderVisible(data.visible || []);
-  renderHidden(data.hidden || []);
+  state.visibleListings = Array.isArray(data.visible) ? data.visible : [];
+  state.hiddenListings = Array.isArray(data.hidden) ? data.hidden : [];
+  renderListings();
 }
 
 async function hideListing(soulId) {
@@ -390,6 +447,111 @@ async function hideListing(soulId) {
     moderatorAuth: true,
     body: { soul_id: soulId, reason }
   });
+}
+
+async function restoreListing(soulId) {
+  await requireAllowedModerator();
+  const reason = window.prompt('Optional reason for restoring visibility:', '') || '';
+  await apiCall('restore_listing_visibility', {
+    method: 'POST',
+    moderatorAuth: true,
+    body: { soul_id: soulId, reason }
+  });
+}
+
+async function deleteListing(soulId) {
+  await requireAllowedModerator();
+  const confirmText = window.prompt(`Type "${soulId}" to permanently delete this listing:`, '');
+  if (String(confirmText || '').trim() !== soulId) return false;
+  const reason = window.prompt('Optional deletion reason for audit trail:', '') || '';
+  await apiCall('delete_listing', {
+    method: 'POST',
+    moderatorAuth: true,
+    body: { soul_id: soulId, reason }
+  });
+  return true;
+}
+
+function findListingById(soulId) {
+  const id = String(soulId || '').trim();
+  return [...state.visibleListings, ...state.hiddenListings].find(
+    (item) => String(item?.asset_id || item?.soul_id || '').trim() === id
+  );
+}
+
+function openEditListingModal(soulId) {
+  const item = findListingById(soulId);
+  if (!item) throw new Error('Listing not found');
+  const setValue = (id, value) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = value == null ? '' : String(value);
+  };
+
+  setValue('editAssetId', item.asset_id || item.soul_id || '');
+  setValue('editAssetType', item.asset_type || 'soul');
+  setValue('editFileName', item.file_name || (String(item.asset_type || 'soul') === 'skill' ? 'SKILL.md' : 'SOUL.md'));
+  setValue('editName', item.name || '');
+  setValue('editDescription', item.description || '');
+  setValue('editPriceUsdc', item.price_usdc ?? '');
+  setValue('editSellerAddress', item.seller_address || '');
+  setValue('editCategory', item.category || '');
+  setValue('editSoulType', item.soul_type || 'hybrid');
+  setValue('editIcon', item.icon || '');
+  setValue('editTags', Array.isArray(item.tags) ? item.tags.join(', ') : '');
+  setValue('editSourceUrl', item.source_url || '');
+  setValue('editSourceLabel', item.source_label || '');
+  setValue('editContentMarkdown', item.content_markdown || item.soul_markdown || '');
+  getUiShell().openModal('editListingModal');
+}
+
+function closeEditListingModal() {
+  getUiShell().closeModal('editListingModal');
+}
+
+function buildListingPayloadFromEditForm() {
+  const read = (id) => String(document.getElementById(id)?.value || '').trim();
+  const tags = read('editTags')
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  const priceRaw = read('editPriceUsdc');
+  const price = Number.parseFloat(priceRaw);
+  return {
+    asset_id: read('editAssetId'),
+    listing: {
+      soul_id: read('editAssetId'),
+      asset_type: read('editAssetType') || 'soul',
+      file_name: read('editFileName'),
+      name: read('editName'),
+      description: read('editDescription'),
+      price_usdc: Number.isFinite(price) ? price : null,
+      seller_address: read('editSellerAddress'),
+      category: read('editCategory'),
+      soul_type: read('editSoulType') || 'hybrid',
+      icon: read('editIcon'),
+      tags,
+      source_url: read('editSourceUrl') || null,
+      source_label: read('editSourceLabel') || null,
+      content_markdown: document.getElementById('editContentMarkdown')?.value || ''
+    }
+  };
+}
+
+async function submitEditListing() {
+  await requireAllowedModerator();
+  const payload = buildListingPayloadFromEditForm();
+  if (!payload.asset_id) throw new Error('Missing asset id');
+  await apiCall('update_listing', {
+    method: 'POST',
+    moderatorAuth: true,
+    body: payload
+  });
+}
+
+function renderListings() {
+  renderVisible(applyListingFilters(state.visibleListings));
+  renderHidden(applyListingFilters(state.hiddenListings));
 }
 
 async function connectWallet() {
@@ -456,21 +618,83 @@ function bindEvents() {
     }
   });
 
+  document.querySelectorAll('[data-filter-type]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      const target = event.currentTarget;
+      if (!(target instanceof HTMLElement)) return;
+      const nextType = String(target.getAttribute('data-filter-type') || 'all').toLowerCase();
+      state.assetTypeFilter = nextType || 'all';
+      document.querySelectorAll('[data-filter-type]').forEach((node) => {
+        if (!(node instanceof HTMLElement)) return;
+        node.classList.toggle('active', node.getAttribute('data-filter-type') === state.assetTypeFilter);
+      });
+      renderListings();
+    });
+  });
+
+  document.getElementById('adminSearchInput')?.addEventListener('input', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    state.searchQuery = target.value || '';
+    renderListings();
+  });
+
+  document.getElementById('editListingForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submitBtn = event.target?.querySelector('button[type="submit"]');
+    if (submitBtn instanceof HTMLButtonElement) submitBtn.disabled = true;
+    try {
+      await submitEditListing();
+      closeEditListingModal();
+      showToast('Listing updated', 'success');
+      await loadModerationListings();
+    } catch (error) {
+      const fieldErrors = error?.field_errors;
+      if (Array.isArray(fieldErrors) && fieldErrors.length) {
+        const first = fieldErrors[0];
+        const hint = [first?.field, first?.fix].filter(Boolean).join(': ');
+        showToast(hint || error.message, 'error');
+      } else {
+        showToast(error.message, 'error');
+      }
+    } finally {
+      if (submitBtn instanceof HTMLButtonElement) submitBtn.disabled = false;
+    }
+  });
+
   document.addEventListener('click', async (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    if (target.getAttribute('data-action') !== 'hide-listing') return;
+    const action = target.getAttribute('data-action');
+    if (!action) return;
     const soulId = target.getAttribute('data-soul');
     if (!soulId) return;
-    target.setAttribute('disabled', 'true');
+    if (action !== 'hide-listing' && action !== 'restore-listing' && action !== 'delete-listing' && action !== 'edit-listing') {
+      return;
+    }
+    if (action !== 'edit-listing') target.setAttribute('disabled', 'true');
     try {
-      await hideListing(soulId);
-      showToast('Listing removed from public visibility', 'success');
-      await loadModerationListings();
+      if (action === 'hide-listing') {
+        await hideListing(soulId);
+        showToast('Listing removed from public visibility', 'success');
+        await loadModerationListings();
+      } else if (action === 'restore-listing') {
+        await restoreListing(soulId);
+        showToast('Listing restored to public visibility', 'success');
+        await loadModerationListings();
+      } else if (action === 'delete-listing') {
+        const deleted = await deleteListing(soulId);
+        if (deleted) {
+          showToast('Listing permanently deleted', 'success');
+          await loadModerationListings();
+        }
+      } else if (action === 'edit-listing') {
+        openEditListingModal(soulId);
+      }
     } catch (error) {
       showToast(error.message, 'error');
     } finally {
-      target.removeAttribute('disabled');
+      if (action !== 'edit-listing') target.removeAttribute('disabled');
     }
   });
 }
@@ -530,6 +754,7 @@ async function init() {
 }
 
 window.closeWalletModal = closeWalletModal;
+window.closeEditListingModal = closeEditListingModal;
 
 init().catch((error) => {
   showToast(error.message, 'error');

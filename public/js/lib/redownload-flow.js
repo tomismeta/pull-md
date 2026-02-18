@@ -22,13 +22,23 @@
     const existing = typeof getStoredSession === 'function' ? getStoredSession(wallet) : null;
     if (existing) return existing;
 
-    const timestamp = Date.now();
-    const siwe = await buildSiweAuthMessage({
+    const requestTimestamp = Date.now();
+    const siwePayload = await buildSiweAuthMessage({
       wallet,
       soulId: '*',
       action: 'session',
-      timestamp
+      timestamp: requestTimestamp
     });
+    const siwe =
+      typeof siwePayload === 'string'
+        ? siwePayload
+        : String(siwePayload?.message || '').trim();
+    const timestamp = Number.isFinite(Number(siwePayload?.timestamp))
+      ? Number(siwePayload.timestamp)
+      : requestTimestamp;
+    if (!siwe || !Number.isFinite(timestamp)) {
+      throw new Error('Failed to build wallet session challenge');
+    }
     const signature = await signer.signMessage(siwe);
     const response = await fetchWithTimeout(`${apiBase}/auth/session`, {
       method: 'GET',

@@ -151,12 +151,16 @@
   }
 
   async function loadModeratorAllowlist({
-    mcpToolCall,
     onAllowlistLoaded
   } = {}) {
     let allowlist;
     try {
-      const payload = await mcpToolCall('list_moderators', {});
+      const response = await fetch('/api/moderation?action=list_moderators', {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload?.error || 'Failed to load moderators'));
       allowlist = new Set(
         (Array.isArray(payload?.moderators) ? payload.moderators : [])
           .map((wallet) => String(wallet || '').toLowerCase())

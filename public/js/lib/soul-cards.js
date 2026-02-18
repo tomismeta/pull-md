@@ -122,7 +122,7 @@
         </div>
         <div class="soul-card-actions">
           <a class="btn btn-ghost" href="${escapeHtml(listingHref)}">View Listing</a>
-          <button class="btn btn-primary" onclick="downloadOwnedSoul('${escapeHtml(String(soul.id || soulId))}', '${escapeHtml(fileName)}')">Download ${escapeHtml(fileName)}</button>
+          <button class="btn btn-ghost" onclick="downloadOwnedSoul('${escapeHtml(String(soul.id || soulId))}', '${escapeHtml(fileName)}')">Download ${escapeHtml(fileName)}</button>
         </div>
       </article>
     `;
@@ -142,6 +142,7 @@
         const fileName = fileNameForAsset(soul);
         const owned = typeof isAccessible === 'function' ? Boolean(isAccessible(soulId)) : false;
         const cta = owned ? `Download ${fileName}` : `Purchase ${fileName}`;
+        const actionBtnClass = owned ? 'btn btn-ghost' : 'btn btn-primary';
         const lineageLabel = typeof lineageLabelForSoul === 'function' ? String(lineageLabelForSoul(soul) || '') : '';
         const type = String(soul?.asset_type || soul?.provenance?.type || 'hybrid').toLowerCase();
         const cardDescription = formatCardDescription(soul?.description, 'Markdown listing available.');
@@ -174,7 +175,7 @@
         </div>
         <div class="soul-card-actions">
           <a class="btn btn-ghost" href="${escapeHtml(listingHref)}">View Listing</a>
-          <button class="btn btn-primary" onclick="${owned ? `downloadOwnedSoul('${escapeHtml(soulId)}', '${escapeHtml(fileName)}')` : `purchaseSoul('${escapeHtml(soulId)}', '${escapeHtml(fileName)}')`}">${escapeHtml(cta)}</button>
+          <button class="${actionBtnClass}" onclick="${owned ? `downloadOwnedSoul('${escapeHtml(soulId)}', '${escapeHtml(fileName)}')` : `purchaseSoul('${escapeHtml(soulId)}', '${escapeHtml(fileName)}')`}">${escapeHtml(cta)}</button>
         </div>
       </article>
     `;

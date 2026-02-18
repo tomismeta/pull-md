@@ -1,8 +1,6 @@
 const MCP_ENDPOINT = '/mcp';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
-const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'pull.md';
-const SIWE_URI = (typeof window !== 'undefined' && window.location?.origin) || `https://${SIWE_DOMAIN}`;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 let moderatorAllowlist = new Set();
 const STATE = {
@@ -84,14 +82,6 @@ function getUiShell() {
   const helper = window?.SoulStarterUiShell;
   if (!helper) {
     throw new Error('UI shell helper unavailable');
-  }
-  return helper;
-}
-
-function getSiweBuilder() {
-  const helper = window?.SoulStarterSiwe;
-  if (!helper || typeof helper.buildScopedMessage !== 'function') {
-    throw new Error('SIWE message helper unavailable');
   }
   return helper;
 }
@@ -257,7 +247,12 @@ async function restoreWalletSession() {
 
 async function loadModeratorAllowlist() {
   try {
-    const payload = await mcpToolCall('list_moderators', {});
+    const response = await fetch('/api/moderation?action=list_moderators', {
+      method: 'GET',
+      headers: { Accept: 'application/json' }
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(String(payload?.error || 'Failed to load moderators'));
     moderatorAllowlist = new Set(
       (Array.isArray(payload?.moderators) ? payload.moderators : [])
         .map((wallet) => String(wallet || '').toLowerCase())
@@ -269,22 +264,21 @@ async function loadModeratorAllowlist() {
   updateModeratorNavLinkVisibility();
 }
 
-async function creatorSiweMessage(action, timestamp) {
-  return getSiweBuilder().buildScopedMessage({
-    domain: SIWE_DOMAIN,
-    uri: SIWE_URI,
-    chainId: BASE_CHAIN_DEC,
-    wallet: STATE.wallet,
-    scope: 'creator',
-    action,
-    timestamp
-  });
-}
-
 async function creatorAuth(action) {
   if (!STATE.signer || !STATE.wallet) throw new Error('Connect your wallet first');
-  const authTimestamp = Date.now();
-  const authSignature = await STATE.signer.signMessage(await creatorSiweMessage(action, authTimestamp));
+  const challenge = await mcpToolCall('get_auth_challenge', {
+    flow: 'creator',
+    wallet_address: STATE.wallet,
+    action
+  });
+  const message = String(challenge?.auth_message_template || '').trim();
+  const issuedAt = String(challenge?.issued_at || '').trim();
+  const challengeTimestamp = Number(challenge?.auth_timestamp_ms);
+  const authTimestamp = Number.isFinite(challengeTimestamp) ? challengeTimestamp : Date.parse(issuedAt);
+  if (!message || !Number.isFinite(authTimestamp)) {
+    throw new Error('Failed to build creator SIWE challenge');
+  }
+  const authSignature = await STATE.signer.signMessage(message);
   return {
     wallet_address: STATE.wallet,
     auth_signature: authSignature,

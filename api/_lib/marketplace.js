@@ -1543,6 +1543,37 @@ function summarizePublishedListing(entry) {
   };
 }
 
+function toModerationListing(entry) {
+  const listing = entry && typeof entry === 'object' ? entry : {};
+  const id = asString(listing.id);
+  const assetType = normalizeAssetType(listing.assetType || listing.asset_type) || 'soul';
+  const fileName = normalizeMarkdownFileName(listing.fileName || listing.file_name, defaultFileNameForAssetType(assetType));
+  const priceMicro = asString(listing.priceMicroUsdc || listing.price_micro_usdc);
+  const parsedPrice = Number.parseInt(priceMicro, 10);
+  const priceUsdc = Number.isFinite(parsedPrice) ? Number((parsedPrice / 1_000_000).toFixed(6)) : null;
+  const tags = Array.isArray(listing.tags) ? listing.tags.map((tag) => asString(tag)).filter(Boolean) : [];
+  const sourceUrl = asString(listing.sourceUrl || listing.source_url);
+  const sourceLabel = asString(listing.sourceLabel || listing.source_label);
+  const markdown = typeof listing.contentInline === 'string' ? listing.contentInline : '';
+  return {
+    ...summarizePublishedListing(listing),
+    asset_id: id,
+    soul_id: id,
+    asset_type: assetType,
+    file_name: fileName,
+    long_description: asString(listing.longDescription || listing.long_description),
+    category: asString(listing.category),
+    soul_type: asString(listing?.provenance?.type || listing.soul_type) || 'hybrid',
+    icon: asString(listing.icon),
+    tags,
+    price_usdc: priceUsdc,
+    source_url: sourceUrl || null,
+    source_label: sourceLabel || null,
+    content_markdown: markdown,
+    soul_markdown: markdown
+  };
+}
+
 export async function publishCreatorListingDirect({ walletAddress, payload, dryRun = false }) {
   if (process.env.VERCEL && !getMarketplaceDatabaseUrl()) {
     return {
@@ -1651,6 +1682,188 @@ export async function setListingVisibility({ soulId, visibility, moderator, reas
     ok: true,
     listing: summarizePublishedListing(updated)
   };
+}
+
+function buildModerationUpdateInput(existing, updates) {
+  const current = existing && typeof existing === 'object' ? existing : {};
+  const patch = updates && typeof updates === 'object' ? updates : {};
+  const patchListing = patch.listing && typeof patch.listing === 'object' ? patch.listing : patch;
+  const patchAssets = patch.assets && typeof patch.assets === 'object' ? patch.assets : patch;
+
+  const existingId = asString(current.id);
+  const requestedId = asString(patchListing.asset_id || patchListing.soul_id || patch.asset_id || patch.soul_id).toLowerCase();
+  if (requestedId && existingId && requestedId !== existingId) {
+    return {
+      ok: false,
+      error: 'asset_id is immutable for moderator edits',
+      field_errors: [
+        {
+          field: 'asset_id',
+          expected: existingId,
+          received: requestedId,
+          fix: 'Use the existing asset_id and update content/metadata fields only.'
+        }
+      ]
+    };
+  }
+
+  const merged = {
+    listing: {
+      soul_id: existingId,
+      asset_type: normalizeAssetType(patchListing.asset_type || current.assetType || current.asset_type) || 'soul',
+      file_name: asString(patchListing.file_name || current.fileName || current.file_name),
+      name: patchListing.name ?? current.name,
+      description: patchListing.description ?? current.description,
+      long_description: patchListing.long_description ?? current.longDescription ?? current.long_description,
+      category: patchListing.category ?? current.category,
+      soul_type: patchListing.soul_type ?? current?.provenance?.type ?? current.soul_type,
+      icon: patchListing.icon ?? current.icon,
+      tags: patchListing.tags ?? current.tags,
+      price_usdc:
+        patchListing.price_usdc ??
+        (Number.isFinite(Number(current.priceMicroUsdc))
+          ? Number((Number(current.priceMicroUsdc) / 1_000_000).toFixed(6))
+          : null),
+      seller_address: patchListing.seller_address ?? current.sellerAddress ?? current.seller_address
+    },
+    assets: {
+      content_markdown:
+        patchAssets.content_markdown ??
+        patchAssets.soul_markdown ??
+        patchListing.content_markdown ??
+        patchListing.soul_markdown ??
+        patch.content_markdown ??
+        patch.soul_markdown ??
+        current.contentInline ??
+        '',
+      source_url: patchAssets.source_url ?? patch.source_url ?? current.sourceUrl ?? current.source_url ?? null,
+      source_label: patchAssets.source_label ?? patch.source_label ?? current.sourceLabel ?? current.source_label ?? null
+    }
+  };
+  return { ok: true, payload: merged };
+}
+
+export async function updatePublishedListingByModerator({ soulId, updates, moderator }) {
+  const id = asString(soulId);
+  if (!id) return { ok: false, error: 'Missing soul_id' };
+
+  const catalog = await loadPublishedCatalog();
+  const idx = catalog.entries.findIndex((entry) => entry?.id === id);
+  if (idx < 0) return { ok: false, error: 'Listing not found' };
+
+  const current = catalog.entries[idx];
+  const prepared = buildModerationUpdateInput(current, updates);
+  if (!prepared.ok) {
+    return {
+      ok: false,
+      code: 'validation_failed',
+      error: prepared.error,
+      errors: [prepared.error],
+      field_errors: prepared.field_errors || []
+    };
+  }
+
+  const publisherWallet = asString(current.publishedBy).toLowerCase();
+  const validated = validateMarketplaceDraft(prepared.payload, {
+    walletAddress: publisherWallet
+  });
+  if (!validated.ok) {
+    return {
+      ok: false,
+      code: 'validation_failed',
+      error: 'Validation failed',
+      errors: validated.errors,
+      field_errors: validated.field_errors || [],
+      warnings: validated.warnings || []
+    };
+  }
+  if (String(validated.normalized?.listing?.soul_id || '').toLowerCase() !== id.toLowerCase()) {
+    return {
+      ok: false,
+      code: 'validation_failed',
+      error: 'asset_id is immutable for moderator edits',
+      errors: ['asset_id is immutable for moderator edits'],
+      field_errors: [
+        {
+          field: 'listing.soul_id',
+          expected: id.toLowerCase(),
+          received: validated.normalized?.listing?.soul_id || null,
+          fix: 'Keep listing.soul_id unchanged when editing.'
+        }
+      ]
+    };
+  }
+
+  const now = new Date().toISOString();
+  const actor = asString(moderator).toLowerCase() || 'moderator';
+  const draft = {
+    draft_id: asString(current.draftId) || `pub_${id}`,
+    normalized: validated.normalized,
+    published_at: current.publishedAt || now
+  };
+  await upsertPublishedCatalogEntry({
+    walletAddress: publisherWallet,
+    draft
+  });
+
+  const refreshed = await loadPublishedCatalog();
+  const updated = refreshed.entries.find((entry) => entry?.id === id);
+  if (!updated) return { ok: false, error: 'Listing not found after update' };
+
+  await appendReviewAudit({
+    at: now,
+    event: 'moderator_edit',
+    wallet: publisherWallet,
+    draft_id: asString(updated.draftId || draft.draft_id),
+    actor,
+    status_before: normalizeVisibility(current.visibility),
+    status_after: normalizeVisibility(updated.visibility),
+    notes: 'Moderator edited published listing',
+    soul_id: id
+  });
+
+  return {
+    ok: true,
+    listing: toModerationListing(updated),
+    warnings: validated.warnings || []
+  };
+}
+
+export async function deletePublishedListingByModerator({ soulId, moderator, reason }) {
+  const id = asString(soulId);
+  if (!id) return { ok: false, error: 'Missing soul_id' };
+
+  const catalog = await loadPublishedCatalog();
+  const idx = catalog.entries.findIndex((entry) => entry?.id === id);
+  if (idx < 0) return { ok: false, error: 'Listing not found' };
+
+  const removed = catalog.entries[idx];
+  catalog.entries.splice(idx, 1);
+  await savePublishedCatalog(catalog);
+
+  const now = new Date().toISOString();
+  const actor = asString(moderator).toLowerCase() || 'moderator';
+  await appendReviewAudit({
+    at: now,
+    event: 'moderator_delete',
+    wallet: String(removed?.publishedBy || '').toLowerCase(),
+    draft_id: String(removed?.draftId || ''),
+    actor,
+    status_before: normalizeVisibility(removed?.visibility),
+    status_after: 'deleted',
+    notes: asString(reason) || null,
+    soul_id: id
+  });
+
+  return {
+    ok: true,
+    listing: toModerationListing(removed)
+  };
+}
+
+export async function listModerationListingDetails() {
+  const entries = await listPublishedCatalogEntriesFiltered({ includeHidden: true });
+  return entries.map((entry) => toModerationListing(entry));
 }
 
 export async function listPublishedListingSummaries({ includeHidden = false, publishedBy = null } = {}) {

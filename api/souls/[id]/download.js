@@ -42,6 +42,8 @@ const ONCHAIN_ENTITLEMENT_LOG_CHUNK_SIZE = Number(process.env.ONCHAIN_ENTITLEMEN
 const ONCHAIN_ENTITLEMENT_UNAVAILABLE_TTL_MS = Number(process.env.ONCHAIN_ENTITLEMENT_UNAVAILABLE_TTL_MS || '30000');
 const BASE_MAINNET_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const ERC20_TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
+const PURCHASE_RECEIPT_SECURITY_HINT =
+  'Persist X-PURCHASE-RECEIPT in secure storage (wallet+asset scoped). Required for strict no-repay re-download. Do not log or share receipt values.';
 
 export function normalizeAssetTransferMethod(value) {
   const raw = String(value || '').trim().toLowerCase();
@@ -91,6 +93,10 @@ function normalizeAssetType(value) {
     .toLowerCase()
     .replace(/[\s_]+/g, '-');
   return normalized || 'soul';
+}
+
+function setPurchaseReceiptSecurityHintHeader(res) {
+  res.setHeader('X-PURCHASE-RECEIPT-HINT', PURCHASE_RECEIPT_SECURITY_HINT);
 }
 
 function resolveDeliveryMetadata(soul, soulId) {
@@ -311,6 +317,7 @@ export default async function handler(req, res) {
         client_mode: clientModeRaw || 'agent',
         flow_hint:
           'Strict agent mode does not use session/auth recovery. Persist X-PURCHASE-RECEIPT and provide X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP with X-WALLET-ADDRESS.',
+        purchase_receipt_security_hint: PURCHASE_RECEIPT_SECURITY_HINT,
         required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP']
       });
     }
@@ -524,6 +531,7 @@ export default async function handler(req, res) {
           soulId,
           transaction: entitlementTransaction
         });
+        setPurchaseReceiptSecurityHintHeader(res);
         res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
         if (!strictAgentMode) {
           appendSetCookieHeader(
@@ -547,7 +555,8 @@ export default async function handler(req, res) {
           assetDelivered: soulId,
           assetType: delivery.assetType,
           fileName: delivery.fileName,
-          entitlementSource
+          entitlementSource,
+          purchase_receipt_security_hint: PURCHASE_RECEIPT_SECURITY_HINT
         })
       ).toString('base64')
     );
@@ -613,6 +622,7 @@ export default async function handler(req, res) {
             result.response.body.flow_hint =
               'Strict agent mode purchase step: send PAYMENT-SIGNATURE with base64-encoded x402 payload.';
             result.response.body.client_mode = clientModeRaw || 'agent';
+            result.response.body.purchase_receipt_security_hint = PURCHASE_RECEIPT_SECURITY_HINT;
             result.response.body.redownload_contract = {
               required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP'],
               disallowed_headers: ['X-REDOWNLOAD-SESSION', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
@@ -626,10 +636,12 @@ export default async function handler(req, res) {
             });
             result.response.body.flow_hint =
               'No payment header was detected. Send PAYMENT-SIGNATURE with base64-encoded x402 payload for purchase.';
+            result.response.body.purchase_receipt_security_hint = PURCHASE_RECEIPT_SECURITY_HINT;
           }
         } else {
           result.response.body.flow_hint =
             'Payment header was detected but could not be verified/settled. Regenerate PAYMENT-SIGNATURE from the latest PAYMENT-REQUIRED and retry.';
+          result.response.body.purchase_receipt_security_hint = PURCHASE_RECEIPT_SECURITY_HINT;
           if (includeDebug) {
             const submittedPayment = decodeSubmittedPayment(req);
             const facilitatorVerify = await inspectFacilitatorVerify({
@@ -693,6 +705,7 @@ export default async function handler(req, res) {
         soulId,
         transaction: cachedEntitlement.transaction || 'prior-entitlement'
       });
+      setPurchaseReceiptSecurityHintHeader(res);
       res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
       if (!strictAgentMode) {
         appendSetCookieHeader(
@@ -711,7 +724,8 @@ export default async function handler(req, res) {
             assetDelivered: soulId,
             assetType: delivery.assetType,
             fileName: delivery.fileName,
-            entitlementSource: 'cache'
+            entitlementSource: 'cache',
+            purchase_receipt_security_hint: PURCHASE_RECEIPT_SECURITY_HINT
           })
         ).toString('base64')
       );
@@ -802,6 +816,7 @@ export default async function handler(req, res) {
     }
 
     if (receiptToken) {
+      setPurchaseReceiptSecurityHintHeader(res);
       res.setHeader('X-PURCHASE-RECEIPT', receiptToken);
       if (!strictAgentMode) {
         appendSetCookieHeader(
@@ -1464,6 +1479,7 @@ function buildPaymentSigningInstructions(paymentRequired) {
     header_format: 'base64(JSON.stringify(x402_payload))',
     accepted_must_match: 'accepted must exactly equal PAYMENT-REQUIRED.accepts[0]',
     wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests. Strict agent mode defaults to eip3009 unless X-ASSET-TRANSFER-METHOD is set.',
+    purchase_receipt_security_hint: PURCHASE_RECEIPT_SECURITY_HINT,
     method_rules: {
       eip3009: {
         typed_data_primary_type: 'TransferWithAuthorization',
@@ -1495,6 +1511,7 @@ function buildPaymentSigningInstructionsForMethod(method) {
     header_format: 'base64(JSON.stringify(x402_payload))',
     accepted_must_match: 'accepted must exactly equal PAYMENT-REQUIRED.accepts[0]',
     wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests. Strict agent mode defaults to eip3009 unless X-ASSET-TRANSFER-METHOD is set.',
+    purchase_receipt_security_hint: PURCHASE_RECEIPT_SECURITY_HINT,
     method_rules: {
       eip3009: {
         typed_data_primary_type: 'TransferWithAuthorization',

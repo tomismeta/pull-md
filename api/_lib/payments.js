@@ -64,7 +64,7 @@ export function setCors(res, origin) {
   );
   res.setHeader(
     'Access-Control-Expose-Headers',
-    'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SESSION'
+    'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PURCHASE-RECEIPT, X-PURCHASE-RECEIPT-HINT, X-REDOWNLOAD-SESSION'
   );
 }
 

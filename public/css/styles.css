@@ -685,6 +685,15 @@ main {
   margin-bottom: 10px;
 }
 
+.admin-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
 .admin-list {
   display: grid;
   gap: 8px;
@@ -794,6 +803,51 @@ main {
   min-width: 108px;
 }
 
+.btn-danger {
+  border-color: rgba(235, 87, 87, 0.42);
+  color: #ffb5b5;
+}
+
+.btn-danger:hover {
+  border-color: rgba(248, 81, 73, 0.72);
+  color: #ffd3d3;
+}
+
+.admin-edit-modal-content {
+  width: min(820px, 96vw);
+  max-height: 92vh;
+}
+
+.admin-edit-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-edit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.68rem;
+  color: var(--text-soft);
+}
+
+.admin-edit-markdown {
+  grid-column: 1 / -1;
+}
+
+.admin-edit-markdown textarea {
+  margin-bottom: 0;
+}
+
+.admin-edit-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .soul-detail {
   padding: 26px 0 44px;
 }
@@ -809,6 +863,11 @@ main {
   display: flex;
   align-items: baseline;
   gap: 10px;
+}
+
+.soul-title-row .title-hash {
+  font-size: clamp(1.7rem, 4.8vw, 2.9rem);
+  line-height: 1.08;
 }
 
 .soul-icon-large {
@@ -1313,6 +1372,15 @@ main {
     align-items: flex-start;
   }
 
+  .admin-filter-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-edit-form {
+    grid-template-columns: 1fr;
+  }
+
   .soul-hero {
     grid-template-columns: 1fr;
     gap: 10px;
@@ -1494,6 +1562,17 @@ body {
 
 .btn-primary:hover {
   filter: brightness(1.08);
+}
+
+.btn-danger {
+  border-color: rgba(248, 81, 73, 0.45);
+  color: #ffb4b0;
+}
+
+.btn-danger:hover {
+  border-color: rgba(248, 81, 73, 0.8);
+  color: #ffd3d0;
+  background: rgba(248, 81, 73, 0.08);
 }
 
 .badge-organic {

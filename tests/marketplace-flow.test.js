@@ -8,11 +8,14 @@ import { ethers } from 'ethers';
 import {
   buildModeratorAuthMessage,
   buildCreatorAuthMessage,
+  deletePublishedListingByModerator,
   getMarketplaceDraftTemplate,
+  listModerationListingDetails,
   listModeratorWallets,
   listPublishedListingSummaries,
   publishCreatorListingDirect,
   setListingVisibility,
+  updatePublishedListingByModerator,
   verifyCreatorAuth,
   verifyModeratorAuth
 } from '../api/_lib/marketplace.js';
@@ -133,10 +136,53 @@ test('immediate publish + visibility removal flow', async () => {
     const nowMissing = await getSoulResolved('creator-alpha-v1');
     assert.equal(nowMissing, null);
 
+    const unhidden = await setListingVisibility({
+      soulId: 'creator-alpha-v1',
+      visibility: 'public',
+      moderator: moderatorAuth.wallet
+    });
+    assert.equal(unhidden.ok, true);
+    assert.equal(unhidden.listing.visibility, 'public');
+
+    const updated = await updatePublishedListingByModerator({
+      soulId: 'creator-alpha-v1',
+      moderator: moderatorAuth.wallet,
+      updates: {
+        listing: {
+          name: 'Creator Alpha Revised',
+          description: 'Updated by moderator for catalog quality.',
+          price_usdc: 0.42,
+          content_markdown: '# SOUL\\n\\nModerator update content.'
+        }
+      }
+    });
+    assert.equal(updated.ok, true);
+    assert.equal(updated.listing.name, 'Creator Alpha Revised');
+    assert.equal(updated.listing.price_micro_usdc, '420000');
+
+    const moderationRows = await listModerationListingDetails();
+    const revised = moderationRows.find((item) => item.soul_id === 'creator-alpha-v1');
+    assert.ok(revised);
+    assert.equal(revised.visibility, 'public');
+    assert.equal(String(revised.content_markdown || '').includes('Moderator update content.'), true);
+
+    const deleted = await deletePublishedListingByModerator({
+      soulId: 'creator-alpha-v1',
+      moderator: moderatorAuth.wallet,
+      reason: 'cleanup test'
+    });
+    assert.equal(deleted.ok, true);
+
+    const afterDelete = await listPublishedListingSummaries({ includeHidden: true });
+    assert.equal(afterDelete.some((item) => item.soul_id === 'creator-alpha-v1'), false);
+
     const auditPath = path.join(tempDir, '.marketplace-drafts', 'review-audit.jsonl');
     const auditRaw = await readFile(auditPath, 'utf8');
     assert.ok(auditRaw.includes('"event":"publish_direct"'));
     assert.ok(auditRaw.includes('"event":"visibility_hidden"'));
+    assert.ok(auditRaw.includes('"event":"visibility_public"'));
+    assert.ok(auditRaw.includes('"event":"moderator_edit"'));
+    assert.ok(auditRaw.includes('"event":"moderator_delete"'));
   } finally {
     process.chdir(originalCwd);
     if (originalDraftDir === undefined) delete process.env.MARKETPLACE_DRAFTS_DIR;

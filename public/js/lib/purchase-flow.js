@@ -60,7 +60,7 @@
         if (firstP) {
           firstP.textContent = redownload
             ? 'Entitlement verified via wallet re-authentication.'
-            : 'x402 payment settled successfully.';
+            : 'x402 payment settled successfully. Save the purchase receipt securely for no-repay re-download.';
         }
       }
 
@@ -240,6 +240,12 @@
         const receipt = paid.headers.get('X-PURCHASE-RECEIPT');
         if (receipt && typeof options.storeReceipt === 'function') {
           options.storeReceipt(soulId, walletAddress, receipt);
+          if (typeof options.showToast === 'function') {
+            options.showToast(
+              'Receipt saved locally. Keep it secure; it is required for strict no-repay re-download.',
+              'info'
+            );
+          }
         }
         markSoulOwned(soulId);
 
