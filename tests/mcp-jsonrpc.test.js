@@ -95,6 +95,8 @@ test('MCP tools/list exposes expected tool names', async () => {
   });
   assert.equal(res.statusCode, 200);
   const names = (res.body?.result?.tools || []).map((tool) => String(tool?.name || ''));
+  assert.ok(names.includes('list_assets'));
+  assert.ok(names.includes('get_asset_details'));
   assert.ok(names.includes('list_souls'));
   assert.ok(names.includes('get_soul_details'));
   assert.ok(names.includes('get_auth_challenge'));
@@ -108,7 +110,9 @@ test('MCP tools/list exposes expected tool names', async () => {
   assert.ok(listingSchema.required.includes('name'));
   assert.ok(listingSchema.required.includes('description'));
   assert.ok(listingSchema.required.includes('price_usdc'));
-  assert.ok(listingSchema.required.includes('soul_markdown'));
+  assert.equal(Array.isArray(listingSchema.anyOf), true);
+  assert.ok(listingSchema.anyOf.some((rule) => Array.isArray(rule?.required) && rule.required.includes('content_markdown')));
+  assert.ok(listingSchema.anyOf.some((rule) => Array.isArray(rule?.required) && rule.required.includes('soul_markdown')));
   assert.equal(publishTool?.inputSchema?.properties?.dry_run?.type, 'boolean');
 });
 
@@ -218,6 +222,8 @@ test('MCP prompts/list and prompts/get return workflow helpers', async () => {
   });
   assert.equal(listRes.statusCode, 200);
   const promptNames = (listRes.body?.result?.prompts || []).map((item) => String(item?.name || ''));
+  assert.ok(promptNames.includes('purchase_asset'));
+  assert.ok(promptNames.includes('redownload_asset'));
   assert.ok(promptNames.includes('purchase_soul'));
   assert.ok(promptNames.includes('redownload_soul'));
 
@@ -227,13 +233,13 @@ test('MCP prompts/list and prompts/get return workflow helpers', async () => {
       id: 6,
       method: 'prompts/get',
       params: {
-        name: 'purchase_soul',
-        arguments: { soul_id: 'the-rock-v1', wallet_address: '0x2420888eaaa361c0e919c4f942d154bd47924793' }
+        name: 'purchase_asset',
+        arguments: { asset_id: 'the-rock-v1', wallet_address: '0x2420888eaaa361c0e919c4f942d154bd47924793' }
       }
     }
   });
   assert.equal(getRes.statusCode, 200);
-  assert.equal(String(getRes.body?.result?.name || ''), 'purchase_soul');
+  assert.equal(String(getRes.body?.result?.name || ''), 'purchase_asset');
   assert.equal(Array.isArray(getRes.body?.result?.messages), true);
 });
 
@@ -250,6 +256,7 @@ test('MCP resources/list and resources/read expose discoverable URIs', async () 
   const resources = listRes.body?.result?.resources || [];
   assert.equal(Array.isArray(resources), true);
   assert.ok(resources.some((item) => String(item?.uri || '') === 'soulstarter://docs/manifest'));
+  assert.ok(resources.some((item) => String(item?.uri || '') === 'soulstarter://assets'));
 
   const readRes = await runMcpRequest({
     body: {

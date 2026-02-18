@@ -27,7 +27,7 @@ export default function handler(req, res) {
   return res.status(200).json({
     schema_version: 'v1',
     name: 'SoulStarter',
-    description: 'Agent soul marketplace with x402 payments and receipt-first redownloads',
+    description: 'Agent markdown asset marketplace with x402 payments and receipt-first redownloads',
     url: 'https://soulstarter.vercel.app',
     auth: {
       type: 'x402',
@@ -126,6 +126,8 @@ export default function handler(req, res) {
       examples: [
         'soulstarter://docs/manifest',
         'soulstarter://docs/webmcp',
+        'soulstarter://assets',
+        'soulstarter://assets/<id>',
         'soulstarter://souls',
         'soulstarter://souls/<id>'
       ]
@@ -133,21 +135,23 @@ export default function handler(req, res) {
     tools,
     download_contract: {
       canonical_base_url: 'https://soulstarter.vercel.app',
-      endpoint_pattern: '/api/souls/{id}/download',
+      endpoint_pattern: '/api/assets/{id}/download',
+      endpoint_pattern_legacy: '/api/souls/{id}/download',
       method: 'GET',
       flow_profiles: {
         headless_agent: {
           purchase:
-            'GET /api/souls/{id}/download with X-CLIENT-MODE: agent -> 402 + PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE',
+            'GET /api/assets/{id}/download with X-CLIENT-MODE: agent -> 402 + PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE',
           redownload:
-            'GET /api/souls/{id}/download with X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP'
+            'GET /api/assets/{id}/download with X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP'
         },
         human_browser: {
           purchase: 'Connect wallet in UI and submit x402 payment',
           redownload: 'Receipt-first, with optional session bootstrap at /api/auth/session for recovery UX'
         }
       },
-      canonical_purchase_flow: 'GET /api/souls/{id}/download is the authoritative x402 flow for payment requirements and paid retry.',
+      canonical_purchase_flow:
+        'GET /api/assets/{id}/download is the authoritative x402 flow for payment requirements and paid retry. Legacy /api/souls/{id}/download remains supported.',
       first_request:
         'No payment headers -> returns 402 + PAYMENT-REQUIRED. Include X-WALLET-ADDRESS on this first request for strict wallet binding and deterministic retries.',
       claim_request: 'Include PAYMENT-SIGNATURE with base64-encoded x402 payload to claim entitlement and download',

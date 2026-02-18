@@ -70,19 +70,21 @@ test('official MCP SDK client can connect and execute SoulStarter tools/resource
   await withMcpSdkClient(async ({ client }) => {
     const tools = await client.listTools();
     const toolNames = (tools?.tools || []).map((tool) => String(tool?.name || ''));
+    assert.ok(toolNames.includes('list_assets'));
     assert.ok(toolNames.includes('list_souls'));
     assert.ok(toolNames.includes('get_auth_challenge'));
 
-    const listSoulsResult = await client.callTool({
-      name: 'list_souls',
+    const listAssetsResult = await client.callTool({
+      name: 'list_assets',
       arguments: {}
     });
-    assert.equal(listSoulsResult?.isError, undefined);
-    assert.equal(Array.isArray(listSoulsResult?.structuredContent?.souls), true);
+    assert.equal(listAssetsResult?.isError, undefined);
+    assert.equal(Array.isArray(listAssetsResult?.structuredContent?.assets), true);
 
     const resources = await client.listResources();
     const resourceUris = (resources?.resources || []).map((item) => String(item?.uri || ''));
     assert.ok(resourceUris.includes('soulstarter://docs/manifest'));
+    assert.ok(resourceUris.includes('soulstarter://assets'));
 
     const read = await client.readResource({ uri: 'soulstarter://docs/manifest' });
     assert.equal(Array.isArray(read?.contents), true);

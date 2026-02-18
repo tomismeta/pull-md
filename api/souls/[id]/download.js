@@ -1,4 +1,4 @@
-import { getSoulResolved, loadSoulContent, soulIdsResolved } from '../../_lib/catalog.js';
+import { assetIdsResolved, getSoulResolved, loadSoulContent, soulIdsResolved } from '../../_lib/catalog.js';
 import { ethers } from 'ethers';
 import {
   buildPurchaseReceiptSetCookie,
@@ -74,6 +74,32 @@ function appendSetCookieHeader(res, cookieValue) {
     return;
   }
   res.setHeader('Set-Cookie', [existing, cookieValue]);
+}
+
+function normalizeDownloadFileName(value) {
+  const candidate = String(value || '').trim();
+  if (!candidate) return 'SOUL.md';
+  if (candidate.includes('/') || candidate.includes('\\')) return 'SOUL.md';
+  if (!/^[A-Za-z0-9._-]+$/.test(candidate)) return 'SOUL.md';
+  if (!/\.md$/i.test(candidate)) return 'SOUL.md';
+  return candidate;
+}
+
+function normalizeAssetType(value) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
+  return normalized || 'soul';
+}
+
+function resolveDeliveryMetadata(soul, soulId) {
+  const fileName = normalizeDownloadFileName(soul?.fileName || soul?.file_name || 'SOUL.md');
+  return {
+    assetType: normalizeAssetType(soul?.assetType || soul?.asset_type || 'soul'),
+    fileName,
+    downloadFileName: `${String(soulId || 'asset')}-${fileName}`
+  };
 }
 
 export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', soulId = '' } = {}) {
@@ -153,11 +179,18 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const isAssetRoute = String(req.url || '').startsWith('/api/assets/');
   const soulId = req.query.id;
   const soul = await getSoulResolved(soulId);
   if (!soul) {
-    return res.status(404).json({ error: 'Soul not found', available_souls: await soulIdsResolved() });
+    const availableIds = isAssetRoute ? await assetIdsResolved() : await soulIdsResolved();
+    return res.status(404).json({
+      error: isAssetRoute ? 'Asset not found' : 'Soul not found',
+      available_assets: availableIds,
+      available_souls: availableIds
+    });
   }
+  const delivery = resolveDeliveryMetadata(soul, soulId);
 
   const sellerAddress = soul.sellerAddress || getSellerAddress();
   if (!sellerAddress) {
@@ -464,7 +497,9 @@ export default async function handler(req, res) {
 
     const content = await loadSoulContent(soulId, { soul });
     if (!content) {
-      return res.status(500).json({ error: 'Soul unavailable' });
+      return res.status(500).json({
+        error: isAssetRoute ? 'Asset unavailable' : 'Soul unavailable'
+      });
     }
     cacheEntitlement({
       wallet: authWallet,
@@ -500,7 +535,7 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Content-Type', 'text/markdown');
-    res.setHeader('Content-Disposition', `attachment; filename="${soulId}-SOUL.md"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${delivery.downloadFileName}"`);
     res.setHeader(
       'PAYMENT-RESPONSE',
       Buffer.from(
@@ -509,6 +544,9 @@ export default async function handler(req, res) {
           transaction: entitlementTransaction,
           network: 'eip155:8453',
           soulDelivered: soulId,
+          assetDelivered: soulId,
+          assetType: delivery.assetType,
+          fileName: delivery.fileName,
           entitlementSource
         })
       ).toString('base64')
@@ -642,7 +680,9 @@ export default async function handler(req, res) {
 
     const content = await loadSoulContent(soulId, { soul });
     if (!content) {
-      return res.status(500).json({ error: 'Soul unavailable' });
+      return res.status(500).json({
+        error: isAssetRoute ? 'Asset unavailable' : 'Soul unavailable'
+      });
     }
 
     const payerHint = getPayerFromPaymentPayload(result.paymentPayload);
@@ -668,12 +708,15 @@ export default async function handler(req, res) {
             transaction: cachedEntitlement.transaction || 'prior-entitlement',
             network: 'eip155:8453',
             soulDelivered: soulId,
+            assetDelivered: soulId,
+            assetType: delivery.assetType,
+            fileName: delivery.fileName,
             entitlementSource: 'cache'
           })
         ).toString('base64')
       );
       res.setHeader('Content-Type', 'text/markdown');
-      res.setHeader('Content-Disposition', `attachment; filename="${soulId}-SOUL.md"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${delivery.downloadFileName}"`);
       return res.status(200).send(content);
     }
 
@@ -780,7 +823,7 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Content-Type', 'text/markdown');
-    res.setHeader('Content-Disposition', `attachment; filename="${soulId}-SOUL.md"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${delivery.downloadFileName}"`);
     return res.status(200).send(content);
   } catch (error) {
     console.error('x402 processing failed:', error);

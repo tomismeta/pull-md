@@ -3,6 +3,9 @@
   "functions": {
     "api/souls/[id]/download.js": {
       "includeFiles": "souls/**/*.md"
+    },
+    "api/assets/[id]/download.js": {
+      "includeFiles": "souls/**/*.md"
     }
   },
   "routes": [
@@ -21,6 +24,10 @@
     {
       "src": "/api/souls/([^/]+)/download",
       "dest": "/api/souls/[id]/download.js?id=$1"
+    },
+    {
+      "src": "/api/assets/([^/]+)/download",
+      "dest": "/api/assets/[id]/download.js?id=$1"
     },
     {
       "src": "/api/(.*)",

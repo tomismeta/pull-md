@@ -1,9 +1,11 @@
 import {
+  buildMcpAssetDetailsResponse,
+  buildMcpListAssetsResponse,
   buildMcpListSoulsResponse,
   buildMcpSoulDetailsResponse,
   checkReceiptEntitlements,
-  listSoulsCatalog,
-  resolveSoulDetails
+  listAssetsCatalog,
+  resolveAssetDetails
 } from './services/souls.js';
 import { executeCreatorMarketplaceAction } from './services/creator_marketplace.js';
 import { AppError } from './errors.js';
@@ -66,8 +68,8 @@ function buildAuthChallengePayload(args = {}) {
 
   const wallet = ensureWalletAddress(parsed.wallet_address);
   const timestampMs = Date.now();
-  const soulIdRaw = String(parsed.soul_id || '').trim();
-  const soulId = soulIdRaw || '*';
+  const assetIdRaw = String(parsed.asset_id || parsed.soul_id || '').trim();
+  const assetId = assetIdRaw || '*';
 
   let action;
   let authMessage;
@@ -92,7 +94,7 @@ function buildAuthChallengePayload(args = {}) {
                 name: '<name>',
                 description: '<description>',
                 price_usdc: 0.01,
-                soul_markdown: '# SOUL\\n\\n...'
+                content_markdown: '# ASSET\\n\\n...'
               }
             }
           : {
@@ -142,16 +144,17 @@ function buildAuthChallengePayload(args = {}) {
     };
   } else if (flow === 'redownload') {
     action = 'redownload';
-    if (!soulIdRaw) {
+    if (!assetIdRaw) {
       throw new AppError(400, {
-        error: 'Missing required field: soul_id',
-        code: 'missing_redownload_soul_id',
-        flow_hint: 'flow=redownload requires soul_id.'
+        error: 'Missing required field: asset_id',
+        code: 'missing_redownload_asset_id',
+        flow_hint: 'flow=redownload requires asset_id (soul_id accepted as legacy alias).'
       });
     }
-    authMessage = buildSiweAuthMessage({ wallet, soulId, action, timestamp: timestampMs });
+    authMessage = buildSiweAuthMessage({ wallet, soulId: assetId, action, timestamp: timestampMs });
     submitVia = {
-      endpoint: `/api/souls/${encodeURIComponent(soulId)}/download`,
+      endpoint: `/api/assets/${encodeURIComponent(assetId)}/download`,
+      legacy_endpoint: `/api/souls/${encodeURIComponent(assetId)}/download`,
       method: 'GET',
       required_headers: [
         'X-CLIENT-MODE',
@@ -188,7 +191,8 @@ function buildAuthChallengePayload(args = {}) {
     auth_format: 'siwe_eip4361_message',
     flow,
     action,
-    soul_id: flow === 'redownload' ? soulId : null,
+    asset_id: flow === 'redownload' ? assetId : null,
+    soul_id: flow === 'redownload' ? assetId : null,
     wallet_address: wallet,
     auth_message_template: authMessage,
     nonce,
@@ -231,8 +235,62 @@ function toolCallHeadersFromArgs(context, args, authShape = 'none') {
 
 const MCP_TOOL_REGISTRY = [
   {
+    name: 'list_assets',
+    description: 'List available markdown assets and pricing',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: { type: 'string', description: 'Optional category filter' },
+        asset_type: { type: 'string', description: 'Optional asset type filter (soul, skill, playbook, ...)' }
+      },
+      additionalProperties: false
+    },
+    manifest: {
+      endpoint: '/mcp',
+      method: 'GET',
+      parameters: {
+        category: { type: 'string', required: false, description: 'Optional category filter' },
+        asset_type: { type: 'string', required: false, description: 'Optional asset type filter' }
+      },
+      returns: { type: 'object', description: 'Markdown asset list with metadata and pricing' }
+    },
+    async run(args) {
+      const category = String(args?.category || '').trim();
+      const assetType = String(args?.asset_type || '').trim();
+      const assets = await listAssetsCatalog({
+        category: category || undefined,
+        assetType: assetType || undefined
+      });
+      return buildMcpListAssetsResponse(assets);
+    }
+  },
+  {
+    name: 'get_asset_details',
+    description: 'Get full metadata, auth message examples, and purchase endpoint for one markdown asset',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Asset identifier' }
+      },
+      required: ['id'],
+      additionalProperties: false
+    },
+    manifest: {
+      endpoint: '/mcp',
+      method: 'GET',
+      parameters: {
+        id: { type: 'string', required: true, description: 'Asset identifier' }
+      },
+      returns: { type: 'object', description: 'Asset details and x402 interaction contract' }
+    },
+    async run(args) {
+      const details = await resolveAssetDetails(args?.id);
+      return buildMcpAssetDetailsResponse(details);
+    }
+  },
+  {
     name: 'list_souls',
-    description: 'List available souls and pricing',
+    description: 'Legacy alias for list_assets',
     inputSchema: {
       type: 'object',
       properties: {
@@ -246,17 +304,17 @@ const MCP_TOOL_REGISTRY = [
       parameters: {
         category: { type: 'string', required: false, description: 'Optional category filter' }
       },
-      returns: { type: 'object', description: 'Soul list with metadata and pricing' }
+      returns: { type: 'object', description: 'Soul list with metadata and pricing (legacy alias)' }
     },
     async run(args) {
       const category = String(args?.category || '').trim();
-      const souls = await listSoulsCatalog({ category: category || undefined });
+      const souls = await listAssetsCatalog({ category: category || undefined, assetType: 'soul' });
       return buildMcpListSoulsResponse(souls);
     }
   },
   {
     name: 'get_soul_details',
-    description: 'Get full metadata, auth message examples, and purchase endpoint for one soul',
+    description: 'Legacy alias for get_asset_details',
     inputSchema: {
       type: 'object',
       properties: {
@@ -271,10 +329,10 @@ const MCP_TOOL_REGISTRY = [
       parameters: {
         id: { type: 'string', required: true, description: 'Soul identifier' }
       },
-      returns: { type: 'object', description: 'Soul details and x402 interaction contract' }
+      returns: { type: 'object', description: 'Soul details and x402 interaction contract (legacy alias)' }
     },
     async run(args) {
-      const details = await resolveSoulDetails(args?.id);
+      const details = await resolveAssetDetails(args?.id);
       return buildMcpSoulDetailsResponse(details);
     }
   },
@@ -290,10 +348,11 @@ const MCP_TOOL_REGISTRY = [
           items: {
             type: 'object',
             properties: {
+              asset_id: { type: 'string' },
               soul_id: { type: 'string' },
               receipt: { type: 'string' }
             },
-            required: ['soul_id', 'receipt'],
+            required: ['receipt'],
             additionalProperties: false
           }
         }
@@ -309,7 +368,7 @@ const MCP_TOOL_REGISTRY = [
         proofs: {
           type: 'array',
           required: true,
-          description: 'List of { soul_id, receipt } proofs (treat receipt as wallet-scoped secret)'
+          description: 'List of { asset_id|soul_id, receipt } proofs (treat receipt as wallet-scoped secret)'
         }
       },
       returns: { type: 'object', description: 'Per-proof entitlement status' }
@@ -333,7 +392,8 @@ const MCP_TOOL_REGISTRY = [
         },
         wallet_address: { type: 'string', description: 'Wallet address used to sign the challenge' },
         action: { type: 'string', description: 'Action name for creator/moderator flows' },
-        soul_id: { type: 'string', description: 'Required when flow=redownload' }
+        asset_id: { type: 'string', description: 'Required when flow=redownload (soul_id accepted as alias)' },
+        soul_id: { type: 'string', description: 'Legacy alias for asset_id when flow=redownload' }
       },
       required: ['flow', 'wallet_address'],
       additionalProperties: false
@@ -345,7 +405,8 @@ const MCP_TOOL_REGISTRY = [
         flow: { type: 'string', required: true, description: 'creator|moderator|session|redownload' },
         wallet_address: { type: 'string', required: true, description: 'Wallet used for SIWE signing' },
         action: { type: 'string', required: false, description: 'Action name (creator/moderator only)' },
-        soul_id: { type: 'string', required: false, description: 'Required for redownload flow' }
+        asset_id: { type: 'string', required: false, description: 'Required for redownload flow' },
+        soul_id: { type: 'string', required: false, description: 'Legacy alias for asset_id' }
       },
       returns: { type: 'object', description: 'SIWE challenge template + exact timestamp/signing guidance' }
     },
@@ -355,7 +416,7 @@ const MCP_TOOL_REGISTRY = [
   },
   {
     name: 'get_listing_template',
-    description: 'Get immediate publish payload template for creator soul listings',
+    description: 'Get immediate publish payload template for creator markdown asset listings',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     manifest: {
       endpoint: '/mcp',
@@ -393,9 +454,11 @@ const MCP_TOOL_REGISTRY = [
             name: { type: 'string', minLength: 3, maxLength: 80 },
             description: { type: 'string', minLength: 12, maxLength: 240 },
             price_usdc: { type: 'number', minimum: 0.000001 },
+            content_markdown: { type: 'string', minLength: 1, maxLength: 65536 },
             soul_markdown: { type: 'string', minLength: 1, maxLength: 65536 }
           },
-          required: ['name', 'description', 'price_usdc', 'soul_markdown'],
+          required: ['name', 'description', 'price_usdc'],
+          anyOf: [{ required: ['content_markdown'] }, { required: ['soul_markdown'] }],
           additionalProperties: true
         }
       },
@@ -553,10 +616,11 @@ const MCP_TOOL_REGISTRY = [
         moderator_address: { type: 'string' },
         moderator_signature: { type: 'string' },
         moderator_timestamp: { type: ['number', 'string'] },
+        asset_id: { type: 'string' },
         soul_id: { type: 'string' },
         reason: { type: 'string' }
       },
-      required: ['moderator_address', 'moderator_signature', 'moderator_timestamp', 'soul_id'],
+      required: ['moderator_address', 'moderator_signature', 'moderator_timestamp'],
       additionalProperties: false
     },
     manifest: {
@@ -567,7 +631,8 @@ const MCP_TOOL_REGISTRY = [
       auth_notes: ['X-MODERATOR-TIMESTAMP accepts Unix ms or ISO-8601 (must match SIWE Issued At)'],
       parameters: {
         action: { type: 'string', required: true, description: 'Set action=remove_listing_visibility' },
-        soul_id: { type: 'string', required: true, description: 'Published soul identifier to hide' },
+        asset_id: { type: 'string', required: true, description: 'Published asset identifier to hide (soul_id accepted as alias)' },
+        soul_id: { type: 'string', required: false, description: 'Legacy alias for asset_id' },
         reason: { type: 'string', required: false, description: 'Optional moderation reason for audit trail' }
       },
       returns: { type: 'object', description: 'Updated listing visibility state' }
@@ -579,7 +644,8 @@ const MCP_TOOL_REGISTRY = [
         method: 'POST',
         headers: toolCallHeadersFromArgs(context, parsed, 'moderator'),
         body: {
-          soul_id: ensureString(parsed.soul_id, 'soul_id'),
+          asset_id: ensureString(parsed.asset_id || parsed.soul_id, 'asset_id'),
+          soul_id: ensureString(parsed.asset_id || parsed.soul_id, 'asset_id'),
           reason: typeof parsed.reason === 'string' ? parsed.reason : ''
         }
       });

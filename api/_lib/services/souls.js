@@ -1,65 +1,118 @@
-import { getSoulResolved, listSoulsResolved, soulIdsResolved } from '../catalog.js';
+import {
+  assetIdsResolved,
+  getAssetResolved,
+  getSoulResolved,
+  listAssetsResolved,
+  listSoulsResolved,
+  soulIdsResolved
+} from '../catalog.js';
 import { buildSiweAuthMessage, getSellerAddress, verifyPurchaseReceipt } from '../payments.js';
 import { AppError } from '../errors.js';
 
-export async function listSoulsCatalog({ category } = {}) {
-  const souls = await listSoulsResolved();
-  return category ? souls.filter((soul) => soul.category === category) : souls;
+function matchesAssetType(item, assetType) {
+  const target = String(assetType || '').trim().toLowerCase();
+  if (!target) return true;
+  return String(item?.asset_type || '').toLowerCase() === target;
 }
 
-export function buildMcpListSoulsResponse(souls) {
+export async function listAssetsCatalog({ category, assetType } = {}) {
+  const assets = await listAssetsResolved();
+  return assets.filter((asset) => {
+    if (category && asset.category !== category) return false;
+    return matchesAssetType(asset, assetType);
+  });
+}
+
+export async function listSoulsCatalog({ category } = {}) {
+  return listAssetsCatalog({ category, assetType: 'soul' });
+}
+
+export function buildMcpListAssetsResponse(assets) {
   return {
-    souls,
-    count: souls.length,
+    assets,
+    souls: assets,
+    count: assets.length,
     meta: {
       agent_friendly: true,
       access_type: 'x402_paywall',
-      flow: 'GET /api/souls/{id}/download -> 402 PAYMENT-REQUIRED -> GET with PAYMENT-SIGNATURE',
+      flow: 'GET /api/assets/{id}/download -> 402 PAYMENT-REQUIRED -> GET with PAYMENT-SIGNATURE',
       reauth_flow:
         'Strict headless agent: X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP. Human recovery: X-WALLET-ADDRESS + X-REDOWNLOAD-SESSION (or signed fallback).',
       receipt_handling:
-        'Persist X-PURCHASE-RECEIPT securely per wallet+soul. Treat it as sensitive proof material and do not log/share plaintext values.'
+        'Persist X-PURCHASE-RECEIPT securely per wallet+asset. Treat it as sensitive proof material and do not log/share plaintext values.'
+    }
+  };
+}
+
+export function buildMcpListSoulsResponse(souls) {
+  return buildMcpListAssetsResponse(souls);
+}
+
+export function buildPublicAssetsResponse(assets) {
+  return {
+    assets,
+    souls: assets,
+    count: assets.length,
+    meta: {
+      discovery: 'public_catalog',
+      mcp_manifest: '/api/mcp/manifest',
+      mcp_endpoint: '/mcp',
+      mcp_list_tool: 'list_assets',
+      purchase_flow: 'GET /api/assets/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE'
     }
   };
 }
 
 export function buildPublicSoulsResponse(souls) {
+  const body = buildPublicAssetsResponse(souls);
   return {
-    souls,
-    count: souls.length,
+    ...body,
+    souls: body.assets,
     meta: {
-      discovery: 'public_catalog',
-      mcp_manifest: '/api/mcp/manifest',
-      mcp_endpoint: '/mcp',
+      ...body.meta,
       mcp_list_tool: 'list_souls',
       purchase_flow: 'GET /api/souls/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE'
     }
   };
 }
 
-export async function resolveSoulDetails(id) {
-  const soulId = String(id || '').trim();
-  if (!soulId) {
+export async function resolveAssetDetails(id) {
+  const assetId = String(id || '').trim();
+  if (!assetId) {
     throw new AppError(400, { error: 'Missing required parameter: id' });
   }
 
-  const soul = await getSoulResolved(soulId);
-  if (!soul) {
-    throw new AppError(404, { error: 'Soul not found', available_souls: await soulIdsResolved() });
+  const asset = await getAssetResolved(assetId);
+  if (!asset) {
+    const ids = await assetIdsResolved();
+    throw new AppError(404, {
+      error: 'Asset not found',
+      available_assets: ids,
+      available_souls: ids
+    });
   }
 
-  const summary = (await listSoulsResolved()).find((item) => item.id === soulId) || null;
-  const sellerAddress = soul.sellerAddress || getSellerAddress();
-  return { soulId, soul, summary, sellerAddress };
+  const summary = (await listAssetsResolved()).find((item) => item.id === assetId) || null;
+  const sellerAddress = asset.sellerAddress || getSellerAddress();
+  return { assetId, soulId: assetId, asset, soul: asset, summary, sellerAddress };
 }
 
-export function buildMcpSoulDetailsResponse({ soulId, soul, summary, sellerAddress }) {
+export async function resolveSoulDetails(id) {
+  return resolveAssetDetails(id);
+}
+
+export function buildMcpAssetDetailsResponse({ assetId, soulId, asset, soul, summary, sellerAddress }) {
+  const effectiveAsset = asset || soul || {};
+  const id = String(assetId || soulId || summary?.id || effectiveAsset.id || '').trim();
+  const fileName =
+    String(summary?.file_name || effectiveAsset.fileName || effectiveAsset.file_name || '').trim() || 'SOUL.md';
   return {
-    soul: {
+    asset: {
       ...summary,
-      long_description: soul.longDescription,
-      files: ['SOUL.md'],
-      purchase_endpoint: `/api/souls/${soulId}/download`,
+      long_description: effectiveAsset.longDescription,
+      files: [fileName],
+      purchase_endpoint: `/api/assets/${id}/download`,
+      purchase_endpoint_legacy: `/api/souls/${id}/download`,
       payment_protocol: 'x402',
       auth_headers: {
         purchase: ['PAYMENT-SIGNATURE', 'X-WALLET-ADDRESS', 'X-ASSET-TRANSFER-METHOD'],
@@ -130,7 +183,7 @@ export function buildMcpSoulDetailsResponse({ soulId, soul, summary, sellerAddre
       auth_message_examples: {
         redownload: buildSiweAuthMessage({
           wallet: '0x<your-wallet>',
-          soulId,
+          soulId: id,
           action: 'redownload',
           timestamp: Date.now()
         }),
@@ -150,6 +203,14 @@ export function buildMcpSoulDetailsResponse({ soulId, soul, summary, sellerAddre
       ],
       seller_address: sellerAddress
     },
+    soul: {
+      ...summary,
+      long_description: effectiveAsset.longDescription,
+      files: [fileName],
+      purchase_endpoint: `/api/souls/${id}/download`,
+      payment_protocol: 'x402',
+      seller_address: sellerAddress
+    },
     meta: {
       agent_friendly: true,
       purchase_flow: 'x402',
@@ -164,6 +225,10 @@ export function buildMcpSoulDetailsResponse({ soulId, soul, summary, sellerAddre
   };
 }
 
+export function buildMcpSoulDetailsResponse(details) {
+  return buildMcpAssetDetailsResponse(details);
+}
+
 export async function checkReceiptEntitlements({ walletAddress, proofs }) {
   const wallet = String(walletAddress || '').trim().toLowerCase();
   if (!/^0x[a-f0-9]{40}$/i.test(wallet)) {
@@ -174,34 +239,37 @@ export async function checkReceiptEntitlements({ walletAddress, proofs }) {
   if (proofList.length === 0) {
     throw new AppError(400, {
       error: 'Missing proofs',
-      message: 'Provide proofs: [{ soul_id, receipt }]'
+      message: 'Provide proofs: [{ asset_id|soul_id, receipt }]'
     });
   }
 
-  const availableSoulIds = await soulIdsResolved();
+  const availableAssetIds = await assetIdsResolved();
   const results = await Promise.all(
     proofList.map(async (proof) => {
-      const soulId = String(proof?.soul_id || '');
+      const assetId = String(proof?.asset_id || proof?.soul_id || '');
       const receipt = String(proof?.receipt || '');
 
-      const soul = await getSoulResolved(soulId);
-      if (!soul) {
+      const asset = await getAssetResolved(assetId);
+      if (!asset) {
         return {
-          soul_id: soulId,
+          asset_id: assetId,
+          soul_id: assetId,
           entitled: false,
-          reason: 'Unknown soul',
-          available_souls: availableSoulIds
+          reason: 'Unknown asset',
+          available_assets: availableAssetIds,
+          available_souls: availableAssetIds
         };
       }
 
       const check = verifyPurchaseReceipt({
         receipt,
         wallet,
-        soulId
+        soulId: assetId
       });
 
       return {
-        soul_id: soulId,
+        asset_id: assetId,
+        soul_id: assetId,
         entitled: check.ok,
         reason: check.ok ? null : check.error,
         transaction: check.transaction || null

@@ -99,8 +99,8 @@ function ensureAction(action) {
   return normalized;
 }
 
-const AUTO_GENERATED_FIELDS = ['soul_id', 'share_path', 'seller_address'];
-const CREATOR_PROVIDED_FIELDS = ['name', 'description', 'price_usdc', 'soul_markdown'];
+const AUTO_GENERATED_FIELDS = ['asset_id', 'soul_id', 'asset_type', 'file_name', 'share_path', 'seller_address'];
+const CREATOR_PROVIDED_FIELDS = ['name', 'description', 'price_usdc', 'content_markdown'];
 
 export function getCreatorMarketplaceSupportedActions() {
   return [
@@ -134,9 +134,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     return {
       template: getMarketplaceDraftTemplate(),
       notes: [
-        'Immediate publish workflow: name, price_usdc, description, soul_markdown.',
+        'Immediate publish workflow: name, price_usdc, description, content_markdown (soul_markdown accepted as alias).',
         'No drafts, no approval queue, no publish state transitions.',
-        'Successful publish returns a shareable soul page URL.'
+        'Successful publish returns a shareable asset page URL.'
       ]
     };
   }
@@ -209,6 +209,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
 
     const listing = withShareUrl(baseUrl, result.listing);
     const listingCreated = {
+      asset_id: listing.asset_id || listing.soul_id,
       soul_id: listing.soul_id,
       auto_generated: AUTO_GENERATED_FIELDS,
       creator_provided: CREATOR_PROVIDED_FIELDS
@@ -221,7 +222,8 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
       auto_generated: AUTO_GENERATED_FIELDS,
       creator_provided: CREATOR_PROVIDED_FIELDS,
       share_url: listing.share_url,
-      purchase_endpoint: `/api/souls/${listing.soul_id}/download`,
+      purchase_endpoint: `/api/assets/${listing.asset_id || listing.soul_id}/download`,
+      purchase_endpoint_legacy: `/api/souls/${listing.soul_id}/download`,
       warnings: result.warnings || [],
       storage_warning: marketplaceStorageWarning()
     };
@@ -275,9 +277,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     if (!moderator.ok) {
       throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
     }
-    const soulId = String(requestBody.soul_id || '').trim();
+    const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
     const reason = typeof requestBody.reason === 'string' ? requestBody.reason : '';
-    if (!soulId) throw new AppError(400, { error: 'Missing required field: soul_id' });
+    if (!soulId) throw new AppError(400, { error: 'Missing required field: asset_id (or soul_id alias)' });
 
     const result = await setListingVisibility({
       soulId,

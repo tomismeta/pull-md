@@ -1,5 +1,9 @@
 import { AppError } from './errors.js';
-import { listSoulsCatalog, resolveSoulDetails, buildMcpSoulDetailsResponse } from './services/souls.js';
+import {
+  buildMcpAssetDetailsResponse,
+  listAssetsCatalog,
+  resolveAssetDetails
+} from './services/souls.js';
 
 function baseUrlFromHeaders(headers = {}) {
   const host = String(headers['x-forwarded-host'] || headers.host || 'soulstarter.vercel.app').trim();
@@ -11,12 +15,16 @@ function asJson(value) {
   return JSON.stringify(value, null, 2);
 }
 
+function assetResourceUri(id) {
+  return `soulstarter://assets/${encodeURIComponent(String(id || ''))}`;
+}
+
 function soulResourceUri(id) {
   return `soulstarter://souls/${encodeURIComponent(String(id || ''))}`;
 }
 
-export async function getMcpResourcesList(context = {}) {
-  const souls = await listSoulsCatalog({});
+export async function getMcpResourcesList() {
+  const assets = await listAssetsCatalog({});
   const docs = [
     {
       uri: 'soulstarter://docs/manifest',
@@ -31,21 +39,35 @@ export async function getMcpResourcesList(context = {}) {
       mimeType: 'text/markdown'
     },
     {
+      uri: 'soulstarter://assets',
+      name: 'Public Asset Catalog',
+      description: 'Publicly listed markdown asset summaries',
+      mimeType: 'application/json'
+    },
+    {
       uri: 'soulstarter://souls',
       name: 'Public Soul Catalog',
-      description: 'Publicly listed soul summaries',
+      description: 'Legacy alias for soulstarter://assets',
       mimeType: 'application/json'
     }
   ];
 
-  const soulResources = souls.map((soul) => ({
-    uri: soulResourceUri(soul.id),
-    name: String(soul.name || soul.id || ''),
-    description: `${String(soul.description || 'Soul listing')}`,
-    mimeType: 'application/json'
-  }));
+  const assetResources = assets.flatMap((asset) => [
+    {
+      uri: assetResourceUri(asset.id),
+      name: String(asset.name || asset.id || ''),
+      description: `${String(asset.description || 'Asset listing')}`,
+      mimeType: 'application/json'
+    },
+    {
+      uri: soulResourceUri(asset.id),
+      name: `${String(asset.name || asset.id || '')} (Legacy Soul URI)`,
+      description: 'Legacy alias for soulstarter://assets/{id}',
+      mimeType: 'application/json'
+    }
+  ]);
 
-  return [...docs, ...soulResources];
+  return [...docs, ...assetResources];
 }
 
 export async function readMcpResource(uri, context = {}) {
@@ -76,19 +98,22 @@ export async function readMcpResource(uri, context = {}) {
     };
   }
 
-  if (normalizedUri === 'soulstarter://souls') {
-    const souls = await listSoulsCatalog({});
+  if (normalizedUri === 'soulstarter://assets' || normalizedUri === 'soulstarter://souls') {
+    const assets = await listAssetsCatalog({});
     return {
       uri: normalizedUri,
       mimeType: 'application/json',
-      text: asJson({ count: souls.length, souls })
+      text: asJson({ count: assets.length, assets, souls: assets })
     };
   }
 
-  if (normalizedUri.startsWith('soulstarter://souls/')) {
-    const id = decodeURIComponent(normalizedUri.slice('soulstarter://souls/'.length));
-    const details = await resolveSoulDetails(id);
-    const body = buildMcpSoulDetailsResponse(details);
+  if (normalizedUri.startsWith('soulstarter://assets/') || normalizedUri.startsWith('soulstarter://souls/')) {
+    const prefix = normalizedUri.startsWith('soulstarter://assets/')
+      ? 'soulstarter://assets/'
+      : 'soulstarter://souls/';
+    const id = decodeURIComponent(normalizedUri.slice(prefix.length));
+    const details = await resolveAssetDetails(id);
+    const body = buildMcpAssetDetailsResponse(details);
     return {
       uri: normalizedUri,
       mimeType: 'application/json',
@@ -105,18 +130,18 @@ export async function readMcpResource(uri, context = {}) {
 
 const MCP_PROMPTS = [
   {
-    name: 'purchase_soul',
-    description: 'Canonical x402 purchase flow for a soul',
+    name: 'purchase_asset',
+    description: 'Canonical x402 purchase flow for a markdown asset',
     arguments: [
-      { name: 'soul_id', required: true, description: 'Soul identifier' },
+      { name: 'asset_id', required: true, description: 'Asset identifier' },
       { name: 'wallet_address', required: true, description: 'Buyer wallet address' }
     ]
   },
   {
-    name: 'redownload_soul',
+    name: 'redownload_asset',
     description: 'Strict no-repay re-download flow using receipt + wallet signature',
     arguments: [
-      { name: 'soul_id', required: true, description: 'Soul identifier' },
+      { name: 'asset_id', required: true, description: 'Asset identifier' },
       { name: 'wallet_address', required: true, description: 'Buyer wallet address' },
       {
         name: 'purchase_receipt',
@@ -130,9 +155,30 @@ const MCP_PROMPTS = [
     description: 'Immediate creator publish flow with SIWE ownership auth',
     arguments: [
       { name: 'wallet_address', required: true, description: 'Creator wallet address' },
-      { name: 'name', required: true, description: 'Soul listing name' },
+      { name: 'name', required: true, description: 'Listing name' },
       { name: 'price_usdc', required: true, description: 'Price in USDC' },
       { name: 'description', required: true, description: 'Buyer-facing summary' }
+    ]
+  },
+  {
+    name: 'purchase_soul',
+    description: 'Legacy alias for purchase_asset',
+    arguments: [
+      { name: 'soul_id', required: true, description: 'Legacy alias for asset_id' },
+      { name: 'wallet_address', required: true, description: 'Buyer wallet address' }
+    ]
+  },
+  {
+    name: 'redownload_soul',
+    description: 'Legacy alias for redownload_asset',
+    arguments: [
+      { name: 'soul_id', required: true, description: 'Legacy alias for asset_id' },
+      { name: 'wallet_address', required: true, description: 'Buyer wallet address' },
+      {
+        name: 'purchase_receipt',
+        required: true,
+        description: 'Saved X-PURCHASE-RECEIPT value'
+      }
     ]
   }
 ];
@@ -141,13 +187,18 @@ export function getMcpPromptsList() {
   return MCP_PROMPTS;
 }
 
+function resolvePromptAssetId(args = {}) {
+  const parsedArgs = args && typeof args === 'object' ? args : {};
+  return String(parsedArgs.asset_id || parsedArgs.soul_id || '<asset_id>');
+}
+
 export function getMcpPrompt(name, args = {}) {
   const promptName = String(name || '').trim();
   const parsedArgs = args && typeof args === 'object' ? args : {};
+  const wallet = String(parsedArgs.wallet_address || '<wallet_address>');
 
-  if (promptName === 'purchase_soul') {
-    const soulId = String(parsedArgs.soul_id || '<soul_id>');
-    const wallet = String(parsedArgs.wallet_address || '<wallet_address>');
+  if (promptName === 'purchase_asset' || promptName === 'purchase_soul') {
+    const assetId = resolvePromptAssetId(parsedArgs);
     return {
       name: promptName,
       description: 'Canonical x402 purchase flow',
@@ -157,12 +208,13 @@ export function getMcpPrompt(name, args = {}) {
           content: {
             type: 'text',
             text: [
-              `Purchase soul ${soulId} with wallet ${wallet}.`,
-              '1) GET /api/souls/{id}/download with X-CLIENT-MODE: agent + X-WALLET-ADDRESS.',
+              `Purchase asset ${assetId} with wallet ${wallet}.`,
+              '1) GET /api/assets/{id}/download with X-CLIENT-MODE: agent + X-WALLET-ADDRESS.',
               '2) Read 402 PAYMENT-REQUIRED and sign per payment_signing_instructions.',
-              '3) Retry GET /api/souls/{id}/download with PAYMENT-SIGNATURE.',
+              '3) Retry GET /api/assets/{id}/download with PAYMENT-SIGNATURE.',
               '4) Persist X-PURCHASE-RECEIPT from successful 200 response.',
-              '5) Treat X-PURCHASE-RECEIPT as wallet-scoped secret proof for re-download. Do not print, publish, or share it.'
+              '5) Treat X-PURCHASE-RECEIPT as wallet-scoped secret proof for re-download. Do not print, publish, or share it.',
+              'Legacy alias endpoint remains available at /api/souls/{id}/download.'
             ].join('\n')
           }
         }
@@ -170,9 +222,8 @@ export function getMcpPrompt(name, args = {}) {
     };
   }
 
-  if (promptName === 'redownload_soul') {
-    const soulId = String(parsedArgs.soul_id || '<soul_id>');
-    const wallet = String(parsedArgs.wallet_address || '<wallet_address>');
+  if (promptName === 'redownload_asset' || promptName === 'redownload_soul') {
+    const assetId = resolvePromptAssetId(parsedArgs);
     return {
       name: promptName,
       description: 'Strict no-repay re-download flow',
@@ -182,10 +233,10 @@ export function getMcpPrompt(name, args = {}) {
           content: {
             type: 'text',
             text: [
-              `Re-download soul ${soulId} with wallet ${wallet} without repaying.`,
+              `Re-download asset ${assetId} with wallet ${wallet} without repaying.`,
               '1) Get SIWE template from get_auth_challenge(flow=redownload).',
               '2) Sign exact SIWE message text.',
-              '3) Send GET /api/souls/{id}/download with X-CLIENT-MODE, X-WALLET-ADDRESS, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP.',
+              '3) Send GET /api/assets/{id}/download with X-CLIENT-MODE, X-WALLET-ADDRESS, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP.',
               '4) Keep X-PURCHASE-RECEIPT in secure storage; it is required proof for strict no-repay re-download.'
             ].join('\n')
           }
@@ -195,7 +246,6 @@ export function getMcpPrompt(name, args = {}) {
   }
 
   if (promptName === 'publish_listing') {
-    const wallet = String(parsedArgs.wallet_address || '<wallet_address>');
     return {
       name: promptName,
       description: 'Immediate creator publish flow',

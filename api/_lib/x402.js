@@ -840,7 +840,7 @@ class NodeAdapter {
   }
 }
 
-function routeConfigForSoul({ soulId, soul, sellerAddress, assetTransferMethod }) {
+function routeConfigForAsset({ assetId, asset, sellerAddress, assetTransferMethod }) {
   const method = normalizeAssetTransferMethod(assetTransferMethod) || getAssetTransferMethod();
   return {
     accepts: {
@@ -848,7 +848,7 @@ function routeConfigForSoul({ soulId, soul, sellerAddress, assetTransferMethod }
       network: 'eip155:8453',
       payTo: sellerAddress,
       price: {
-        amount: soul.priceMicroUsdc,
+        amount: asset.priceMicroUsdc,
         asset: BASE_MAINNET_USDC,
         extra: {
           name: 'USD Coin',
@@ -858,14 +858,15 @@ function routeConfigForSoul({ soulId, soul, sellerAddress, assetTransferMethod }
       },
       maxTimeoutSeconds: 300
     },
-    description: `Soul purchase for ${soulId}`,
+    description: `Markdown asset purchase for ${assetId}`,
     mimeType: 'text/markdown',
     unpaidResponseBody: () => ({
       contentType: 'application/json',
       body: {
         error: 'Payment required',
-        message: `x402 payment required to download ${soulId}`,
-        soul_id: soulId
+        message: `x402 payment required to download ${assetId}`,
+        asset_id: assetId,
+        soul_id: assetId
       }
     })
   };
@@ -883,15 +884,29 @@ function normalizeAssetTransferMethod(value) {
   return null;
 }
 
-export async function getX402HTTPServer({ soulId, soul, sellerAddress, assetTransferMethod = null }) {
+export async function getX402HTTPServer({
+  soulId,
+  soul,
+  assetId,
+  asset,
+  sellerAddress,
+  assetTransferMethod = null
+}) {
   await ensureFacilitatorReachable();
+  const resolvedId = String(assetId || soulId || asset?.id || soul?.id || '').trim();
+  const resolvedAsset = asset || soul;
 
   const method = normalizeAssetTransferMethod(assetTransferMethod) || getAssetTransferMethod();
-  const key = `${soulId}:${sellerAddress}:${soul.priceDisplay}:${method}`;
+  const key = `${resolvedId}:${sellerAddress}:${resolvedAsset.priceDisplay}:${method}`;
   if (!serverCache.has(key)) {
     const resourceServer = new x402ResourceServer(facilitatorClient).register('eip155:*', new ExactEvmScheme());
     const httpServer = new x402HTTPResourceServer(resourceServer, {
-      '*': routeConfigForSoul({ soulId, soul, sellerAddress, assetTransferMethod: method })
+      '*': routeConfigForAsset({
+        assetId: resolvedId,
+        asset: resolvedAsset,
+        sellerAddress,
+        assetTransferMethod: method
+      })
     });
     const initPromise = httpServer.initialize();
     serverCache.set(key, { httpServer, initPromise });

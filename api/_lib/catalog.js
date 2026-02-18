@@ -107,6 +107,51 @@ function bundledCatalogValues() {
   return includeBundledSouls() ? Object.values(SOUL_CATALOG) : [];
 }
 
+function normalizeAssetType(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
+}
+
+function defaultFileNameForAssetType(assetType) {
+  const normalized = normalizeAssetType(assetType);
+  const mapping = {
+    soul: 'SOUL.md',
+    skill: 'SKILL.md',
+    playbook: 'PLAYBOOK.md',
+    policy: 'POLICY.md',
+    prompt: 'PROMPT.md',
+    guide: 'GUIDE.md',
+    workflow: 'WORKFLOW.md',
+    knowledge: 'KNOWLEDGE.md'
+  };
+  return mapping[normalized] || 'ASSET.md';
+}
+
+function normalizeMarkdownFileName(value, fallback) {
+  const candidate = String(value || '').trim();
+  if (!candidate) return fallback;
+  if (candidate.includes('/') || candidate.includes('\\')) return fallback;
+  if (!/\.md$/i.test(candidate)) return fallback;
+  if (!/^[A-Za-z0-9._-]+$/.test(candidate)) return fallback;
+  return candidate;
+}
+
+function normalizeCatalogAsset(asset) {
+  const source = asset && typeof asset === 'object' ? asset : {};
+  const assetType = normalizeAssetType(source.assetType || source.asset_type) || 'soul';
+  const fileName = normalizeMarkdownFileName(
+    source.fileName || source.file_name,
+    defaultFileNameForAssetType(assetType)
+  );
+  return {
+    ...source,
+    assetType,
+    fileName
+  };
+}
+
 function getMarketplaceDraftsDir() {
   const configured = String(process.env.MARKETPLACE_DRAFTS_DIR || '').trim();
   if (configured) return configured;
@@ -142,15 +187,15 @@ function loadPublishedCatalogSync() {
 }
 
 function mergedCatalogValues() {
-  const byId = new Map(bundledCatalogValues().map((item) => [item.id, item]));
+  const byId = new Map(bundledCatalogValues().map((item) => [item.id, normalizeCatalogAsset(item)]));
   for (const entry of loadPublishedCatalogSync()) {
-    byId.set(entry.id, entry);
+    byId.set(entry.id, normalizeCatalogAsset(entry));
   }
   return [...byId.values()];
 }
 
 async function mergedCatalogValuesAsync() {
-  const byId = new Map(bundledCatalogValues().map((item) => [item.id, item]));
+  const byId = new Map(bundledCatalogValues().map((item) => [item.id, normalizeCatalogAsset(item)]));
   let published = [];
   try {
     published = await listPublishedCatalogEntries();
@@ -160,77 +205,121 @@ async function mergedCatalogValuesAsync() {
   }
   for (const entry of Array.isArray(published) ? published : []) {
     if (entry && typeof entry === 'object' && typeof entry.id === 'string') {
-      byId.set(entry.id, entry);
+      byId.set(entry.id, normalizeCatalogAsset(entry));
     }
   }
   return [...byId.values()];
 }
 
-function toSoulSummary(soul) {
-  const sharePath = typeof soul.sharePath === 'string' && soul.sharePath.trim() ? soul.sharePath : `/soul.html?id=${encodeURIComponent(soul.id)}`;
+function toAssetSummary(asset) {
+  const sharePath =
+    typeof asset.sharePath === 'string' && asset.sharePath.trim()
+      ? asset.sharePath
+      : `/soul.html?id=${encodeURIComponent(asset.id)}`;
+  const assetType = normalizeAssetType(asset.assetType || asset.asset_type) || 'soul';
+  const fileName = normalizeMarkdownFileName(
+    asset.fileName || asset.file_name,
+    defaultFileNameForAssetType(assetType)
+  );
   return {
-    id: soul.id,
-    name: soul.name,
-    description: soul.description,
-    icon: soul.icon,
-    category: soul.category,
-    tags: soul.tags,
+    id: asset.id,
+    asset_id: asset.id,
+    soul_id: asset.id,
+    asset_type: assetType,
+    file_name: fileName,
+    name: asset.name,
+    description: asset.description,
+    icon: asset.icon,
+    category: asset.category,
+    tags: asset.tags,
     price: {
-      amount: (Number(soul.priceMicroUsdc) / 1_000_000).toFixed(2),
+      amount: (Number(asset.priceMicroUsdc) / 1_000_000).toFixed(2),
       currency: 'USDC',
       network: 'Base',
-      display: `${soul.priceDisplay} USDC`
+      display: `${asset.priceDisplay} USDC`
     },
-    provenance: soul.provenance,
-    compatibility: soul.compatibility,
-    preview: { available: true, excerpt: soul.preview },
-    source_label: soul.sourceLabel || null,
-    source_url: soul.sourceUrl || null,
+    provenance: asset.provenance,
+    compatibility: asset.compatibility,
+    preview: { available: true, excerpt: asset.preview },
+    source_label: asset.sourceLabel || null,
+    source_url: asset.sourceUrl || null,
     share_path: sharePath,
-    purchase_endpoint: `/api/souls/${soul.id}/download`,
-    payment_protocol: 'x402'
+    purchase_endpoint: `/api/assets/${asset.id}/download`,
+    purchase_endpoint_legacy: `/api/souls/${asset.id}/download`,
+    payment_protocol: 'x402',
+    delivery: {
+      mime_type: 'text/markdown',
+      file_name: fileName
+    }
   };
 }
 
+export function listAssets() {
+  return mergedCatalogValues().map((asset) => toAssetSummary(asset));
+}
+
 export function listSouls() {
-  return mergedCatalogValues().map((soul) => toSoulSummary(soul));
+  return listAssets().filter((asset) => String(asset?.asset_type || '').toLowerCase() === 'soul');
+}
+
+export function getAsset(id) {
+  if (includeBundledSouls() && SOUL_CATALOG[id]) return SOUL_CATALOG[id];
+  const published = loadPublishedCatalogSync().find((entry) => entry.id === id);
+  return published ? normalizeCatalogAsset(published) : null;
 }
 
 export function getSoul(id) {
-  if (includeBundledSouls() && SOUL_CATALOG[id]) return SOUL_CATALOG[id];
-  const published = loadPublishedCatalogSync().find((entry) => entry.id === id);
-  return published || null;
+  return getAsset(id);
+}
+
+export function assetIds() {
+  return mergedCatalogValues().map((asset) => asset.id);
 }
 
 export function soulIds() {
-  return mergedCatalogValues().map((soul) => soul.id);
+  return listSouls().map((asset) => asset.id);
+}
+
+export async function listAssetsResolved() {
+  const assets = await mergedCatalogValuesAsync();
+  return assets.map((asset) => toAssetSummary(asset));
 }
 
 export async function listSoulsResolved() {
-  const souls = await mergedCatalogValuesAsync();
-  return souls.map((soul) => toSoulSummary(soul));
+  const assets = await listAssetsResolved();
+  return assets.filter((asset) => String(asset?.asset_type || '').toLowerCase() === 'soul');
+}
+
+export async function getAssetResolved(id) {
+  if (includeBundledSouls() && SOUL_CATALOG[id]) return SOUL_CATALOG[id];
+  const assets = await mergedCatalogValuesAsync();
+  const match = assets.find((entry) => entry.id === id) || null;
+  return match ? normalizeCatalogAsset(match) : null;
 }
 
 export async function getSoulResolved(id) {
-  if (includeBundledSouls() && SOUL_CATALOG[id]) return SOUL_CATALOG[id];
-  const published = await mergedCatalogValuesAsync();
-  return published.find((entry) => entry.id === id) || null;
+  return getAssetResolved(id);
+}
+
+export async function assetIdsResolved() {
+  const assets = await mergedCatalogValuesAsync();
+  return assets.map((asset) => asset.id);
 }
 
 export async function soulIdsResolved() {
-  const souls = await mergedCatalogValuesAsync();
-  return souls.map((soul) => soul.id);
+  const assets = await listSoulsResolved();
+  return assets.map((asset) => asset.id);
 }
 
-export async function loadSoulContent(id, options = {}) {
-  const soul = options?.soul || (await getSoulResolved(id)) || getSoul(id);
-  if (!soul) return null;
+export async function loadAssetContent(id, options = {}) {
+  const asset = options?.asset || options?.soul || (await getAssetResolved(id)) || getAsset(id);
+  if (!asset) return null;
 
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [];
-  if (typeof soul.contentFile === 'string' && soul.contentFile.trim()) {
-    candidates.push(path.join(process.cwd(), soul.contentFile));
-    candidates.push(path.resolve(moduleDir, '../../', soul.contentFile));
+  if (typeof asset.contentFile === 'string' && asset.contentFile.trim()) {
+    candidates.push(path.join(process.cwd(), asset.contentFile));
+    candidates.push(path.resolve(moduleDir, '../../', asset.contentFile));
   }
 
   for (const diskPath of candidates) {
@@ -241,10 +330,14 @@ export async function loadSoulContent(id, options = {}) {
     }
   }
 
-  if (typeof soul.contentInline === 'string' && soul.contentInline.trim()) {
-    return soul.contentInline;
+  if (typeof asset.contentInline === 'string' && asset.contentInline.trim()) {
+    return asset.contentInline;
   }
 
-  const envKey = `SOUL_${id.replace(/-/g, '_').toUpperCase()}`;
-  return process.env[envKey] || null;
+  const normalizedId = String(id || '').replace(/-/g, '_').toUpperCase();
+  return process.env[`ASSET_${normalizedId}`] || process.env[`SOUL_${normalizedId}`] || null;
+}
+
+export async function loadSoulContent(id, options = {}) {
+  return loadAssetContent(id, options);
 }

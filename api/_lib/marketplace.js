@@ -5,6 +5,7 @@ import { ethers } from 'ethers';
 import { Pool } from 'pg';
 
 const SOUL_TYPES = new Set(['synthetic', 'organic', 'hybrid']);
+const ASSET_TYPES = new Set(['soul', 'skill', 'playbook', 'policy', 'prompt', 'guide', 'workflow', 'knowledge']);
 const MAX_SOUL_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
@@ -47,6 +48,42 @@ function normalizeUsdPriceToMicroUsdc(value) {
   const micro = Math.round(value * 1_000_000);
   if (micro <= 0) return null;
   return String(micro);
+}
+
+function normalizeAssetType(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
+}
+
+function defaultFileNameForAssetType(assetType) {
+  const normalized = normalizeAssetType(assetType);
+  const mapping = {
+    soul: 'SOUL.md',
+    skill: 'SKILL.md',
+    playbook: 'PLAYBOOK.md',
+    policy: 'POLICY.md',
+    prompt: 'PROMPT.md',
+    guide: 'GUIDE.md',
+    workflow: 'WORKFLOW.md',
+    knowledge: 'KNOWLEDGE.md'
+  };
+  return mapping[normalized] || 'ASSET.md';
+}
+
+function isValidMarkdownFileName(value) {
+  const candidate = String(value || '').trim();
+  if (!candidate) return false;
+  if (candidate.includes('/') || candidate.includes('\\')) return false;
+  if (!/\.md$/i.test(candidate)) return false;
+  return /^[A-Za-z0-9._-]+$/.test(candidate);
+}
+
+function normalizeMarkdownFileName(value, fallback = 'ASSET.md') {
+  const candidate = String(value || '').trim();
+  if (isValidMarkdownFileName(candidate)) return candidate;
+  return fallback;
 }
 
 function validateEthAddress(value) {
@@ -93,9 +130,11 @@ function buildDraftInput(input, options = {}) {
   const assets = payload.assets && typeof payload.assets === 'object' ? payload.assets : {};
 
   const name = asString(listing.name || payload.name);
+  const assetType = normalizeAssetType(listing.asset_type || payload.asset_type) || 'soul';
+  const fileName = asString(listing.file_name || payload.file_name) || defaultFileNameForAssetType(assetType);
   const description = asString(listing.description || payload.description);
   const longDescription = asString(listing.long_description || payload.long_description || description);
-  const category = asString(listing.category || payload.category).toLowerCase() || 'creator';
+  const category = asString(listing.category || payload.category).toLowerCase() || assetType || 'creator';
   const soulType = asString(listing.soul_type || payload.soul_type).toLowerCase() || 'hybrid';
   const icon = asString(listing.icon || payload.icon) || deriveIconFromName(name);
   const tags = normalizeTags(listing.tags || payload.tags);
@@ -112,12 +151,18 @@ function buildDraftInput(input, options = {}) {
   const sourceUrl = asString(assets.source_url || payload.source_url);
   const sourceLabel = asString(assets.source_label || payload.source_label);
   const soulMarkdown =
-    typeof assets.soul_markdown === 'string'
-      ? assets.soul_markdown
+    typeof assets.content_markdown === 'string'
+      ? assets.content_markdown
+      : typeof assets.soul_markdown === 'string'
+        ? assets.soul_markdown
       : typeof payload.soul_markdown === 'string'
         ? payload.soul_markdown
+        : typeof payload.content_markdown === 'string'
+          ? payload.content_markdown
         : typeof payload.soul_md === 'string'
           ? payload.soul_md
+          : typeof payload.markdown_content === 'string'
+            ? payload.markdown_content
           : '';
 
   const soulId = asString(listing.soul_id || payload.soul_id).toLowerCase() || slugifySoulId(name);
@@ -128,6 +173,8 @@ function buildDraftInput(input, options = {}) {
     schema_version: 'marketplace-draft-v1',
     listing: {
       soul_id: soulId,
+      asset_type: assetType,
+      file_name: fileName,
       name,
       description,
       long_description: longDescription,
@@ -141,6 +188,7 @@ function buildDraftInput(input, options = {}) {
       platform_fee_bps: platformFeeBps
     },
     assets: {
+      content_markdown: soulMarkdown,
       soul_markdown: soulMarkdown,
       source_url: sourceUrl,
       source_label: sourceLabel
@@ -436,8 +484,12 @@ function derivePreview(markdown) {
   return clean || 'Published creator soul.';
 }
 
-function sharePathForSoul(soulId) {
+function sharePathForAsset(soulId) {
   return `/soul.html?id=${encodeURIComponent(String(soulId || ''))}`;
+}
+
+function sharePathForSoul(soulId) {
+  return sharePathForAsset(soulId);
 }
 
 function normalizeVisibility(value) {
@@ -535,11 +587,21 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
   const assets = draft?.normalized?.assets || {};
   const id = asString(listing.soul_id);
   if (!id) return;
+  const assetType = normalizeAssetType(listing.asset_type) || 'soul';
+  const fileName = normalizeMarkdownFileName(listing.file_name, defaultFileNameForAssetType(assetType));
+  const contentMarkdown =
+    typeof assets.content_markdown === 'string'
+      ? assets.content_markdown
+      : typeof assets.soul_markdown === 'string'
+        ? assets.soul_markdown
+        : '';
 
   const catalog = await loadPublishedCatalog();
   const existingEntry = catalog.entries.find((entry) => entry?.id === id) || null;
   const nextEntry = {
     id,
+    assetType,
+    fileName,
     name: asString(listing.name),
     description: asString(listing.description),
     longDescription: asString(listing.long_description),
@@ -554,15 +616,15 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
       days_nurtured: 0
     },
     compatibility: { runtimes: ['OpenClaw', 'ElizaOS', 'Olas'], min_memory: '8MB', min_context: 4000 },
-    preview: derivePreview(assets.soul_markdown),
+    preview: derivePreview(contentMarkdown),
     sourceLabel: assets.source_label || null,
     sourceUrl: assets.source_url || null,
-    contentInline: assets.soul_markdown,
+    contentInline: contentMarkdown,
     sellerAddress: asString(listing.seller_address).toLowerCase(),
     publishedBy: String(walletAddress || '').toLowerCase(),
     publishedAt: draft?.published_at || new Date().toISOString(),
     draftId: draft?.draft_id,
-    sharePath: sharePathForSoul(id),
+    sharePath: sharePathForAsset(id),
     visibility: normalizeVisibility(existingEntry?.visibility),
     hiddenAt: existingEntry?.hiddenAt || null,
     hiddenBy: existingEntry?.hiddenBy || null,
@@ -785,9 +847,28 @@ export async function listPublishedCatalogEntriesForModeration() {
 export function getMarketplaceDraftTemplate() {
   return {
     schema_version: 'marketplace-publish-v1',
+    asset_type: 'soul',
+    file_name: 'SOUL.md',
     name: 'Example Soul',
     description: 'Short summary buyers see before purchase.',
     price_usdc: 0.49,
+    content_markdown: `# SOUL
+
+## Core Principles
+- Define your non-negotiable values and decision rules.
+
+## Operating Pattern
+- Describe how this soul plans, executes, and iterates.
+
+## Boundaries
+- Clarify what this soul should not do and when to refuse.
+
+## Communication
+- Specify tone, brevity, formatting, and interaction style.
+
+## Continuity
+- Define memory expectations, handoff behavior, and long-term consistency rules.`,
+    // Legacy alias preserved for existing clients.
     soul_markdown: `# SOUL
 
 ## Core Principles
@@ -811,6 +892,7 @@ export function getMarketplaceDraftTemplate() {
         'category, soul_type, icon, tags',
         'share_path'
       ],
+      aliases: ['soul_markdown is accepted as alias for content_markdown'],
       publish_mode: 'immediate'
     }
   };
@@ -903,6 +985,8 @@ export function validateMarketplaceDraft(input, options = {}) {
   const assets = prepared.assets || {};
 
   const soulId = asString(listing.soul_id).toLowerCase();
+  const assetType = normalizeAssetType(listing.asset_type) || 'soul';
+  const fileName = asString(listing.file_name) || defaultFileNameForAssetType(assetType);
   const name = asString(listing.name);
   const description = asString(listing.description);
   const longDescription = asString(listing.long_description);
@@ -913,7 +997,12 @@ export function validateMarketplaceDraft(input, options = {}) {
   const sellerAddress = asString(listing.seller_address);
   const sourceUrl = asString(assets.source_url);
   const sourceLabel = asString(assets.source_label);
-  const soulMarkdown = typeof assets.soul_markdown === 'string' ? assets.soul_markdown : '';
+  const soulMarkdown =
+    typeof assets.content_markdown === 'string'
+      ? assets.content_markdown
+      : typeof assets.soul_markdown === 'string'
+        ? assets.soul_markdown
+        : '';
 
   if (!validateSoulId(soulId)) {
     addFieldError({
@@ -924,6 +1013,28 @@ export function validateMarketplaceDraft(input, options = {}) {
       received: listing.soul_id,
       fix: 'Provide a valid soul_id or allow it to auto-derive from name.',
       message: 'listing.soul_id must be kebab-case alphanumeric (example-soul-v1).'
+    });
+  }
+  if (!ASSET_TYPES.has(assetType)) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.asset_type',
+      expected: `one of: ${[...ASSET_TYPES].join(' | ')}`,
+      received: listing.asset_type,
+      fix: 'Set listing.asset_type to a supported markdown asset type.',
+      message: `listing.asset_type must be one of: ${[...ASSET_TYPES].join(', ')}.`
+    });
+  }
+  if (!isValidMarkdownFileName(fileName)) {
+    addFieldError({
+      errors,
+      fieldErrors,
+      field: 'listing.file_name',
+      expected: 'markdown filename like SOUL.md or SKILL.md (no path separators)',
+      received: listing.file_name,
+      fix: 'Set listing.file_name to a safe .md filename.',
+      message: 'listing.file_name must be a valid .md filename.'
     });
   }
   if (name.length < 3 || name.length > 80) {
@@ -998,8 +1109,8 @@ export function validateMarketplaceDraft(input, options = {}) {
       fieldErrors,
       field: 'listing.soul_markdown',
       expected: `string (markdown content, 1-${MAX_SOUL_MD_BYTES} bytes)`,
-      received: assets.soul_markdown ?? input?.soul_markdown ?? null,
-      fix: 'Include listing.soul_markdown (or soul_markdown in payload) with SOUL.md content.',
+      received: assets.content_markdown ?? assets.soul_markdown ?? input?.content_markdown ?? input?.soul_markdown ?? null,
+      fix: 'Include content_markdown (or legacy soul_markdown alias) in the payload.',
       message: 'assets.soul_markdown is required.'
     });
   }
@@ -1010,7 +1121,7 @@ export function validateMarketplaceDraft(input, options = {}) {
       field: 'listing.soul_markdown',
       expected: `string <= ${MAX_SOUL_MD_BYTES} bytes`,
       received: `bytes:${Buffer.byteLength(soulMarkdown, 'utf8')}`,
-      fix: 'Shorten listing.soul_markdown content.',
+      fix: 'Shorten markdown content.',
       message: `assets.soul_markdown exceeds ${MAX_SOUL_MD_BYTES} bytes.`
     });
   }
@@ -1083,6 +1194,8 @@ export function validateMarketplaceDraft(input, options = {}) {
     schema_version: 'marketplace-draft-v1',
     listing: {
       soul_id: soulId,
+      asset_type: assetType,
+      file_name: normalizeMarkdownFileName(fileName, defaultFileNameForAssetType(assetType)),
       name,
       description,
       long_description: longDescription,
@@ -1097,6 +1210,7 @@ export function validateMarketplaceDraft(input, options = {}) {
       platform_fee_bps: platformFeeBps
     },
     assets: {
+      content_markdown: soulMarkdown,
       soul_markdown: soulMarkdown,
       source_url: sourceUrl || null,
       source_label: sourceLabel || null
@@ -1411,9 +1525,14 @@ export async function publishCreatorDraft({ walletAddress, draftId, reviewer, no
 function summarizePublishedListing(entry) {
   const listing = entry && typeof entry === 'object' ? entry : {};
   const id = asString(listing.id);
-  const sharePath = asString(listing.sharePath || sharePathForSoul(id));
+  const assetType = normalizeAssetType(listing.assetType || listing.asset_type) || 'soul';
+  const fileName = normalizeMarkdownFileName(listing.fileName || listing.file_name, defaultFileNameForAssetType(assetType));
+  const sharePath = asString(listing.sharePath || sharePathForAsset(id));
   return {
+    asset_id: id,
     soul_id: id,
+    asset_type: assetType,
+    file_name: fileName,
     name: asString(listing.name),
     description: asString(listing.description),
     price_micro_usdc: asString(listing.priceMicroUsdc),
