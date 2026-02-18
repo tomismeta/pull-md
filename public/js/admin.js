@@ -1,8 +1,8 @@
 const MCP_ENDPOINT = '/mcp';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
-const SIWE_DOMAIN = 'soulstarter.vercel.app';
-const SIWE_URI = 'https://soulstarter.vercel.app';
+const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'soulstarter.vercel.app';
+const SIWE_URI = (typeof window !== 'undefined' && window.location?.origin) || `https://${SIWE_DOMAIN}`;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 const state = {
   provider: null,
@@ -290,7 +290,7 @@ async function apiCall(action, { method = 'GET', body, moderatorAuth = false } =
   if (normalizedAction === 'remove_listing_visibility') {
     return mcpToolCall('remove_listing_visibility', {
       ...authArgs,
-      soul_id: String(body?.soul_id || '').trim(),
+      asset_id: String(body?.asset_id || body?.soul_id || '').trim(),
       reason: typeof body?.reason === 'string' ? body.reason : ''
     });
   }
@@ -323,12 +323,12 @@ function renderVisible(items) {
             <h4>${escapeHtml(item.name || item.soul_id)}</h4>
             <span class="badge badge-organic">public</span>
           </div>
-          <p class="admin-line">soul_id: <code>${escapeHtml(item.soul_id || '-')}</code></p>
+          <p class="admin-line">asset_id: <code>${escapeHtml(item.asset_id || item.soul_id || '-')}</code></p>
           <p class="admin-line">creator: <code>${escapeHtml(item.wallet_address || '-')}</code></p>
           <p class="admin-line">published: <code>${escapeHtml(formatDate(item.published_at))}</code></p>
           <div class="admin-card-actions">
             ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
-            <button class="btn btn-primary" data-action="hide-listing" data-soul="${escapeHtml(item.soul_id)}">remove visibility</button>
+            <button class="btn btn-primary" data-action="hide-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">remove visibility</button>
           </div>
         </article>
       `
@@ -351,7 +351,7 @@ function renderHidden(items) {
             <h4>${escapeHtml(item.name || item.soul_id)}</h4>
             <span class="badge badge-hybrid">hidden</span>
           </div>
-          <p class="admin-line">soul_id: <code>${escapeHtml(item.soul_id || '-')}</code></p>
+          <p class="admin-line">asset_id: <code>${escapeHtml(item.asset_id || item.soul_id || '-')}</code></p>
           <p class="admin-line">hidden_by: <code>${escapeHtml(item.hidden_by || '-')}</code></p>
           <p class="admin-line">hidden_at: <code>${escapeHtml(formatDate(item.hidden_at))}</code></p>
           <p class="admin-line">reason: <code>${escapeHtml(item.hidden_reason || '-')}</code></p>

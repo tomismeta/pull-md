@@ -5,6 +5,8 @@ export default function handler(req, res) {
   const allowedOrigins = [
     'https://soulstarter.vercel.app',
     'https://soulstarter.io',
+    'https://pull.md',
+    'https://www.pull.md',
     'http://localhost:3000',
     'http://localhost:8080'
   ];
@@ -21,14 +23,18 @@ export default function handler(req, res) {
     return res.status(200).end();
   }
 
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'soulstarter.vercel.app').trim();
+  const proto = String(req.headers['x-forwarded-proto'] || 'https').trim();
+  const baseUrl = `${proto}://${host}`;
+
   const tools = getMcpToolsForManifest();
   const mcpMetadata = getMcpServerMetadata();
 
   return res.status(200).json({
     schema_version: 'v1',
-    name: 'SoulStarter',
-    description: 'Agent markdown asset marketplace with x402 payments and receipt-first redownloads',
-    url: 'https://soulstarter.vercel.app',
+    name: 'PULL.md',
+    description: 'Markdown asset marketplace with x402 payments and receipt-first redownloads',
+    url: baseUrl,
     auth: {
       type: 'x402',
       network: 'eip155:8453',
@@ -134,7 +140,7 @@ export default function handler(req, res) {
     },
     tools,
     download_contract: {
-      canonical_base_url: 'https://soulstarter.vercel.app',
+      canonical_base_url: baseUrl,
       endpoint_pattern: '/api/assets/{id}/download',
       endpoint_pattern_legacy: '/api/souls/{id}/download',
       method: 'GET',
@@ -179,7 +185,7 @@ export default function handler(req, res) {
       redownload_priority:
         'If wallet+receipt headers are present, entitlement path is processed first (prevents accidental repay even when payment headers are also sent).',
       note: 'auth_message_template may appear in a 402 response as helper text; purchase still requires payment header submission.',
-      domain_note: 'Use the canonical production host (soulstarter.vercel.app). Preview/alias domains may not reflect the latest contract behavior.',
+      domain_note: 'Use the canonical production host (pull.md or current deployment host). Preview/alias domains may not reflect the latest contract behavior.',
       v2_requirement: 'Submitted payment JSON must include accepted matching PAYMENT-REQUIRED.accepts[0] exactly.',
       method_discipline:
         'Submit exactly one payload method branch. eip3009 => authorization+signature only. permit2 => permit2Authorization(+transaction)+signature only.',
@@ -202,8 +208,8 @@ export default function handler(req, res) {
       ]
     },
     contact: {
-      name: 'SoulStarter Support',
-      url: 'https://soulstarter.vercel.app'
+      name: 'PULL.md Support',
+      url: baseUrl
     }
   });
 }

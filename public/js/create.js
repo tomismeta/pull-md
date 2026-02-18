@@ -1,8 +1,8 @@
 const MCP_ENDPOINT = '/mcp';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
-const SIWE_DOMAIN = 'soulstarter.vercel.app';
-const SIWE_URI = 'https://soulstarter.vercel.app';
+const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'soulstarter.vercel.app';
+const SIWE_URI = (typeof window !== 'undefined' && window.location?.origin) || `https://${SIWE_DOMAIN}`;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 let moderatorAllowlist = new Set();
 const STATE = {
@@ -306,7 +306,7 @@ function collectListing() {
     name,
     price_usdc: Number.isFinite(price) ? price : 0,
     description,
-    soul_markdown: soulMarkdown
+    content_markdown: soulMarkdown
   };
 }
 
@@ -315,7 +315,7 @@ function applyTemplate(template) {
   document.getElementById('name').value = payload.name || '';
   document.getElementById('description').value = payload.description || '';
   document.getElementById('priceUsdc').value = payload.price_usdc || '';
-  document.getElementById('soulMarkdown').value = normalizeTemplateMarkdown(payload.soul_markdown || '');
+  document.getElementById('soulMarkdown').value = normalizeTemplateMarkdown(payload.content_markdown || payload.soul_markdown || '');
 }
 
 function normalizeTemplateMarkdown(value) {
@@ -361,25 +361,26 @@ function renderPublishedList(items) {
   const container = document.getElementById('publishedList');
   if (!container) return;
   if (!STATE.wallet) {
-    container.innerHTML = '<p class="admin-empty">Connect your wallet to view your published souls.</p>';
+    container.innerHTML = '<p class="admin-empty">Connect your wallet to view your published assets.</p>';
     return;
   }
   if (!Array.isArray(items) || items.length === 0) {
-    container.innerHTML = '<p class="admin-empty">No published souls for this wallet yet.</p>';
+    container.innerHTML = '<p class="admin-empty">No published assets for this wallet yet.</p>';
     return;
   }
   container.innerHTML = items
     .map((item) => {
       const visibility = String(item.visibility || 'public');
       const shareUrl = String(item.share_url || '');
-      const soulId = String(item.soul_id || '').trim();
-      const type = 'hybrid';
+      const assetId = String(item.asset_id || item.soul_id || '').trim();
+      const type = String(item.asset_type || 'asset').toLowerCase();
+      const fileName = String(item.file_name || 'ASSET.md').trim() || 'ASSET.md';
       const creator = shortenAddress(item.wallet_address || STATE.wallet || '');
-      const description = formatCardDescription(item.description, 'Published soul listing.');
+      const description = formatCardDescription(item.description, 'Published markdown listing.');
       return `
         <article class="soul-card">
           <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(item))}</div>
-          <h3>${escapeHtml(item.name || soulId)}</h3>
+          <h3>${escapeHtml(item.name || assetId)}</h3>
           <p>${escapeHtml(description)}</p>
           <div class="soul-card-meta">
             <div class="soul-lineage">
@@ -391,7 +392,7 @@ function renderPublishedList(items) {
               <span class="currency">USDC</span>
             </div>
           </div>
-          <p class="soul-format-label">${escapeHtml(visibility)}</p>
+          <p class="soul-format-label">${escapeHtml(fileName)} · ${escapeHtml(visibility)}</p>
           ${
             shareUrl
               ? `<div class="soul-card-actions">
@@ -455,7 +456,7 @@ async function refreshPublished() {
     }
   });
   renderPublishedList(payload.listings || []);
-  setStatus(`Loaded ${payload.count || 0} published listing(s).`);
+  setStatus(`Loaded ${payload.count || 0} published asset(s).`);
 }
 
 async function publishNow() {
@@ -468,8 +469,8 @@ async function publishNow() {
     }
   });
   setOutput(payload);
-  setStatus(`Published ${payload?.listing?.soul_id || 'listing'} successfully.`);
-  toast('Soul published', 'success');
+  setStatus(`Published ${payload?.listing?.asset_id || payload?.listing?.soul_id || 'listing'} successfully.`);
+  toast('Asset published', 'success');
 }
 
 async function copyShareUrl(url) {

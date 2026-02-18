@@ -13,7 +13,7 @@
 
   function formatCreatorLabel(raw, shortenAddress = (value) => String(value || '-')) {
     const text = String(raw || '').trim();
-    if (!text) return 'Creator';
+    if (!text) return 'Creator -';
     const match = text.match(/0x[a-fA-F0-9]{40}/);
     if (match) {
       return `Creator ${shortenAddress(match[0])}`;
@@ -41,7 +41,7 @@
     if (glyph) glyph.textContent = glyphForSoul(soul);
 
     const heading = document.getElementById('soulDetailName');
-    if (heading) heading.textContent = String(soul.name || soul.id || 'Soul');
+    if (heading) heading.textContent = String(soul.name || soul.id || 'Asset');
 
     const subtitle = document.getElementById('soulDetailDescription');
     if (subtitle) subtitle.textContent = String(soul.description || 'No description available.');
@@ -50,7 +50,10 @@
     if (preview) preview.textContent = String(soul.preview?.excerpt || soul.description || 'No preview available.');
 
     const lineage = document.getElementById('soulDetailLineage');
-    if (lineage) lineage.textContent = formatCreator(String(soul.provenance?.raised_by || ''));
+    if (lineage) {
+      const creatorHint = soul.provenance?.raised_by || soul.creator_address || soul.wallet_address || soul.seller_address || '';
+      lineage.textContent = formatCreator(String(creatorHint));
+    }
 
     const typeBadge = document.getElementById('soulDetailType');
     if (typeBadge) {
@@ -78,6 +81,12 @@
       const seller = soul.seller_address ? safeShorten(soul.seller_address) : 'seller wallet';
       note.textContent = `Paid access via x402. Settlement recipient: ${seller}.`;
     }
+
+    const fileNameEl = document.getElementById('assetDetailFileName');
+    if (fileNameEl) {
+      const fileName = String(soul?.delivery?.file_name || soul?.file_name || 'ASSET.md').trim();
+      fileNameEl.textContent = fileName || 'ASSET.md';
+    }
   }
 
   function updateSoulPagePurchaseState({
@@ -100,11 +109,15 @@
     const resolvedSoulId = String(btn.dataset.soulId || '').trim();
     if (!resolvedSoulId) return;
     if (typeof onPurchaseClick === 'function') {
-      btn.onclick = () => onPurchaseClick(resolvedSoulId);
+      btn.onclick = () => onPurchaseClick(resolvedSoulId, btn.dataset.fileName || 'ASSET.md');
       btn.removeAttribute('onclick');
     }
-    const accessible = typeof isSoulAccessible === 'function' ? isSoulAccessible(resolvedSoulId) : false;
-    btn.textContent = accessible ? 'Download SOUL.md' : 'Purchase SOUL.md';
+    const matching = Array.isArray(soulCatalogCache)
+      ? soulCatalogCache.find((item) => String(item?.id || '') === resolvedSoulId)
+      : null;
+    const fileName = String(matching?.delivery?.file_name || matching?.file_name || 'ASSET.md').trim() || 'ASSET.md';
+    btn.dataset.fileName = fileName;
+    btn.textContent = accessible ? `Download ${fileName}` : `Purchase ${fileName}`;
   }
 
   globalScope.SoulStarterSoulDetailUi = {

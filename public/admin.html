@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SoulStarter Moderation</title>
+  <title>PULL.md Moderation</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,8 +16,8 @@
     <div class="container">
       <div class="header-content">
         <a href="/" class="logo">
-          <span class="logo-mark">SS</span>
-          <span>SoulStarter</span>
+          <span class="logo-mark">PM</span>
+          <span>PULL.md</span>
         </a>
         <button
           class="nav-toggle"
@@ -30,7 +30,8 @@
           Menu
         </button>
         <nav class="nav" id="topNav">
-          <a href="/" class="nav-link">Discover</a>
+          <a href="/#assets" class="nav-link">Discover</a>
+          <a href="/#my-assets" class="nav-link">My Assets</a>
           <a href="/create.html" class="nav-link">Create</a>
           <a href="/admin.html" class="nav-link">Moderate</a>
           <button class="wallet-btn" id="walletBtn">Connect Wallet</button>
@@ -43,8 +44,8 @@
     <section class="admin-section">
       <div class="container">
         <div class="agent-api-card admin-header-card">
-          <h1>Moderation</h1>
-          <p>Only allowlisted moderators can remove listings from public visibility.</p>
+          <h1>Marketplace Moderation</h1>
+          <p>Allowlisted moderators can remove markdown assets from public visibility.</p>
         </div>
       </div>
     </section>
@@ -67,7 +68,7 @@
       <div class="container">
         <div class="agent-api-card">
           <div class="admin-actions">
-            <h3>Public Listings</h3>
+            <h3>Public Assets</h3>
             <button id="refreshListingsBtn" class="btn btn-ghost">Refresh List</button>
           </div>
           <div id="visibleContainer" class="admin-list"></div>
@@ -79,7 +80,7 @@
       <div class="container">
         <div class="agent-api-card">
           <div class="admin-actions">
-            <h3>Removed Listings</h3>
+            <h3>Removed Assets</h3>
             <button id="refreshHiddenBtn" class="btn btn-ghost">Refresh List</button>
           </div>
           <div id="hiddenContainer" class="admin-list"></div>

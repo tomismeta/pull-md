@@ -11,8 +11,8 @@ const CONFIG = {
     blockExplorerUrls: ['https://basescan.org']
   }
 };
-const SIWE_DOMAIN = 'soulstarter.vercel.app';
-const SIWE_URI = 'https://soulstarter.vercel.app';
+const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'soulstarter.vercel.app';
+const SIWE_URI = (typeof window !== 'undefined' && window.location?.origin) || `https://${SIWE_DOMAIN}`;
 
 const X402_FETCH_SDK_VERSION = '2.3.0';
 const X402_EVM_SDK_VERSION = '2.3.1';
@@ -567,7 +567,13 @@ async function getExpectedSellerAddressForSoul(soulId) {
     soulId,
     defaultSellerAddress: EXPECTED_SELLER_ADDRESS,
     cache: sellerAddressCache,
-    fetchSoulDetails: (id) => mcpToolCall('get_soul_details', { id })
+    fetchSoulDetails: async (id) => {
+      try {
+        return await mcpToolCall('get_asset_details', { id });
+      } catch (_) {
+        return mcpToolCall('get_soul_details', { id });
+      }
+    }
   });
 }
 
@@ -624,17 +630,21 @@ async function tryRedownload(soulId) {
     buildSiweAuthMessage,
     readSettlementTx,
     onSuccess: ({ content, tx, soulId: successSoulId }) => {
-      showPaymentSuccess(content, tx, successSoulId, true);
+      const summary = Array.isArray(soulCatalogCache)
+        ? soulCatalogCache.find((item) => String(item?.id || '') === String(successSoulId))
+        : null;
+      const fileName = String(summary?.delivery?.file_name || summary?.file_name || 'ASSET.md').trim() || 'ASSET.md';
+      showPaymentSuccess(content, tx, successSoulId, true, null, fileName);
     }
   });
 }
 
-async function purchaseSoul(soulId) {
-  return getPurchaseFlowController().purchaseSoul(soulId);
+async function purchaseSoul(soulId, fileName = null) {
+  return getPurchaseFlowController().purchaseSoul(soulId, fileName);
 }
 
-async function downloadOwnedSoul(soulId) {
-  return getPurchaseFlowController().downloadOwnedSoul(soulId);
+async function downloadOwnedSoul(soulId, fileName = null) {
+  return getPurchaseFlowController().downloadOwnedSoul(soulId, fileName);
 }
 
 function readSettlementTx(response) {
@@ -714,16 +724,16 @@ function getStoredReceipt(soulId, wallet) {
   });
 }
 
-function triggerMarkdownDownload(content, soulId) {
-  getDownloadDeliveryHelper().triggerMarkdownDownload(content, soulId);
+function triggerMarkdownDownload(content, soulId, fileName = 'ASSET.md') {
+  getDownloadDeliveryHelper().triggerMarkdownDownload(content, soulId, fileName);
 }
 
 function isLikelyMobileBrowser() {
   return getDownloadDeliveryHelper().isLikelyMobileBrowser();
 }
 
-function showPaymentSuccess(content, txRef, soulId, redownload, expectedSettlement = null) {
-  return getPurchaseFlowController().showPaymentSuccess(content, txRef, soulId, redownload, expectedSettlement);
+function showPaymentSuccess(content, txRef, soulId, redownload, expectedSettlement = null, fileName = null) {
+  return getPurchaseFlowController().showPaymentSuccess(content, txRef, soulId, redownload, expectedSettlement, fileName);
 }
 
 function escapeHtml(text) {
@@ -754,7 +764,13 @@ async function loadSouls() {
     renderOwnedSouls,
     isSoulAccessible,
     listingHrefBuilder: soulListingHref,
-    lineageLabelForSoul: (soul) => formatCreatorLabel(soul?.provenance?.raised_by || ''),
+    lineageLabelForSoul: (soul) => formatCreatorLabel(
+      soul?.provenance?.raised_by ||
+      soul?.creator_address ||
+      soul?.wallet_address ||
+      soul?.seller_address ||
+      ''
+    ),
     soulsGridId: 'soulsGrid'
   });
 }

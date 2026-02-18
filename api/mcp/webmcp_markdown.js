@@ -67,7 +67,7 @@ function renderWebmcpMarkdown(manifest) {
   const capabilityLines = Object.entries(capabilities).map(([key, value]) => `- \`${escapeCell(key)}\`: ${escapeCell(value)}`);
 
   return [
-    '# SoulStarter WebMCP Contract',
+    '# PULL.md WebMCP Contract',
     '',
     '> Generated dynamically from `GET /api/mcp/manifest`.',
     '',

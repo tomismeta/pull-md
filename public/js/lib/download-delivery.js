@@ -1,12 +1,13 @@
 (function attachSoulStarterDownloadDelivery(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
-  function triggerMarkdownDownload(content, soulId) {
+  function triggerMarkdownDownload(content, soulId, fileName = 'ASSET.md') {
     const blob = new Blob([content], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `${soulId}-SOUL.md`;
+    const normalized = String(fileName || 'ASSET.md').trim() || 'ASSET.md';
+    anchor.download = `${soulId}-${normalized}`;
     anchor.style.display = 'none';
     document.body.appendChild(anchor);
     anchor.click();
@@ -24,11 +25,12 @@
     event,
     content,
     soulId,
+    fileName = 'ASSET.md',
     showToast
   } = {}) {
     if (!content || !soulId || !isLikelyMobileBrowser()) return;
 
-    const filename = `${soulId}-SOUL.md`;
+    const filename = `${soulId}-${String(fileName || 'ASSET.md').trim() || 'ASSET.md'}`;
     if (event?.preventDefault) {
       event.preventDefault();
     }
@@ -61,11 +63,11 @@
         } catch (_) {}
       }, 60 * 1000);
       if (typeof showToast === 'function') {
-        showToast('Opened SOUL.md. Use browser Share/Save to keep it locally.', 'info');
+        showToast(`Opened ${String(fileName || 'ASSET.md')}. Use browser Share/Save to keep it locally.`, 'info');
       }
     } catch (_) {
       if (typeof showToast === 'function') {
-        showToast('Unable to open SOUL.md. Try again from My Souls.', 'error');
+        showToast(`Unable to open ${String(fileName || 'ASSET.md')}. Try again from My Assets.`, 'error');
       }
     }
   }

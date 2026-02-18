@@ -28,7 +28,7 @@
 
 body {
   font-family: 'Manrope', sans-serif;
-  background: radial-gradient(1200px 500px at 10% -20%, #dce9ff 0%, transparent 65%), var(--bg);
+  background: var(--bg);
   color: var(--text);
   line-height: 1.55;
   min-height: 100vh;
@@ -44,7 +44,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(246, 249, 252, 0.92);
+  background: rgba(248, 251, 255, 0.94);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(200, 216, 232, 0.78);
 }
@@ -73,8 +73,9 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #2f7cff, #5aa2ff);
-  color: #fff;
+  background: #ebf2ff;
+  color: #20457c;
+  border: 1px solid #c7daf8;
   font-family: 'Manrope', sans-serif;
   font-size: 0.72rem;
   letter-spacing: 0.03em;
@@ -148,7 +149,7 @@ main {
 }
 
 .hero-shell {
-  background: linear-gradient(145deg, #ffffff, #f4f9ff);
+  background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 24px;
   box-shadow: var(--shadow-md);
@@ -159,7 +160,7 @@ main {
   display: inline-flex;
   align-items: center;
   border: 1px solid #c8daf3;
-  background: #edf4ff;
+  background: #f5f9ff;
   color: #315789;
   font-family: 'Manrope', sans-serif;
   font-size: 0.72rem;
@@ -230,7 +231,7 @@ main {
 .hero-metrics div {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.72);
+  background: #ffffff;
   padding: 12px;
 }
 
@@ -437,6 +438,19 @@ main {
   background: #eaf7f0;
 }
 
+.badge-asset,
+.badge-soul,
+.badge-skill,
+.badge-playbook,
+.badge-policy,
+.badge-prompt,
+.badge-guide,
+.badge-workflow,
+.badge-knowledge {
+  color: #1f5cae;
+  background: #ebf2ff;
+}
+
 .badge-hybrid {
   color: #995d05;
   background: #fff5e7;
@@ -482,7 +496,7 @@ main {
 }
 
 .btn-primary {
-  background: linear-gradient(140deg, #2068ff, #4d8aff);
+  background: #246bff;
   color: #ffffff;
 }
 

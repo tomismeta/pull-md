@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Soul — SoulStarter</title>
-  <meta name="description" content="SoulStarter listing details and x402 purchase access.">
+  <title>Asset — PULL.md</title>
+  <meta name="description" content="PULL.md listing details and x402 purchase access.">
   <meta name="mcp:version" content="1.0">
   <meta name="mcp:endpoint" content="/mcp">
   <meta name="mcp:manifest" content="/api/mcp/manifest">
@@ -19,8 +19,8 @@
     <div class="container">
       <div class="header-content">
         <a href="/" class="logo">
-          <span class="logo-mark">SS</span>
-          <span>SoulStarter</span>
+          <span class="logo-mark">PM</span>
+          <span>PULL.md</span>
         </a>
         <button
           class="nav-toggle"
@@ -33,8 +33,8 @@
           Menu
         </button>
         <nav class="nav" id="topNav">
-          <a href="/#souls" class="nav-link">Discover</a>
-          <a href="/#my-souls" class="nav-link">My Souls</a>
+          <a href="/#assets" class="nav-link">Discover</a>
+          <a href="/#my-assets" class="nav-link">My Assets</a>
           <a href="/create.html" class="nav-link">Create</a>
           <a href="/#for-agents" class="nav-link">For Agents</a>
           <a href="/admin.html" class="nav-link moderator-nav-link" style="display: none;">Moderate</a>
@@ -55,7 +55,7 @@
             <span class="badge badge-hybrid" id="soulDetailType">Hybrid</span>
             <span class="lineage-text" id="soulDetailLineage">Creator listing</span>
           </div>
-          <h1 class="soul-title" id="soulDetailName">Loading soul...</h1>
+          <h1 class="soul-title" id="soulDetailName">Loading asset...</h1>
           <p class="soul-description" id="soulDetailDescription">Fetching listing details.</p>
           <div class="soul-tags" id="soulDetailTags">
             <span class="tag">loading</span>
@@ -70,7 +70,7 @@
             <div class="file-item">
               <span class="file-icon">MD</span>
               <div class="file-info">
-              <span class="file-name">SOUL.md</span>
+              <span class="file-name" id="assetDetailFileName">ASSET.md</span>
                 <span class="file-desc">Delivered only after successful payment or entitlement verification</span>
               </div>
             </div>
@@ -93,17 +93,17 @@
               <span>Base Network</span>
             </div>
             <button class="btn btn-primary btn-lg btn-full" id="buyBtn" data-soul-id="">
-              Purchase SOUL.md
+              Purchase Asset
             </button>
             <p class="purchase-note" id="soulDetailPurchaseNote">Delivered instantly through x402 settlement.</p>
           </div>
 
           <div class="purchase-card success-card" id="successCard" style="display: none;">
             <div class="success-icon">OK</div>
-            <h3>Soul Acquired</h3>
+            <h3>Asset Acquired</h3>
             <p>Your purchase is complete.</p>
             <a id="downloadLink" href="#" class="btn btn-primary btn-lg btn-full" download>
-              Download SOUL.md
+              Download File
             </a>
             <div class="settlement-verification" id="settlementVerification" style="display: none;"></div>
             <p class="tx-hash" id="txHash"></p>

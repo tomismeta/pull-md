@@ -52,7 +52,7 @@
     return currentSoulDetailId;
   }
 
-  async function hydrateSoulDetailPage({
+async function hydrateSoulDetailPage({
     soulDetailUiHelper,
     mcpToolCall,
     currentSoulDetailId = null,
@@ -85,9 +85,14 @@
     }
 
     try {
-      const payload = await mcpToolCall('get_soul_details', { id: soulId });
-      const soul = payload?.soul || null;
-      if (!soul) throw new Error('Soul metadata unavailable');
+      let payload = null;
+      try {
+        payload = await mcpToolCall('get_asset_details', { id: soulId });
+      } catch (_) {
+        payload = await mcpToolCall('get_soul_details', { id: soulId });
+      }
+      const soul = payload?.asset || payload?.soul || null;
+      if (!soul) throw new Error('Asset metadata unavailable');
       const mergedCatalog = [
         soul,
         ...(Array.isArray(soulCatalogCache) ? soulCatalogCache.filter((item) => item.id !== soul.id) : [])
@@ -102,9 +107,9 @@
       if (btn) btn.disabled = false;
       return { hydrated: true, currentSoulDetailId: nextSoulDetailId || currentSoulDetailId };
     } catch (error) {
-      if (typeof showToast === 'function') showToast(error?.message || 'Unable to load soul details', 'error');
+      if (typeof showToast === 'function') showToast(error?.message || 'Unable to load asset details', 'error');
       const name = document.getElementById('soulDetailName');
-      if (name) name.textContent = 'Soul unavailable';
+      if (name) name.textContent = 'Asset unavailable';
       const description = document.getElementById('soulDetailDescription');
       if (description) description.textContent = 'This listing could not be loaded.';
       if (btn) {
@@ -128,7 +133,7 @@
     if (!grid) return;
 
     if (!walletAddress) {
-      grid.innerHTML = '<p class="admin-empty">Connect your wallet to view your purchased and created souls.</p>';
+      grid.innerHTML = '<p class="admin-empty">Connect your wallet to view your purchased and created assets.</p>';
       return;
     }
 
@@ -136,7 +141,7 @@
     const created = typeof createdSoulSetForCurrentWallet === 'function' ? createdSoulSetForCurrentWallet() : new Set();
     const allSoulIds = new Set([...owned, ...created]);
     if (!allSoulIds.size) {
-      grid.innerHTML = '<p class="admin-empty">No purchased or created souls found for this wallet yet.</p>';
+      grid.innerHTML = '<p class="admin-empty">No purchased or created assets found for this wallet yet.</p>';
       return;
     }
 
@@ -169,10 +174,10 @@
     }
 
     try {
-      const response = await fetchWithTimeout('/api/souls');
-      if (!response.ok) throw new Error('Failed to load soul catalog');
+      const response = await fetchWithTimeout('/api/assets');
+      if (!response.ok) throw new Error('Failed to load asset catalog');
       const payload = await response.json();
-      const souls = payload.souls || [];
+      const souls = payload.assets || payload.souls || [];
       if (typeof setSoulCatalogCache === 'function') {
         setSoulCatalogCache(souls);
       }
@@ -182,7 +187,7 @@
 
       if (!souls.length) {
         grid.innerHTML =
-          '<p class="admin-empty">No public souls are listed yet. Use <a href="/create.html">Create</a> to publish the first listing.</p>';
+          '<p class="admin-empty">No public assets are listed yet. Use <a href="/create.html">Create</a> to publish the first listing.</p>';
         if (typeof renderOwnedSouls === 'function') renderOwnedSouls();
         return { souls, loaded: true };
       }
@@ -197,9 +202,9 @@
       return { souls, loaded: true };
     } catch (error) {
       console.error('Catalog load failed:', error);
-      grid.innerHTML = '<p>Souls are temporarily unavailable. Please try again.</p>';
+      grid.innerHTML = '<p>Assets are temporarily unavailable. Please try again.</p>';
       if (typeof renderInventorySummary === 'function') {
-        renderInventorySummary([], 'Souls are temporarily unavailable.');
+        renderInventorySummary([], 'Assets are temporarily unavailable.');
       }
       if (typeof renderOwnedSouls === 'function') renderOwnedSouls();
       return { souls: [], loaded: true, error };

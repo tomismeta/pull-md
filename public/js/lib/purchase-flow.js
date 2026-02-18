@@ -25,22 +25,24 @@
     async function handleSuccessDownloadClick(event) {
       if (!latestSoulDownload || typeof options.isLikelyMobileBrowser !== 'function') return;
       if (!options.isLikelyMobileBrowser()) return;
-      const { content, soulId } = latestSoulDownload;
+      const { content, soulId, fileName } = latestSoulDownload;
       if (typeof options.handleMobileDownloadClick === 'function') {
         await options.handleMobileDownloadClick({
           event,
           content,
           soulId,
+          fileName,
           showToast: options.showToast
         });
       }
     }
 
-    function showPaymentSuccess(content, txRef, soulId, redownload, expectedSettlement = null) {
+    function showPaymentSuccess(content, txRef, soulId, redownload, expectedSettlement = null, fileNameHint = null) {
       const txHash = typeof txRef === 'string' ? txRef : null;
       settlementVerificationSequence += 1;
       const verificationRunId = settlementVerificationSequence;
-      latestSoulDownload = { content, soulId };
+      const fileName = String(fileNameHint || latestSoulDownload?.fileName || 'ASSET.md').trim() || 'ASSET.md';
+      latestSoulDownload = { content, soulId, fileName };
 
       const purchaseCard = document.getElementById('purchaseCard');
       if (purchaseCard) purchaseCard.style.display = 'none';
@@ -66,13 +68,14 @@
         revokeActiveSuccessDownloadUrl();
         activeSuccessDownloadUrl = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
         downloadLink.href = activeSuccessDownloadUrl;
-        downloadLink.download = `${soulId}-SOUL.md`;
+        downloadLink.download = `${soulId}-${fileName}`;
+        downloadLink.textContent = `Download ${fileName}`;
         downloadLink.onclick = handleSuccessDownloadClick;
       }
 
       if (typeof options.triggerMarkdownDownload === 'function') {
         try {
-          options.triggerMarkdownDownload(content, soulId);
+          options.triggerMarkdownDownload(content, soulId, fileName);
         } catch (_) {}
       }
 
@@ -145,7 +148,7 @@
       }
     }
 
-    async function purchaseSoul(soulId) {
+    async function purchaseSoul(soulId, fileNameHint = null) {
       const walletAddress = getWalletAddress();
       const signer = getSigner();
       if (!walletAddress || !signer) {
@@ -185,7 +188,7 @@
           preferredAssetTransferMethod: 'eip3009'
         });
         const initial = await options.fetchWithTimeout(
-          `${options.apiBase}/souls/${encodeURIComponent(soulId)}/download`,
+          `${options.apiBase}/assets/${encodeURIComponent(soulId)}/download`,
           {
             method: 'GET',
             headers: {
@@ -206,7 +209,7 @@
         const paymentPayload = await options.buildX402PaymentSignature(paymentRequired, soulId, x402Engine);
 
         if (btn) btn.textContent = 'Submitting payment...';
-        const paid = await options.fetchWithTimeout(`${options.apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
+        const paid = await options.fetchWithTimeout(`${options.apiBase}/assets/${encodeURIComponent(soulId)}/download`, {
           method: 'GET',
           headers: {
             'PAYMENT-SIGNATURE': btoa(JSON.stringify(paymentPayload)),
@@ -227,6 +230,12 @@
         }
 
         const content = await paid.text();
+        const deliveredFileName = String(
+          settlementResponse?.fileName ||
+            settlementResponse?.assetDelivered?.fileName ||
+            fileNameHint ||
+            'ASSET.md'
+        ).trim() || 'ASSET.md';
         const tx = settlementResponse.transaction || null;
         const receipt = paid.headers.get('X-PURCHASE-RECEIPT');
         if (receipt && typeof options.storeReceipt === 'function') {
@@ -241,8 +250,8 @@
           payer: walletAddress,
           network: paymentPayload?.accepted?.network || null
         };
-        showPaymentSuccess(content, tx, soulId, false, expectedSettlement);
-        if (typeof options.showToast === 'function') options.showToast('Soul acquired successfully!', 'success');
+        showPaymentSuccess(content, tx, soulId, false, expectedSettlement, deliveredFileName);
+        if (typeof options.showToast === 'function') options.showToast('Asset acquired successfully.', 'success');
         if (typeof options.loadSouls === 'function') options.loadSouls();
         if (typeof options.updateSoulPagePurchaseState === 'function') options.updateSoulPagePurchaseState();
       } catch (error) {
@@ -253,12 +262,12 @@
       } finally {
         if (btn) {
           btn.disabled = false;
-          btn.textContent = 'Purchase Soul';
+          btn.textContent = `Purchase ${String(fileNameHint || 'ASSET.md')}`;
         }
       }
     }
 
-    async function downloadOwnedSoul(soulId) {
+    async function downloadOwnedSoul(soulId, fileNameHint = null) {
       const walletAddress = getWalletAddress();
       const signer = getSigner();
       if (!walletAddress || !signer) {
@@ -272,6 +281,9 @@
         }
         const prior = await options.tryRedownload(soulId);
         if (prior.ok) {
+          if (typeof fileNameHint === 'string' && latestSoulDownload) {
+            latestSoulDownload.fileName = fileNameHint;
+          }
           if (typeof options.showToast === 'function') {
             options.showToast('Download restored from your entitlement.', 'success');
           }

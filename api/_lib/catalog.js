@@ -221,6 +221,8 @@ function toAssetSummary(asset) {
     asset.fileName || asset.file_name,
     defaultFileNameForAssetType(assetType)
   );
+  const sellerAddress = String(asset.sellerAddress || asset.seller_address || '').trim() || null;
+  const creatorWallet = String(asset.publishedBy || asset.wallet_address || '').trim() || null;
   return {
     id: asset.id,
     asset_id: asset.id,
@@ -243,6 +245,9 @@ function toAssetSummary(asset) {
     preview: { available: true, excerpt: asset.preview },
     source_label: asset.sourceLabel || null,
     source_url: asset.sourceUrl || null,
+    seller_address: sellerAddress ? sellerAddress.toLowerCase() : null,
+    wallet_address: creatorWallet ? creatorWallet.toLowerCase() : null,
+    creator_address: creatorWallet ? creatorWallet.toLowerCase() : (sellerAddress ? sellerAddress.toLowerCase() : null),
     share_path: sharePath,
     purchase_endpoint: `/api/assets/${asset.id}/download`,
     purchase_endpoint_legacy: `/api/souls/${asset.id}/download`,

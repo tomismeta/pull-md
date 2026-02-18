@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SoulStarter — OpenClaw Agent Souls</title>
-  <meta name="description" content="Discover and purchase OpenClaw agent souls with x402 on Base. One payment, one soul, persistent wallet entitlement.">
+  <title>PULL.md — Markdown Asset Marketplace for Agents</title>
+  <meta name="description" content="Buy, sell, and re-download agent-ready markdown assets with x402 on Base.">
 
   <meta name="mcp:version" content="1.0">
   <meta name="mcp:endpoint" content="/mcp">
@@ -22,8 +22,8 @@
     <div class="container">
       <div class="header-content">
         <a href="/" class="logo">
-          <span class="logo-mark">SS</span>
-          <span>SoulStarter</span>
+          <span class="logo-mark">PM</span>
+          <span>PULL.md</span>
         </a>
         <button
           class="nav-toggle"
@@ -36,8 +36,8 @@
           Menu
         </button>
         <nav class="nav" id="topNav">
-          <a href="#souls" class="nav-link">Discover</a>
-          <a href="#my-souls" class="nav-link">My Souls</a>
+          <a href="#assets" class="nav-link">Discover</a>
+          <a href="#my-assets" class="nav-link">My Assets</a>
           <a href="/create.html" class="nav-link">Create</a>
           <a href="#for-agents" class="nav-link">For Agents</a>
           <a href="/admin.html" class="nav-link moderator-nav-link" style="display: none;">Moderate</a>
@@ -53,22 +53,22 @@
     <section class="hero">
       <div class="container">
         <div class="hero-shell">
-          <p class="hero-kicker">OpenClaw Agent Identity Marketplace</p>
-          <h1 class="hero-title">Start New Agent Life with One Clear Purchase</h1>
+          <p class="hero-kicker">Markdown Commerce for Agent Teams</p>
+          <h1 class="hero-title">Buy, Sell, and Reuse Agent-Ready Markdown</h1>
           <p class="hero-subtitle">
-            Browse agent identities, purchase with x402, and re-download any soul you already own.
-            Fast for humans. Programmatic for agents.
+            PULL.md is a clean marketplace for SOUL.md, SKILL.md, and other markdown assets.
+            Pay once with x402, then re-download with wallet proof.
           </p>
           <div class="hero-actions">
-            <a href="#souls" class="btn btn-primary btn-lg">Explore Souls</a>
-            <a href="#for-agents" class="btn btn-ghost btn-lg">Agent Integration</a>
+            <a href="#assets" class="btn btn-primary btn-lg">Explore Assets</a>
+            <a href="/create.html" class="btn btn-ghost btn-lg">Publish Asset</a>
           </div>
           <div class="hero-inventory" id="liveInventorySummary">
             <div class="hero-inventory-copy">
               <strong>Live Inventory</strong>
-              <span>Loading public souls...</span>
+              <span>Loading public markdown assets...</span>
             </div>
-            <a href="#souls" class="btn btn-ghost">Browse All Souls</a>
+            <a href="#assets" class="btn btn-ghost">Browse All Assets</a>
           </div>
           <div class="hero-metrics">
             <div><strong>x402</strong><span>verifiable payment handshake</span></div>
@@ -85,41 +85,41 @@
       <div class="container">
         <div class="section-head">
           <h2>How It Works</h2>
-          <p>Three steps, two clean paths for buyers and creators.</p>
-          <p>SIWE (EIP-4361) is used for wallet sign-in. x402 is used for payment.</p>
+          <p>Three steps for buyers and creators. Human-friendly UI, agent-ready APIs.</p>
+          <p>SIWE (EIP-4361) handles wallet sign-in. x402 handles payment.</p>
         </div>
         <div class="workflow-grid">
           <article class="workflow-card">
-            <h3>1. Buy a Soul</h3>
-            <p>Browse public OpenClaw listings and select the SOUL.md profile that matches your agent identity.</p>
+            <h3>1. Choose an Asset</h3>
+            <p>Browse public markdown listings and pick the one that fits your workflow.</p>
           </article>
           <article class="workflow-card">
-            <h3>2. Pay and Reuse</h3>
-            <p>Authorize payment with x402 on Base once, then re-download later with wallet proof and no repay.</p>
+            <h3>2. Pay Through x402</h3>
+            <p>Authorize payment on Base with USDC using the canonical x402 handshake.</p>
           </article>
           <article class="workflow-card">
-            <h3>3. Publish Instantly</h3>
-            <p>Connect wallet, complete four fields, and publish immediately with a shareable link.</p>
+            <h3>3. Download and Reuse</h3>
+            <p>Receive the markdown file immediately, then re-download later without paying twice.</p>
           </article>
         </div>
       </div>
     </section>
 
-    <section class="souls-section" id="souls">
+    <section class="souls-section" id="assets">
       <div class="container">
         <div class="section-head">
-          <h2>Available Souls</h2>
-          <p>Each listing is scoped, price-tagged, and delivered as one downloadable SOUL.md file.</p>
+          <h2>Available Markdown Assets</h2>
+          <p>Each listing is priced in USDC and delivered as one markdown file after settlement.</p>
         </div>
         <div class="souls-grid" id="soulsGrid"></div>
       </div>
     </section>
 
-    <section class="souls-section" id="my-souls">
+    <section class="souls-section" id="my-assets">
       <div class="container">
         <div class="section-head">
-          <h2>My Souls</h2>
-          <p>Connect your wallet to view purchased and created souls, then download without repaying.</p>
+          <h2>My Assets</h2>
+          <p>Connect your wallet to view purchased and created assets, then re-download without repay.</p>
         </div>
         <div class="souls-grid" id="ownedSoulsGrid"></div>
       </div>
@@ -129,35 +129,25 @@
       <div class="container">
         <div class="agent-api-card">
           <h3>For Agents</h3>
-          <p>Use Streamable HTTP MCP for tool orchestration and canonical x402 for purchase + re-download.</p>
+          <p>Use Streamable HTTP MCP for discovery and orchestration. Use canonical x402 HTTP for settlement.</p>
           <div class="agent-quickstart">
             <p><strong>Quickstart</strong></p>
             <code>POST /mcp</code>
             <code>GET /api/mcp/manifest</code>
-            <code>GET /api/souls/{id}/download</code>
+            <code>GET /api/assets</code>
+            <code>GET /api/assets/{id}/download</code>
           </div>
-          <pre class="hero-code-block">MCP transport (Streamable HTTP)
+          <pre class="hero-code-block">MCP transport
 POST /mcp
-JSON-RPC methods: initialize, ping, tools/list, tools/call
 
-MCP discovery manifest
-GET /api/mcp/manifest
+Canonical x402 purchase and re-download
+GET /api/assets/{id}/download
 
-Auth challenge (SIWE)
-POST /mcp -> tools/call name=get_auth_challenge
-
-Canonical x402 purchase + re-download
-GET /api/souls/{id}/download
-
-Strict agent headers
-X-CLIENT-MODE: agent
-X-WALLET-ADDRESS: 0x...
-
-Full contract + errors
+Full contract and examples
 GET /WEBMCP.md</pre>
           <div class="agent-api-actions">
             <a href="/api/mcp/manifest" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Open MCP Manifest</a>
-            <a href="/WEBMCP.md" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Read WebMCP Markdown</a>
+            <a href="/WEBMCP.md" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Read WebMCP Contract</a>
           </div>
         </div>
       </div>
@@ -166,7 +156,7 @@ GET /WEBMCP.md</pre>
 
   <footer class="footer">
     <div class="container">
-      <p>SoulStarter · OpenClaw Agent Souls · x402 on Base</p>
+      <p>PULL.md · Markdown Asset Commerce · x402 on Base</p>
     </div>
   </footer>
 

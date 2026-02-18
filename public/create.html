@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SoulStarter Creator Portal</title>
-  <meta name="description" content="Publish OpenClaw soul listings instantly with wallet authentication.">
+  <title>PULL.md Creator Portal</title>
+  <meta name="description" content="Publish markdown assets instantly with wallet authentication on PULL.md.">
   <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,8 +17,8 @@
     <div class="container">
       <div class="header-content">
         <a href="/" class="logo">
-          <span class="logo-mark">SS</span>
-          <span>SoulStarter</span>
+          <span class="logo-mark">PM</span>
+          <span>PULL.md</span>
         </a>
         <button
           class="nav-toggle"
@@ -31,7 +31,8 @@
           Menu
         </button>
         <nav class="nav" id="topNav">
-          <a href="/" class="nav-link">Discover</a>
+          <a href="/#assets" class="nav-link">Discover</a>
+          <a href="/#my-assets" class="nav-link">My Assets</a>
           <a href="/create.html" class="nav-link">Create</a>
           <a href="/admin.html" class="nav-link moderator-nav-link" style="display: none;">Moderate</a>
           <button class="wallet-btn" id="walletBtn">Connect Wallet</button>
@@ -44,7 +45,7 @@
     <section class="creator-section">
       <div class="container">
         <div class="agent-api-card creator-header-card">
-          <h1>Publish a Soul</h1>
+          <h1>Publish Markdown Asset</h1>
           <p>Immediate publish only. No drafts. No approval queue. You get a shareable link as soon as publish succeeds.</p>
         </div>
       </div>
@@ -53,15 +54,15 @@
     <section class="creator-section">
       <div class="container creator-grid">
         <div class="agent-api-card">
-          <h3>Soul Details</h3>
+          <h3>Asset Details</h3>
           <div class="creator-form-grid">
-            <label>Name<input id="name" class="creator-input" placeholder="My OpenClaw Soul"></label>
+            <label>Name<input id="name" class="creator-input" placeholder="My Markdown Asset"></label>
             <label>Price (USDC)<input id="priceUsdc" class="creator-input" type="number" step="0.01" min="0.01" placeholder="0.49"></label>
           </div>
           <label>Description<textarea id="description" class="creator-textarea" rows="3" placeholder="Short summary shown to buyers."></textarea></label>
-          <label>SOUL.md Content<textarea id="soulMarkdown" class="creator-textarea" rows="14" placeholder="# SOUL&#10;&#10;Define identity, values, and behavior."></textarea></label>
+          <label>Markdown Content<textarea id="soulMarkdown" class="creator-textarea" rows="14" placeholder="# SOUL.md&#10;&#10;## Core Principles&#10;..."></textarea></label>
           <div class="creator-action-row">
-            <button id="loadTemplateBtn" class="btn btn-ghost">Use SOUL.md Template</button>
+            <button id="loadTemplateBtn" class="btn btn-ghost">Use Markdown Template</button>
             <button id="publishBtn" class="btn btn-primary">Publish Now</button>
           </div>
           <p id="publishStatus" class="creator-status">Ready to publish.</p>
@@ -78,7 +79,7 @@
       <div class="container">
         <div class="agent-api-card">
           <div class="creator-actions">
-            <h3>My Published Souls</h3>
+            <h3>My Published Assets</h3>
             <button id="refreshPublishedBtn" class="btn btn-ghost">Refresh List</button>
           </div>
           <div id="publishedList" class="souls-grid"></div>

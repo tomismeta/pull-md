@@ -84,7 +84,7 @@
     if (receipt) passiveHeaders['X-PURCHASE-RECEIPT'] = receipt;
     if (activeSession?.token) passiveHeaders['X-REDOWNLOAD-SESSION'] = activeSession.token;
 
-    const passive = await fetchWithTimeout(`${apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
+    const passive = await fetchWithTimeout(`${apiBase}/assets/${encodeURIComponent(soulId)}/download`, {
       method: 'GET',
       headers: passiveHeaders
     });
@@ -126,7 +126,7 @@
     if (receipt) retryHeaders['X-PURCHASE-RECEIPT'] = receipt;
     if (refreshedSession?.token) retryHeaders['X-REDOWNLOAD-SESSION'] = refreshedSession.token;
 
-    const signed = await fetchWithTimeout(`${apiBase}/souls/${encodeURIComponent(soulId)}/download`, {
+    const signed = await fetchWithTimeout(`${apiBase}/assets/${encodeURIComponent(soulId)}/download`, {
       method: 'GET',
       headers: retryHeaders
     });
