@@ -50,6 +50,7 @@ function mapCreatorActionToTool(action) {
 }
 
 function normalizeModeratorAction(action) {
+  if (action === 'get_telemetry_dashboard') return 'get_telemetry_dashboard';
   if (action === 'remove_listing_visibility') return 'remove_listing_visibility';
   if (action === 'restore_listing_visibility') return 'restore_listing_visibility';
   if (action === 'update_listing') return 'update_listing';
@@ -120,10 +121,15 @@ function buildAuthChallengePayload(args = {}) {
     const moderationEndpoint = `/api/moderation?action=${encodeURIComponent(action)}`;
     submitVia = {
       endpoint: moderationEndpoint,
-      method: action === 'list_moderation_listings' ? 'GET' : 'POST',
+      method: action === 'list_moderation_listings' || action === 'get_telemetry_dashboard' ? 'GET' : 'POST',
       headers_template: commonHeaders,
       body_template:
-        action === 'remove_listing_visibility'
+        action === 'get_telemetry_dashboard'
+          ? {
+              window_hours: 24,
+              row_limit: 10
+            }
+          : action === 'remove_listing_visibility'
           ? {
               soul_id: '<soul_id>',
               reason: '<optional_reason>'

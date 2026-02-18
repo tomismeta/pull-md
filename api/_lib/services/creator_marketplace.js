@@ -13,6 +13,7 @@ import {
   verifyModeratorAuth
 } from '../marketplace.js';
 import { AppError } from '../errors.js';
+import { getTelemetryDashboard, normalizeTelemetryWindowHours, recordTelemetryEvent } from '../telemetry.js';
 
 const DEPRECATED_ACTIONS = new Set([
   'validate_listing_draft',
@@ -104,6 +105,26 @@ function ensureAction(action) {
 
 const AUTO_GENERATED_FIELDS = ['asset_id', 'soul_id', 'asset_type', 'file_name', 'share_path', 'seller_address'];
 const CREATOR_PROVIDED_FIELDS = ['name', 'description', 'price_usdc', 'content_markdown'];
+const DEFAULT_WINDOW_HOURS = 24;
+const DEFAULT_ROW_LIMIT = 10;
+
+function recordMarketplaceTelemetry(event = {}) {
+  void recordTelemetryEvent({
+    source: 'marketplace',
+    route: event.route || '/mcp',
+    httpMethod: event.httpMethod || null,
+    eventType: event.eventType || 'marketplace.action',
+    action: event.action || null,
+    walletAddress: event.walletAddress || null,
+    assetId: event.assetId || null,
+    assetType: event.assetType || null,
+    success: typeof event.success === 'boolean' ? event.success : null,
+    statusCode: event.statusCode ?? null,
+    errorCode: event.errorCode || null,
+    errorMessage: event.errorMessage || null,
+    metadata: event.metadata || {}
+  });
+}
 
 export function getCreatorMarketplaceSupportedActions() {
   return [
@@ -112,6 +133,7 @@ export function getCreatorMarketplaceSupportedActions() {
     'list_my_published_listings',
     'list_published_listings',
     'list_moderators',
+    'get_telemetry_dashboard',
     'list_moderation_listings',
     'remove_listing_visibility',
     'restore_listing_visibility',
@@ -182,6 +204,18 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
         payload: listingPayload,
         dryRun: true
       });
+      recordMarketplaceTelemetry({
+        eventType: 'creator.publish_dry_run',
+        action: normalizedAction,
+        walletAddress: auth.wallet,
+        success: Boolean(result.ok),
+        statusCode: result.ok ? 200 : 400,
+        errorCode: result.ok ? null : result.code || 'validation_failed',
+        metadata: {
+          warning_count: Array.isArray(result.warnings) ? result.warnings.length : 0,
+          field_error_count: Array.isArray(result.field_errors) ? result.field_errors.length : 0
+        }
+      });
       return {
         ok: result.ok,
         dry_run: true,
@@ -202,6 +236,15 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
       payload: listingPayload
     });
     if (!result.ok) {
+      recordMarketplaceTelemetry({
+        eventType: 'creator.publish_failed',
+        action: normalizedAction,
+        walletAddress: auth.wallet,
+        success: false,
+        statusCode: result.code === 'marketplace_persistence_unconfigured' ? 503 : 400,
+        errorCode: result.code || 'publish_failed',
+        errorMessage: Array.isArray(result.errors) && result.errors.length ? result.errors[0] : 'publish_failed'
+      });
       const statusCode = result.code === 'marketplace_persistence_unconfigured' ? 503 : 400;
       throw new AppError(statusCode, {
         code: result.code || 'publish_failed',
@@ -220,6 +263,19 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
       auto_generated: AUTO_GENERATED_FIELDS,
       creator_provided: CREATOR_PROVIDED_FIELDS
     };
+    recordMarketplaceTelemetry({
+      eventType: 'creator.publish_success',
+      action: normalizedAction,
+      walletAddress: auth.wallet,
+      assetId: listing.asset_id || listing.soul_id,
+      assetType: listing.asset_type || null,
+      success: true,
+      statusCode: 200,
+      metadata: {
+        price_micro_usdc: listing.price_micro_usdc || null,
+        visibility: listing.visibility || null
+      }
+    });
     return {
       ok: true,
       wallet_address: auth.wallet,
@@ -241,6 +297,14 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
       throw new AppError(401, creatorAuthError(normalizedAction, auth));
     }
     const listings = await listPublishedListingSummaries({ includeHidden: true, publishedBy: auth.wallet });
+    recordMarketplaceTelemetry({
+      eventType: 'creator.list_my_published',
+      action: normalizedAction,
+      walletAddress: auth.wallet,
+      success: true,
+      statusCode: 200,
+      metadata: { count: listings.length }
+    });
     return {
       wallet_address: auth.wallet,
       count: listings.length,
@@ -251,10 +315,46 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
 
   if (normalizedAction === 'list_published_listings' && normalizedMethod === 'GET') {
     const listings = await listPublishedListingSummaries({ includeHidden: false });
+    recordMarketplaceTelemetry({
+      eventType: 'marketplace.list_published',
+      action: normalizedAction,
+      success: true,
+      statusCode: 200,
+      metadata: { count: listings.length }
+    });
     return {
       count: listings.length,
       listings: listings.map((item) => withShareUrl(baseUrl, item)),
       storage_warning: marketplaceStorageWarning()
+    };
+  }
+
+  if (normalizedAction === 'get_telemetry_dashboard' && normalizedMethod === 'GET') {
+    const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
+    if (!moderator.ok) {
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
+    }
+    const windowHours = normalizeTelemetryWindowHours(requestBody.window_hours || requestBody.hours || DEFAULT_WINDOW_HOURS);
+    const rowLimit = requestBody.row_limit || requestBody.limit || DEFAULT_ROW_LIMIT;
+    const dashboard = await getTelemetryDashboard({
+      windowHours,
+      rowLimit
+    });
+    recordMarketplaceTelemetry({
+      eventType: 'moderation.telemetry_dashboard',
+      route: '/api/moderation',
+      action: normalizedAction,
+      walletAddress: moderator.wallet,
+      success: true,
+      statusCode: 200,
+      metadata: {
+        window_hours: windowHours,
+        row_limit: rowLimit
+      }
+    });
+    return {
+      moderator: moderator.wallet,
+      ...dashboard
     };
   }
 
@@ -270,6 +370,19 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     const hidden = listings
       .filter((item) => item.visibility === 'hidden')
       .map((item) => withShareUrl(baseUrl, item));
+    recordMarketplaceTelemetry({
+      eventType: 'moderation.action_success',
+      route: '/api/moderation',
+      action: normalizedAction,
+      walletAddress: moderator.wallet,
+      success: true,
+      statusCode: 200,
+      metadata: {
+        total_count: listings.length,
+        visible_count: visible.length,
+        hidden_count: hidden.length
+      }
+    });
     return {
       moderator: moderator.wallet,
       count: listings.length,
@@ -297,6 +410,15 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
       const statusCode = /not found/i.test(result.error) ? 404 : 400;
       throw new AppError(statusCode, { ok: false, error: result.error });
     }
+    recordMarketplaceTelemetry({
+      eventType: 'moderation.action_success',
+      route: '/api/moderation',
+      action: normalizedAction,
+      walletAddress: moderator.wallet,
+      assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
+      success: true,
+      statusCode: 200
+    });
     return {
       ok: true,
       listing: withShareUrl(baseUrl, result.listing)
@@ -322,6 +444,15 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
       const statusCode = /not found/i.test(result.error) ? 404 : 400;
       throw new AppError(statusCode, { ok: false, error: result.error });
     }
+    recordMarketplaceTelemetry({
+      eventType: 'moderation.action_success',
+      route: '/api/moderation',
+      action: normalizedAction,
+      walletAddress: moderator.wallet,
+      assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
+      success: true,
+      statusCode: 200
+    });
     return {
       ok: true,
       listing: withShareUrl(baseUrl, result.listing)
@@ -358,6 +489,16 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
         warnings: result.warnings || []
       });
     }
+    recordMarketplaceTelemetry({
+      eventType: 'moderation.action_success',
+      route: '/api/moderation',
+      action: normalizedAction,
+      walletAddress: moderator.wallet,
+      assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
+      assetType: result?.listing?.asset_type || null,
+      success: true,
+      statusCode: 200
+    });
     return {
       ok: true,
       listing: withShareUrl(baseUrl, result.listing),
@@ -383,6 +524,15 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
       const statusCode = /not found/i.test(result.error) ? 404 : 400;
       throw new AppError(statusCode, { ok: false, error: result.error });
     }
+    recordMarketplaceTelemetry({
+      eventType: 'moderation.action_success',
+      route: '/api/moderation',
+      action: normalizedAction,
+      walletAddress: moderator.wallet,
+      assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
+      success: true,
+      statusCode: 200
+    });
     return {
       ok: true,
       deleted: true,

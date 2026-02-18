@@ -63,3 +63,28 @@ Use if needed:
 npx vercel ls soulstarter --token <VERCEL_TOKEN> --scope open-meta-looms-projects
 npx vercel promote <deployment-url> --token <VERCEL_TOKEN> --scope open-meta-looms-projects
 ```
+
+## Telemetry Emergency Controls
+
+Immediate kill switch (no code rollback):
+
+1. In Vercel project env vars, set:
+   - `TELEMETRY_ENABLED=false`
+2. Redeploy production.
+
+This disables telemetry ingestion and moderator telemetry dashboard reads while keeping purchase/re-download flows active.
+
+Full code rollback:
+
+1. Revert the isolated telemetry commit:
+
+```bash
+git revert <telemetry-commit-sha>
+git push origin main
+```
+
+2. Deploy production:
+
+```bash
+npx vercel --prod --yes --token <VERCEL_TOKEN>
+```

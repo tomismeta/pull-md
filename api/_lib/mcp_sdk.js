@@ -23,6 +23,7 @@ import {
   getMcpResourcesList,
   readMcpResource
 } from './mcp_contract.js';
+import { recordTelemetryEvent } from './telemetry.js';
 
 const SERVER_INFO = {
   name: 'SoulStarter',
@@ -47,6 +48,18 @@ function normalizeToolError(error) {
     hint,
     retryable
   };
+}
+
+function walletFromToolArgs(args) {
+  const parsed = args && typeof args === 'object' ? args : {};
+  const wallet = parsed.wallet_address || parsed.moderator_address || parsed.wallet;
+  return typeof wallet === 'string' ? wallet : null;
+}
+
+function assetIdFromToolArgs(args) {
+  const parsed = args && typeof args === 'object' ? args : {};
+  const value = parsed.asset_id || parsed.soul_id || parsed.id;
+  return typeof value === 'string' ? value : null;
 }
 
 function getHeadersFromExtra(extra, fallbackHeaders) {
@@ -81,10 +94,28 @@ function buildMcpSdkServer({ requestHeaders } = {}) {
       request?.params?.arguments && typeof request.params.arguments === 'object'
         ? request.params.arguments
         : {};
+    const start = Date.now();
 
     try {
       const output = await invokeMcpTool(name, args, {
         headers: getHeadersFromExtra(extra, requestHeaders)
+      });
+      void recordTelemetryEvent({
+        eventType: 'mcp.tool_invocation',
+        source: 'mcp',
+        route: '/mcp',
+        httpMethod: 'POST',
+        rpcMethod: 'tools/call',
+        toolName: name,
+        action: name,
+        walletAddress: walletFromToolArgs(args),
+        assetId: assetIdFromToolArgs(args),
+        success: true,
+        statusCode: 200,
+        metadata: {
+          duration_ms: Date.now() - start,
+          argument_keys: Object.keys(args || {}).slice(0, 24)
+        }
       });
       return {
         content: [
@@ -98,6 +129,25 @@ function buildMcpSdkServer({ requestHeaders } = {}) {
     } catch (error) {
       if (isAppError(error)) {
         const normalized = normalizeToolError(error);
+        void recordTelemetryEvent({
+          eventType: 'mcp.tool_invocation',
+          source: 'mcp',
+          route: '/mcp',
+          httpMethod: 'POST',
+          rpcMethod: 'tools/call',
+          toolName: name,
+          action: name,
+          walletAddress: walletFromToolArgs(args),
+          assetId: assetIdFromToolArgs(args),
+          success: false,
+          statusCode: Number(error.status || 500),
+          errorCode: normalized.code || null,
+          errorMessage: normalized.message || null,
+          metadata: {
+            duration_ms: Date.now() - start,
+            retryable: normalized.retryable === true
+          }
+        });
         return {
           isError: true,
           content: [
@@ -109,6 +159,24 @@ function buildMcpSdkServer({ requestHeaders } = {}) {
           structuredContent: normalized
         };
       }
+      void recordTelemetryEvent({
+        eventType: 'mcp.tool_invocation',
+        source: 'mcp',
+        route: '/mcp',
+        httpMethod: 'POST',
+        rpcMethod: 'tools/call',
+        toolName: name,
+        action: name,
+        walletAddress: walletFromToolArgs(args),
+        assetId: assetIdFromToolArgs(args),
+        success: false,
+        statusCode: 500,
+        errorCode: 'mcp_internal_error',
+        errorMessage: error instanceof Error ? error.message : String(error || 'Internal error'),
+        metadata: {
+          duration_ms: Date.now() - start
+        }
+      });
       throw new McpError(
         ErrorCode.InternalError,
         error instanceof Error ? error.message : String(error || 'Internal error')

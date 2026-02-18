@@ -76,6 +76,16 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 when `MARKETPLACE_DATABASE_URL` (or `DATABASE_URL`/`POSTGRES_URL`) is configured, published catalog and moderation audit data are stored in Postgres JSONB tables for Vercel-safe durability.
 On Vercel, creator publish requires one of these DB vars. Without DB config, publish now returns `503 marketplace_persistence_unconfigured` to prevent non-durable ghost listings.
 
+## Telemetry
+
+- Moderator telemetry dashboard is available in `/admin.html` via moderation action `get_telemetry_dashboard`.
+- Telemetry ingestion is asynchronous fire-and-forget and should not block purchase/re-download responses.
+- Global kill switch:
+  - `TELEMETRY_ENABLED=false` disables telemetry ingestion and dashboard queries.
+- Storage:
+  - Telemetry events are written to `marketplace_telemetry_events` when a Postgres URL is configured.
+  - Wallets are stored as short preview + HMAC hash (no raw wallet export in telemetry rows).
+
 ## Marketplace Moderation Configuration
 
 | Variable | Required | Purpose |
@@ -116,6 +126,9 @@ remove listing visibility only (`remove_listing_visibility`). No approval/publis
 | `POSTGRES_URL` | optional (required on Vercel for creator publish if both above unset) | Alternate Postgres connection string fallback |
 | `ENABLE_BUNDLED_SOULS` | optional | Set to `1` to include bundled static catalog souls. Default is off (DB/published listings only). |
 | `MARKETPLACE_DB_SSL` | optional | Force SSL for Postgres (`true`/`false`) when provider requires TLS |
+| `TELEMETRY_ENABLED` | optional | Global telemetry kill switch (`false` disables telemetry ingestion and dashboard reads) |
+| `TELEMETRY_HASH_SECRET` | optional | Secret for HMAC hashing wallet identifiers in telemetry rows (falls back to `PURCHASE_RECEIPT_SECRET`) |
+| `TELEMETRY_METADATA_MAX_BYTES` | optional | Max serialized telemetry metadata bytes before truncation (default `12288`) |
 
 ## Facilitator Health Checks
 

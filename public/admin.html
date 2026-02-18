@@ -67,6 +67,48 @@
     <section class="admin-section">
       <div class="container">
         <div class="agent-api-card">
+          <div class="admin-actions">
+            <h3>Telemetry Dashboard</h3>
+            <div class="admin-token-row telemetry-controls">
+              <label class="admin-inline-field" for="telemetryWindowHours">Window</label>
+              <select id="telemetryWindowHours" class="admin-input admin-select">
+                <option value="24" selected>24h</option>
+                <option value="72">72h</option>
+                <option value="168">7d</option>
+              </select>
+              <button id="refreshTelemetryBtn" class="btn btn-ghost">Refresh</button>
+            </div>
+          </div>
+          <div id="telemetryOverview" class="telemetry-kpis"></div>
+          <div class="telemetry-grid">
+            <div class="telemetry-panel">
+              <h4>Top Assets</h4>
+              <div id="telemetryTopAssets" class="admin-list"></div>
+            </div>
+            <div class="telemetry-panel">
+              <h4>MCP Tool Invocations</h4>
+              <div id="telemetryTopTools" class="admin-list"></div>
+            </div>
+            <div class="telemetry-panel">
+              <h4>API Route Traffic</h4>
+              <div id="telemetryRoutes" class="admin-list"></div>
+            </div>
+            <div class="telemetry-panel">
+              <h4>Recent Errors</h4>
+              <div id="telemetryErrors" class="admin-list"></div>
+            </div>
+          </div>
+          <div class="telemetry-panel telemetry-panel-wide">
+            <h4>Hourly Activity</h4>
+            <div id="telemetryHourly" class="admin-list"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-section">
+      <div class="container">
+        <div class="agent-api-card">
           <div class="admin-filter-row">
             <div class="listing-filters" role="tablist" aria-label="Asset type filters">
               <button type="button" class="filter-pill active" data-filter-type="all">All Markdown</button>

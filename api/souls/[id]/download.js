@@ -14,6 +14,7 @@ import {
   verifyRedownloadSessionToken,
   verifyWalletAuth
 } from '../../_lib/payments.js';
+import { recordTelemetryEvent } from '../../_lib/telemetry.js';
 import {
   applyInstructionResponse,
   buildCdpRequestDebug,
@@ -44,6 +45,24 @@ const BASE_MAINNET_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const ERC20_TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
 const PURCHASE_RECEIPT_SECURITY_HINT =
   'Persist X-PURCHASE-RECEIPT in secure storage (wallet+asset scoped). Required for strict no-repay re-download. Do not log or share receipt values.';
+
+function recordDownloadTelemetry(event = {}) {
+  void recordTelemetryEvent({
+    source: 'download',
+    eventType: event.eventType || 'download.request',
+    route: event.route || '/api/assets/{id}/download',
+    httpMethod: 'GET',
+    action: event.action || null,
+    walletAddress: event.walletAddress || null,
+    assetId: event.assetId || null,
+    assetType: event.assetType || null,
+    success: typeof event.success === 'boolean' ? event.success : null,
+    statusCode: event.statusCode ?? null,
+    errorCode: event.errorCode || null,
+    errorMessage: event.errorMessage || null,
+    metadata: event.metadata || {}
+  });
+}
 
 export function normalizeAssetTransferMethod(value) {
   const raw = String(value || '').trim().toLowerCase();
@@ -186,10 +205,20 @@ export default async function handler(req, res) {
   }
 
   const isAssetRoute = String(req.url || '').startsWith('/api/assets/');
+  const telemetryRoute = isAssetRoute ? '/api/assets/{id}/download' : '/api/souls/{id}/download';
+  const startMs = Date.now();
   const soulId = req.query.id;
   const soul = await getSoulResolved(soulId);
   if (!soul) {
     const availableIds = isAssetRoute ? await assetIdsResolved() : await soulIdsResolved();
+    recordDownloadTelemetry({
+      eventType: 'download.not_found',
+      route: telemetryRoute,
+      assetId: soulId,
+      success: false,
+      statusCode: 404,
+      errorCode: isAssetRoute ? 'asset_not_found' : 'soul_not_found'
+    });
     return res.status(404).json({
       error: isAssetRoute ? 'Asset not found' : 'Soul not found',
       available_assets: availableIds,
@@ -200,6 +229,15 @@ export default async function handler(req, res) {
 
   const sellerAddress = soul.sellerAddress || getSellerAddress();
   if (!sellerAddress) {
+    recordDownloadTelemetry({
+      eventType: 'download.config_error',
+      route: telemetryRoute,
+      assetId: soulId,
+      assetType: delivery.assetType,
+      success: false,
+      statusCode: 500,
+      errorCode: 'missing_seller_address'
+    });
     return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required' });
   }
   const { rawMode: clientModeRaw, strictAgentMode } = classifyClientMode({ headers: req.headers, query: req.query });
@@ -271,6 +309,17 @@ export default async function handler(req, res) {
       });
     }
     if (hasReceiptRedownloadHeaders && !hasAgentRedownloadChallengeHeaders) {
+      recordDownloadTelemetry({
+        eventType: 'redownload.failed',
+        route: telemetryRoute,
+        action: 'redownload',
+        walletAddress: wallet,
+        assetId: soulId,
+        assetType: delivery.assetType,
+        success: false,
+        statusCode: 401,
+        errorCode: 'agent_redownload_signature_required'
+      });
       return res.status(401).json({
         error: 'Wallet signature required for strict agent redownload',
         code: 'agent_redownload_signature_required',
@@ -295,6 +344,17 @@ export default async function handler(req, res) {
         signature: redownloadSignature
       });
       if (!verify.ok) {
+        recordDownloadTelemetry({
+          eventType: 'redownload.failed',
+          route: telemetryRoute,
+          action: 'redownload',
+          walletAddress: wallet,
+          assetId: soulId,
+          assetType: delivery.assetType,
+          success: false,
+          statusCode: 401,
+          errorCode: 'invalid_agent_redownload_signature'
+        });
         return res.status(401).json({
           error: 'Invalid strict agent redownload signature',
           code: 'invalid_agent_redownload_signature',
@@ -311,6 +371,17 @@ export default async function handler(req, res) {
       }
     }
     if (hasAnyRedownloadHeaders && !hasReceiptRedownloadHeaders && !paymentSignature) {
+      recordDownloadTelemetry({
+        eventType: 'redownload.failed',
+        route: telemetryRoute,
+        action: 'redownload',
+        walletAddress: wallet,
+        assetId: soulId,
+        assetType: delivery.assetType,
+        success: false,
+        statusCode: 401,
+        errorCode: 'receipt_required_agent_mode'
+      });
       return res.status(401).json({
         error: 'Receipt required for strict agent redownload',
         code: 'receipt_required_agent_mode',
@@ -327,6 +398,17 @@ export default async function handler(req, res) {
   // This prevents accidental repurchase when clients intended entitlement-based access.
   if (hasAnyRedownloadHeaders && !hasAnyValidEntitlementHeaders && !paymentSignature) {
     const walletForTemplate = typeof wallet === 'string' && wallet ? wallet : '0x<your-wallet>';
+    recordDownloadTelemetry({
+      eventType: 'redownload.failed',
+      route: telemetryRoute,
+      action: 'redownload',
+      walletAddress: walletForTemplate,
+      assetId: soulId,
+      assetType: delivery.assetType,
+      success: false,
+      statusCode: 401,
+      errorCode: 'incomplete_redownload_header_set'
+    });
     return res.status(401).json({
       error: 'Incomplete re-download header set',
       flow_hint:
@@ -377,6 +459,18 @@ export default async function handler(req, res) {
 
       if (!receiptCheck.ok) {
         if (strictAgentMode) {
+          recordDownloadTelemetry({
+            eventType: 'redownload.failed',
+            route: telemetryRoute,
+            action: 'redownload',
+            walletAddress: authWallet,
+            assetId: soulId,
+            assetType: delivery.assetType,
+            success: false,
+            statusCode: 401,
+            errorCode: 'invalid_receipt_agent_mode',
+            errorMessage: receiptCheck.error
+          });
           return res.status(401).json({
             error: receiptCheck.error,
             code: 'invalid_receipt_agent_mode',
@@ -394,6 +488,18 @@ export default async function handler(req, res) {
         });
         if (!onchainEntitlement.ok) {
           if (isOnchainServiceUnavailableReason(onchainEntitlement.reason)) {
+            recordDownloadTelemetry({
+              eventType: 'redownload.failed',
+              route: telemetryRoute,
+              action: 'redownload',
+              walletAddress: authWallet,
+              assetId: soulId,
+              assetType: delivery.assetType,
+              success: false,
+              statusCode: 503,
+              errorCode: 'onchain_entitlement_unavailable',
+              errorMessage: onchainEntitlement.reason || null
+            });
             return res.status(503).json({
               error: 'On-chain entitlement verification temporarily unavailable',
               flow_hint:
@@ -406,6 +512,18 @@ export default async function handler(req, res) {
               }
             });
           }
+          recordDownloadTelemetry({
+            eventType: 'redownload.failed',
+            route: telemetryRoute,
+            action: 'redownload',
+            walletAddress: authWallet,
+            assetId: soulId,
+            assetType: delivery.assetType,
+            success: false,
+            statusCode: 401,
+            errorCode: 'no_onchain_entitlement',
+            errorMessage: receiptCheck.error
+          });
           return res.status(401).json({
             error: receiptCheck.error,
             flow_hint:
@@ -434,6 +552,18 @@ export default async function handler(req, res) {
         });
 
         if (!authCheck.ok) {
+          recordDownloadTelemetry({
+            eventType: 'redownload.failed',
+            route: telemetryRoute,
+            action: 'redownload',
+            walletAddress: wallet,
+            assetId: soulId,
+            assetType: delivery.assetType,
+            success: false,
+            statusCode: 401,
+            errorCode: 'wallet_auth_failed',
+            errorMessage: authCheck.error
+          });
           return res.status(401).json({
             error: authCheck.error,
             auth_debug: authCheck.auth_debug || null
@@ -447,6 +577,18 @@ export default async function handler(req, res) {
           wallet: authWallet
         });
         if (!sessionCheck.ok) {
+          recordDownloadTelemetry({
+            eventType: 'redownload.failed',
+            route: telemetryRoute,
+            action: 'redownload',
+            walletAddress: authWallet,
+            assetId: soulId,
+            assetType: delivery.assetType,
+            success: false,
+            statusCode: 401,
+            errorCode: 'redownload_session_invalid',
+            errorMessage: sessionCheck.error
+          });
           return res.status(401).json({ error: sessionCheck.error });
         }
       }
@@ -461,6 +603,18 @@ export default async function handler(req, res) {
         });
         if (!onchainEntitlement.ok) {
           if (isOnchainServiceUnavailableReason(onchainEntitlement.reason)) {
+            recordDownloadTelemetry({
+              eventType: 'redownload.failed',
+              route: telemetryRoute,
+              action: 'redownload',
+              walletAddress: authWallet,
+              assetId: soulId,
+              assetType: delivery.assetType,
+              success: false,
+              statusCode: 503,
+              errorCode: 'onchain_entitlement_unavailable',
+              errorMessage: onchainEntitlement.reason || null
+            });
             return res.status(503).json({
               error: 'On-chain entitlement verification temporarily unavailable',
               flow_hint:
@@ -473,6 +627,17 @@ export default async function handler(req, res) {
               }
             });
           }
+          recordDownloadTelemetry({
+            eventType: 'redownload.failed',
+            route: telemetryRoute,
+            action: 'redownload',
+            walletAddress: authWallet,
+            assetId: soulId,
+            assetType: delivery.assetType,
+            success: false,
+            statusCode: 401,
+            errorCode: 'no_receipt_or_entitlement'
+          });
           return res.status(401).json({
             error: 'No receipt provided and wallet has no prior entitlement for this soul',
             flow_hint:
@@ -497,13 +662,35 @@ export default async function handler(req, res) {
     } else if (entitlementSource === 'onchain') {
       // On-chain ownership fallback allows session-only redownloads when receipts are missing/legacy.
     } else if (entitlementSource !== 'receipt') {
-        return res.status(401).json({
-          error: 'Unsupported entitlement source'
-        });
-      }
+      recordDownloadTelemetry({
+        eventType: 'redownload.failed',
+        route: telemetryRoute,
+        action: 'redownload',
+        walletAddress: authWallet,
+        assetId: soulId,
+        assetType: delivery.assetType,
+        success: false,
+        statusCode: 401,
+        errorCode: 'unsupported_entitlement_source'
+      });
+      return res.status(401).json({
+        error: 'Unsupported entitlement source'
+      });
+    }
 
     const content = await loadSoulContent(soulId, { soul });
     if (!content) {
+      recordDownloadTelemetry({
+        eventType: 'redownload.failed',
+        route: telemetryRoute,
+        action: 'redownload',
+        walletAddress: authWallet,
+        assetId: soulId,
+        assetType: delivery.assetType,
+        success: false,
+        statusCode: 500,
+        errorCode: isAssetRoute ? 'asset_unavailable' : 'soul_unavailable'
+      });
       return res.status(500).json({
         error: isAssetRoute ? 'Asset unavailable' : 'Soul unavailable'
       });
@@ -561,6 +748,20 @@ export default async function handler(req, res) {
       ).toString('base64')
     );
 
+    recordDownloadTelemetry({
+      eventType: 'redownload.success',
+      route: telemetryRoute,
+      action: 'redownload',
+      walletAddress: authWallet,
+      assetId: soulId,
+      assetType: delivery.assetType,
+      success: true,
+      statusCode: 200,
+      metadata: {
+        entitlement_source: entitlementSource,
+        duration_ms: Date.now() - startMs
+      }
+    });
     return res.status(200).send(content);
   }
 
@@ -617,6 +818,22 @@ export default async function handler(req, res) {
         }
 
         if (!context.paymentHeader) {
+          recordDownloadTelemetry({
+            eventType: 'purchase.paywall_issued',
+            route: telemetryRoute,
+            action: 'purchase',
+            walletAddress: walletHintForQuote || wallet || null,
+            assetId: soulId,
+            assetType: delivery.assetType,
+            success: false,
+            statusCode: Number(result.response?.status || 402),
+            errorCode: 'payment_required',
+            metadata: {
+              strict_agent_mode: strictAgentMode === true,
+              transfer_method: transferMethodSelection?.method || null,
+              duration_ms: Date.now() - startMs
+            }
+          });
           result.response.body.transfer_method_selection = transferMethodSelection;
           if (strictAgentMode) {
             result.response.body.flow_hint =
@@ -639,6 +856,22 @@ export default async function handler(req, res) {
             result.response.body.purchase_receipt_security_hint = PURCHASE_RECEIPT_SECURITY_HINT;
           }
         } else {
+          recordDownloadTelemetry({
+            eventType: 'purchase.payment_error',
+            route: telemetryRoute,
+            action: 'purchase',
+            walletAddress: walletHintForQuote || wallet || null,
+            assetId: soulId,
+            assetType: delivery.assetType,
+            success: false,
+            statusCode: Number(result.response?.status || 402),
+            errorCode: 'payment_header_rejected',
+            metadata: {
+              strict_agent_mode: strictAgentMode === true,
+              transfer_method: transferMethodSelection?.method || null,
+              duration_ms: Date.now() - startMs
+            }
+          });
           result.response.body.flow_hint =
             'Payment header was detected but could not be verified/settled. Regenerate PAYMENT-SIGNATURE from the latest PAYMENT-REQUIRED and retry.';
           result.response.body.purchase_receipt_security_hint = PURCHASE_RECEIPT_SECURITY_HINT;
@@ -666,6 +899,17 @@ export default async function handler(req, res) {
     }
 
     if (result.type !== 'payment-verified') {
+      recordDownloadTelemetry({
+        eventType: 'purchase.processing_failed',
+        route: telemetryRoute,
+        action: 'purchase',
+        walletAddress: walletHintForQuote || wallet || null,
+        assetId: soulId,
+        assetType: delivery.assetType,
+        success: false,
+        statusCode: 500,
+        errorCode: 'unexpected_x402_state'
+      });
       return res.status(500).json({ error: 'Unexpected x402 processing state' });
     }
 
@@ -674,6 +918,17 @@ export default async function handler(req, res) {
       paymentRequirements: result.paymentRequirements
     });
     if (!payloadContractCheck.ok) {
+      recordDownloadTelemetry({
+        eventType: 'purchase.validation_failed',
+        route: telemetryRoute,
+        action: 'purchase',
+        walletAddress: walletHintForQuote || wallet || null,
+        assetId: soulId,
+        assetType: delivery.assetType,
+        success: false,
+        statusCode: 402,
+        errorCode: payloadContractCheck.code || 'invalid_payment_payload_contract'
+      });
       return res.status(402).json({
         error: 'Invalid payment payload contract',
         code: payloadContractCheck.code,
@@ -692,6 +947,17 @@ export default async function handler(req, res) {
 
     const content = await loadSoulContent(soulId, { soul });
     if (!content) {
+      recordDownloadTelemetry({
+        eventType: 'purchase.processing_failed',
+        route: telemetryRoute,
+        action: 'purchase',
+        walletAddress: walletHintForQuote || wallet || null,
+        assetId: soulId,
+        assetType: delivery.assetType,
+        success: false,
+        statusCode: 500,
+        errorCode: isAssetRoute ? 'asset_unavailable' : 'soul_unavailable'
+      });
       return res.status(500).json({
         error: isAssetRoute ? 'Asset unavailable' : 'Soul unavailable'
       });
@@ -731,6 +997,21 @@ export default async function handler(req, res) {
       );
       res.setHeader('Content-Type', 'text/markdown');
       res.setHeader('Content-Disposition', `attachment; filename="${delivery.downloadFileName}"`);
+      recordDownloadTelemetry({
+        eventType: 'purchase.settlement_success',
+        route: telemetryRoute,
+        action: 'purchase',
+        walletAddress: payerHint || null,
+        assetId: soulId,
+        assetType: delivery.assetType,
+        success: true,
+        statusCode: 200,
+        metadata: {
+          settlement_source: 'entitlement_cache',
+          transaction: cachedEntitlement.transaction || 'prior-entitlement',
+          duration_ms: Date.now() - startMs
+        }
+      });
       return res.status(200).send(content);
     }
 
@@ -771,6 +1052,23 @@ export default async function handler(req, res) {
             x402Version: result.paymentPayload?.x402Version ?? 2
           })
         : null;
+      recordDownloadTelemetry({
+        eventType: 'purchase.settlement_failed',
+        route: telemetryRoute,
+        action: 'purchase',
+        walletAddress: getPayerFromPaymentPayload(result.paymentPayload),
+        assetId: soulId,
+        assetType: delivery.assetType,
+        success: false,
+        statusCode: 402,
+        errorCode: 'settlement_failed',
+        errorMessage: settlement.errorMessage || settlement.errorReason || null,
+        metadata: {
+          attempts: Array.isArray(settlementResult.attempts) ? settlementResult.attempts.length : 0,
+          transfer_method: String(result.paymentRequirements?.extra?.assetTransferMethod || 'eip3009').toLowerCase(),
+          duration_ms: Date.now() - startMs
+        }
+      });
       return res.status(402).json({
         error: 'Settlement failed',
         reason: settlement.errorReason,
@@ -839,9 +1137,39 @@ export default async function handler(req, res) {
 
     res.setHeader('Content-Type', 'text/markdown');
     res.setHeader('Content-Disposition', `attachment; filename="${delivery.downloadFileName}"`);
+    recordDownloadTelemetry({
+      eventType: 'purchase.settlement_success',
+      route: telemetryRoute,
+      action: 'purchase',
+      walletAddress: settlement.payer || getPayerFromPaymentPayload(result.paymentPayload),
+      assetId: soulId,
+      assetType: delivery.assetType,
+      success: true,
+      statusCode: 200,
+      metadata: {
+        transaction: settlement.transaction || null,
+        transfer_method: String(result.paymentRequirements?.extra?.assetTransferMethod || 'eip3009').toLowerCase(),
+        duration_ms: Date.now() - startMs
+      }
+    });
     return res.status(200).send(content);
   } catch (error) {
     console.error('x402 processing failed:', error);
+    recordDownloadTelemetry({
+      eventType: 'purchase.processing_failed',
+      route: telemetryRoute,
+      action: 'purchase',
+      walletAddress: walletHintForQuote || wallet || null,
+      assetId: soulId,
+      assetType: delivery.assetType,
+      success: false,
+      statusCode: 500,
+      errorCode: 'x402_processing_failed',
+      errorMessage: error instanceof Error ? error.message : String(error || 'x402_processing_failed'),
+      metadata: {
+        duration_ms: Date.now() - startMs
+      }
+    });
     return res.status(500).json({
       error: 'Payment processing failed',
       processing_debug: extractX402Error(error)

@@ -12,7 +12,9 @@ const state = {
   visibleListings: [],
   hiddenListings: [],
   assetTypeFilter: 'all',
-  searchQuery: ''
+  searchQuery: '',
+  telemetryWindowHours: 24,
+  telemetry: null
 };
 
 function normalizeSearchText(value) {
@@ -166,6 +168,17 @@ function formatDate(value) {
   return date.toLocaleString();
 }
 
+function formatCount(value) {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? num.toLocaleString() : '0';
+}
+
+function formatPercent(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return '0%';
+  return `${(num * 100).toFixed(1)}%`;
+}
+
 function escapeHtml(value) {
   const div = document.createElement('div');
   div.textContent = String(value || '');
@@ -300,10 +313,15 @@ async function signModeratorHeaders(action) {
   };
 }
 
-async function moderationRequest(action, { method = 'GET', headers = {}, body } = {}) {
+async function moderationRequest(action, { method = 'GET', headers = {}, body, query = {} } = {}) {
   const normalizedAction = String(action || '').trim();
   const normalizedMethod = String(method || '').toUpperCase();
-  const response = await fetch(`/api/moderation?action=${encodeURIComponent(normalizedAction)}`, {
+  const params = new URLSearchParams({ action: normalizedAction });
+  for (const [key, value] of Object.entries(query || {})) {
+    if (value == null || value === '') continue;
+    params.set(key, String(value));
+  }
+  const response = await fetch(`/api/moderation?${params.toString()}`, {
     method: normalizedMethod,
     headers: {
       Accept: 'application/json',
@@ -322,13 +340,14 @@ async function moderationRequest(action, { method = 'GET', headers = {}, body } 
   return payload || {};
 }
 
-async function apiCall(action, { method = 'GET', body, moderatorAuth = false } = {}) {
+async function apiCall(action, { method = 'GET', body, query, moderatorAuth = false } = {}) {
   const normalizedAction = String(action || '').trim();
   const headers = moderatorAuth ? await signModeratorHeaders(normalizedAction) : {};
   return moderationRequest(normalizedAction, {
     method,
     headers,
-    body
+    body,
+    query
   });
 }
 
@@ -405,6 +424,149 @@ function renderHidden(items) {
     .join('');
 }
 
+function renderTelemetryEmpty(message) {
+  const targets = ['telemetryOverview', 'telemetryTopAssets', 'telemetryTopTools', 'telemetryRoutes', 'telemetryErrors', 'telemetryHourly'];
+  for (const id of targets) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.innerHTML = `<p class="admin-empty">${escapeHtml(message)}</p>`;
+  }
+}
+
+function renderTelemetryDashboard(data) {
+  const overviewEl = document.getElementById('telemetryOverview');
+  const topAssetsEl = document.getElementById('telemetryTopAssets');
+  const topToolsEl = document.getElementById('telemetryTopTools');
+  const routesEl = document.getElementById('telemetryRoutes');
+  const errorsEl = document.getElementById('telemetryErrors');
+  const hourlyEl = document.getElementById('telemetryHourly');
+
+  if (!overviewEl || !topAssetsEl || !topToolsEl || !routesEl || !errorsEl || !hourlyEl) return;
+
+  const overview = data?.overview || {};
+  const kpis = [
+    { label: 'Events', value: formatCount(overview.total_events) },
+    { label: 'MCP POST', value: formatCount(overview.mcp_post_requests) },
+    { label: 'Tool Calls', value: formatCount(overview.mcp_tool_invocations) },
+    { label: 'Paywalls', value: formatCount(overview.paywall_issued) },
+    { label: 'Purchases', value: formatCount(overview.purchase_successes) },
+    { label: 'Re-downloads', value: formatCount(overview.redownload_successes) },
+    { label: 'Publishes', value: formatCount(overview.publish_successes) },
+    { label: 'Error Rate', value: formatPercent(overview.error_rate) }
+  ];
+
+  overviewEl.innerHTML = kpis
+    .map(
+      (item) => `
+      <article class="telemetry-kpi">
+        <strong>${escapeHtml(item.value)}</strong>
+        <span>${escapeHtml(item.label)}</span>
+      </article>
+    `
+    )
+    .join('');
+
+  const topAssets = Array.isArray(data?.top_assets) ? data.top_assets : [];
+  if (!topAssets.length) {
+    topAssetsEl.innerHTML = '<p class="admin-empty">No asset activity in selected window.</p>';
+  } else {
+    topAssetsEl.innerHTML = topAssets
+      .map(
+        (item) => `
+        <article class="admin-card">
+          <p class="admin-line"><strong>${escapeHtml(item.asset_id || '-')}</strong></p>
+          <p class="admin-line">type: <code>${escapeHtml(String(item.asset_type || 'unknown').toUpperCase())}</code></p>
+          <p class="admin-line">purchases: <code>${escapeHtml(formatCount(item.purchases))}</code></p>
+          <p class="admin-line">re-downloads: <code>${escapeHtml(formatCount(item.redownloads))}</code></p>
+        </article>
+      `
+      )
+      .join('');
+  }
+
+  const topTools = Array.isArray(data?.mcp_tools) ? data.mcp_tools : [];
+  if (!topTools.length) {
+    topToolsEl.innerHTML = '<p class="admin-empty">No MCP tool calls in selected window.</p>';
+  } else {
+    topToolsEl.innerHTML = topTools
+      .map(
+        (item) => `
+        <article class="admin-card">
+          <p class="admin-line"><strong>${escapeHtml(item.tool_name || '-')}</strong></p>
+          <p class="admin-line">calls: <code>${escapeHtml(formatCount(item.calls))}</code></p>
+          <p class="admin-line">failures: <code>${escapeHtml(formatCount(item.failures))}</code></p>
+        </article>
+      `
+      )
+      .join('');
+  }
+
+  const routes = Array.isArray(data?.api_routes) ? data.api_routes : [];
+  if (!routes.length) {
+    routesEl.innerHTML = '<p class="admin-empty">No API route traffic in selected window.</p>';
+  } else {
+    routesEl.innerHTML = routes
+      .map(
+        (item) => `
+        <article class="admin-card">
+          <p class="admin-line"><strong>${escapeHtml(item.method || '-')}</strong> <code>${escapeHtml(item.route || '-')}</code></p>
+          <p class="admin-line">hits: <code>${escapeHtml(formatCount(item.hits))}</code></p>
+          <p class="admin-line">failures: <code>${escapeHtml(formatCount(item.failures))}</code></p>
+        </article>
+      `
+      )
+      .join('');
+  }
+
+  const errors = Array.isArray(data?.recent_errors) ? data.recent_errors : [];
+  if (!errors.length) {
+    errorsEl.innerHTML = '<p class="admin-empty">No recent errors in selected window.</p>';
+  } else {
+    errorsEl.innerHTML = errors
+      .map(
+        (item) => `
+        <article class="admin-card">
+          <p class="admin-line"><strong>${escapeHtml(item.event_type || '-')}</strong> · <code>${escapeHtml(formatDate(item.occurred_at))}</code></p>
+          <p class="admin-line">code: <code>${escapeHtml(item.error_code || '-')}</code> status: <code>${escapeHtml(item.status_code || '-')}</code></p>
+          <p class="admin-line">${escapeHtml(item.error_message || 'Unknown error')}</p>
+        </article>
+      `
+      )
+      .join('');
+  }
+
+  const hourly = Array.isArray(data?.hourly) ? data.hourly : [];
+  if (!hourly.length) {
+    hourlyEl.innerHTML = '<p class="admin-empty">No hourly activity available in selected window.</p>';
+  } else {
+    hourlyEl.innerHTML = hourly
+      .slice(-24)
+      .map(
+        (bucket) => `
+        <article class="admin-card">
+          <p class="admin-line"><strong>${escapeHtml(formatDate(bucket.bucket))}</strong></p>
+          <p class="admin-line">events: <code>${escapeHtml(formatCount(bucket.total_events))}</code> · tools: <code>${escapeHtml(formatCount(bucket.mcp_tool_calls))}</code> · purchases: <code>${escapeHtml(formatCount(bucket.purchases))}</code> · re-downloads: <code>${escapeHtml(formatCount(bucket.redownloads))}</code></p>
+        </article>
+      `
+      )
+      .join('');
+  }
+}
+
+async function loadTelemetryDashboard() {
+  await requireAllowedModerator();
+  const payload = await apiCall('get_telemetry_dashboard', {
+    method: 'GET',
+    moderatorAuth: true,
+    query: {
+      window_hours: state.telemetryWindowHours,
+      row_limit: 10
+    }
+  });
+  state.telemetry = payload;
+  renderTelemetryDashboard(payload);
+}
+
 async function loadModerators() {
   const data = await apiCall('list_moderators');
   state.moderators = Array.isArray(data.moderators) ? data.moderators.map((w) => String(w).toLowerCase()) : [];
@@ -418,11 +580,13 @@ function disconnectWallet() {
   state.walletType = null;
   state.visibleListings = [];
   state.hiddenListings = [];
+  state.telemetry = null;
   clearWalletSession();
   setConnectButton();
   setStatus('Connect wallet to continue.');
   renderEmpty('visibleContainer', 'Connect an allowlisted moderator wallet.');
   renderEmpty('hiddenContainer', 'Connect an allowlisted moderator wallet.');
+  renderTelemetryEmpty('Connect an allowlisted moderator wallet.');
   showToast('Wallet disconnected', 'info');
 }
 
@@ -560,10 +724,17 @@ async function connectWallet() {
     setStatus(`Connected moderator: ${state.wallet}`);
     showToast('Moderator wallet connected', 'success');
     await loadModerationListings();
+    try {
+      await loadTelemetryDashboard();
+    } catch (error) {
+      renderTelemetryEmpty(`Telemetry unavailable: ${error.message}`);
+      showToast(`Telemetry unavailable: ${error.message}`, 'warning');
+    }
   } else {
     setStatus(`Connected wallet is not allowlisted: ${state.wallet}`);
     renderEmpty('visibleContainer', 'Access denied. Use an allowlisted moderator wallet.');
     renderEmpty('hiddenContainer', 'Access denied. Use an allowlisted moderator wallet.');
+    renderTelemetryEmpty('Access denied. Use an allowlisted moderator wallet.');
     showToast('Wallet is not in moderator allowlist', 'warning');
   }
 }
@@ -615,6 +786,29 @@ function bindEvents() {
     } catch (error) {
       showToast(error.message, 'error');
       renderEmpty('hiddenContainer', `Hidden list load failed: ${error.message}`);
+    }
+  });
+
+  document.getElementById('refreshTelemetryBtn')?.addEventListener('click', async () => {
+    try {
+      await loadTelemetryDashboard();
+    } catch (error) {
+      showToast(error.message, 'error');
+      renderTelemetryEmpty(`Telemetry load failed: ${error.message}`);
+    }
+  });
+
+  document.getElementById('telemetryWindowHours')?.addEventListener('change', async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const nextValue = Number.parseInt(target.value, 10);
+    state.telemetryWindowHours = Number.isFinite(nextValue) ? nextValue : 24;
+    if (!state.wallet) return;
+    try {
+      await loadTelemetryDashboard();
+    } catch (error) {
+      showToast(error.message, 'error');
+      renderTelemetryEmpty(`Telemetry load failed: ${error.message}`);
     }
   });
 
@@ -750,6 +944,11 @@ async function init() {
   setStatus('Connect wallet to continue.');
   renderEmpty('visibleContainer', 'Connect an allowlisted moderator wallet.');
   renderEmpty('hiddenContainer', 'Connect an allowlisted moderator wallet.');
+  renderTelemetryEmpty('Connect an allowlisted moderator wallet.');
+  const windowSelect = document.getElementById('telemetryWindowHours');
+  if (windowSelect instanceof HTMLSelectElement) {
+    state.telemetryWindowHours = Number.parseInt(windowSelect.value, 10) || 24;
+  }
   await restoreWalletSession();
 }
 

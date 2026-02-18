@@ -708,6 +708,70 @@ main {
   margin-bottom: 10px;
 }
 
+.admin-inline-field {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.admin-select {
+  min-width: 92px;
+}
+
+.telemetry-controls {
+  gap: 6px;
+}
+
+.telemetry-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.telemetry-kpi {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #f8fbff;
+  padding: 10px;
+}
+
+.telemetry-kpi strong {
+  display: block;
+  font-size: 1rem;
+  color: var(--text);
+  line-height: 1.15;
+}
+
+.telemetry-kpi span {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.telemetry-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  padding: 10px;
+}
+
+.telemetry-panel h4 {
+  font-size: 0.86rem;
+  margin-bottom: 8px;
+}
+
+.telemetry-panel-wide {
+  margin-top: 10px;
+}
+
 .admin-list {
   display: grid;
   gap: 8px;
@@ -1389,6 +1453,10 @@ main {
   .admin-filter-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .telemetry-grid {
+    grid-template-columns: 1fr;
   }
 
   .admin-edit-form {
