@@ -24,6 +24,16 @@
     return text;
   }
 
+  function hashToneClass(seed) {
+    const value = String(seed || 'asset');
+    const tones = ['hash-tone-blue', 'hash-tone-orange', 'hash-tone-green', 'hash-tone-purple', 'hash-tone-yellow'];
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash * 31 + value.charCodeAt(i)) | 0;
+    }
+    return tones[Math.abs(hash) % tones.length];
+  }
+
   function updateSoulDetailMetadata({
     soul,
     escapeHtml,
@@ -37,8 +47,11 @@
     const safeShorten = typeof shortenAddress === 'function' ? shortenAddress : (value) => String(value || '-');
     const formatCreator = typeof formatCreatorLabelFn === 'function' ? formatCreatorLabelFn : formatCreatorLabel;
 
-    const glyph = document.getElementById('soulDetailGlyph');
-    if (glyph) glyph.textContent = glyphForSoul(soul);
+    const hash = document.getElementById('soulDetailHash');
+    if (hash) {
+      hash.className = `title-hash ${hashToneClass(String(soul.id || soul.name || 'asset'))}`;
+      hash.textContent = '#';
+    }
 
     const heading = document.getElementById('soulDetailName');
     if (heading) heading.textContent = String(soul.name || soul.id || 'Asset');
@@ -57,7 +70,7 @@
 
     const typeBadge = document.getElementById('soulDetailType');
     if (typeBadge) {
-      const type = String((soul.provenance?.type || 'hybrid')).toLowerCase();
+      const type = String((soul.asset_type || soul.provenance?.type || 'hybrid')).toLowerCase();
       typeBadge.className = `badge badge-${safeEscape(type)}`;
       typeBadge.textContent = type;
     }
@@ -117,6 +130,8 @@
       : null;
     const fileName = String(matching?.delivery?.file_name || matching?.file_name || 'ASSET.md').trim() || 'ASSET.md';
     btn.dataset.fileName = fileName;
+    const accessible =
+      typeof isSoulAccessible === 'function' ? Boolean(isSoulAccessible(resolvedSoulId)) : Boolean(walletAddress);
     btn.textContent = accessible ? `Download ${fileName}` : `Purchase ${fileName}`;
   }
 

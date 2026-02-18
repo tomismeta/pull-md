@@ -1,8 +1,6 @@
 const MCP_ENDPOINT = '/mcp';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
-const SIWE_DOMAIN = (typeof window !== 'undefined' && window.location?.hostname) || 'pull.md';
-const SIWE_URI = (typeof window !== 'undefined' && window.location?.origin) || `https://${SIWE_DOMAIN}`;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 const state = {
   provider: null,
@@ -78,14 +76,6 @@ function getUiShell() {
   const helper = window?.SoulStarterUiShell;
   if (!helper) {
     throw new Error('UI shell helper unavailable');
-  }
-  return helper;
-}
-
-function getSiweBuilder() {
-  const helper = window?.SoulStarterSiwe;
-  if (!helper || typeof helper.buildScopedMessage !== 'function') {
-    throw new Error('SIWE message helper unavailable');
   }
   return helper;
 }
@@ -246,23 +236,23 @@ async function connectBankrProvider() {
   });
 }
 
-async function moderatorSiweMessage(action, timestamp) {
-  return getSiweBuilder().buildScopedMessage({
-    domain: SIWE_DOMAIN,
-    uri: SIWE_URI,
-    chainId: BASE_CHAIN_DEC,
-    wallet: state.wallet,
-    scope: 'moderator',
-    action,
-    timestamp
-  });
-}
-
 async function signModeratorHeaders(action) {
   if (!state.wallet || !state.signer) throw new Error('Connect your wallet first');
   if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
-  const timestamp = Date.now();
-  const signature = await state.signer.signMessage(await moderatorSiweMessage(action, timestamp));
+  const challenge = await mcpToolCall('get_auth_challenge', {
+    flow: 'moderator',
+    wallet_address: state.wallet,
+    action
+  });
+  const message = String(challenge?.auth_message_template || '').trim();
+  const issuedAt = String(challenge?.issued_at || '').trim();
+  const timestamp = Number.isFinite(Number(challenge?.auth_timestamp_ms))
+    ? Number(challenge.auth_timestamp_ms)
+    : Date.parse(issuedAt);
+  if (!message || !Number.isFinite(timestamp)) {
+    throw new Error('Failed to build moderator SIWE challenge');
+  }
+  const signature = await state.signer.signMessage(message);
   return {
     'X-MODERATOR-ADDRESS': state.wallet,
     'X-MODERATOR-SIGNATURE': signature,

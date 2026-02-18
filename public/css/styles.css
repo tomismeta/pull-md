@@ -787,9 +787,15 @@ main {
 
 .soul-hero {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 1fr;
   gap: 18px;
   margin-bottom: 20px;
+}
+
+.soul-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
 }
 
 .soul-icon-large {
@@ -802,7 +808,11 @@ main {
 .soul-title {
   font-size: clamp(1.7rem, 4.8vw, 2.9rem);
   line-height: 1.08;
-  margin-bottom: 10px;
+  margin-bottom: 0;
+}
+
+.soul-title-row + .soul-description {
+  margin-top: 10px;
 }
 
 .soul-description {
