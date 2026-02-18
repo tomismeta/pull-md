@@ -592,10 +592,6 @@ function initDefaults() {
   initProviderDiscovery();
   initMobileNav();
   setWalletButton();
-  const priceInput = document.getElementById('priceUsdc');
-  if (priceInput && !String(priceInput.value || '').trim()) {
-    priceInput.value = '0.02';
-  }
   setOutput('No publish response yet.');
   renderPublishedList([]);
 }
