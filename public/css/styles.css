@@ -349,7 +349,7 @@ main {
 }
 
 .soul-card h3 {
-  margin: 12px 0 8px;
+  margin: 0;
   font-size: 1.06rem;
 }
 
@@ -1278,6 +1278,12 @@ main {
     grid-template-columns: 1fr;
   }
 
+  .listing-search {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+
   .admin-actions,
   .creator-actions {
     flex-direction: column;
@@ -1515,6 +1521,7 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 14px;
+  align-items: center;
 }
 
 .filter-pill {
@@ -1540,6 +1547,72 @@ body {
   border-color: #5b8fd4;
   background: #17345a;
   color: #cce4ff;
+}
+
+.listing-search {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 250px;
+}
+
+.listing-search-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.listing-search input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #3a4b64;
+  border-radius: 999px;
+  background: #101726;
+  color: var(--text);
+  font-size: 0.78rem;
+  padding: 0 12px;
+  outline: none;
+}
+
+.listing-search input:focus {
+  border-color: #5b8fd4;
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.14);
+}
+
+.soul-card-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.title-hash {
+  font-weight: 800;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.hash-tone-blue {
+  color: #58a6ff;
+}
+
+.hash-tone-orange {
+  color: #f2a272;
+}
+
+.hash-tone-green {
+  color: #7ee787;
+}
+
+.hash-tone-purple {
+  color: #d2a8ff;
+}
+
+.hash-tone-yellow {
+  color: #e3b341;
 }
 
 .admin-input,

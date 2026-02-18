@@ -1,6 +1,66 @@
 (function attachSoulStarterCatalogUi(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
+  function normalizeSearchText(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+
+  function filterSoulsByQuery(souls = [], searchQuery = '') {
+    const normalized = normalizeSearchText(searchQuery);
+    if (!normalized) return Array.isArray(souls) ? souls : [];
+    const terms = normalized.split(/\s+/).filter(Boolean);
+    if (!terms.length) return Array.isArray(souls) ? souls : [];
+
+    return (Array.isArray(souls) ? souls : []).filter((soul) => {
+      const haystack = normalizeSearchText(
+        [
+          soul?.id,
+          soul?.name,
+          soul?.description,
+          soul?.asset_type,
+          soul?.file_name,
+          soul?.creator_address,
+          soul?.wallet_address,
+          soul?.seller_address,
+          ...(Array.isArray(soul?.tags) ? soul.tags : [])
+        ]
+          .filter(Boolean)
+          .join(' ')
+      );
+      return terms.every((term) => haystack.includes(term));
+    });
+  }
+
+  function renderCatalogGrid({
+    grid,
+    souls = [],
+    searchQuery = '',
+    soulCardsHelper,
+    isSoulAccessible,
+    listingHrefBuilder,
+    lineageLabelForSoul
+  } = {}) {
+    if (!grid) return [];
+    const filtered = filterSoulsByQuery(souls, searchQuery);
+    if (!filtered.length) {
+      const hasQuery = String(searchQuery || '').trim().length > 0;
+      grid.innerHTML = hasQuery
+        ? '<p class="admin-empty">No listings match your search. Try fewer or broader keywords.</p>'
+        : '<p class="admin-empty">No public assets are listed yet. Use <a href="/create.html">Create</a> to publish the first listing.</p>';
+      return filtered;
+    }
+    grid.innerHTML = soulCardsHelper.buildCatalogSoulCardsHtml({
+      souls: filtered,
+      isAccessible: isSoulAccessible,
+      listingHrefBuilder,
+      lineageLabelForSoul
+    });
+    return filtered;
+  }
+
   function updateSoulPagePurchaseState({
     soulDetailUiHelper,
     walletAddress,
@@ -166,7 +226,8 @@ async function loadSouls({
     listingHrefBuilder,
     lineageLabelForSoul,
     soulsGridId = 'soulsGrid',
-    assetType = 'all'
+    assetType = 'all',
+    searchQuery = ''
   } = {}) {
     const grid = document.getElementById(soulsGridId);
     if (!grid) {
@@ -186,23 +247,18 @@ async function loadSouls({
       if (typeof setSoulCatalogCache === 'function') {
         setSoulCatalogCache(souls);
       }
-      if (typeof renderInventorySummary === 'function') {
-        renderInventorySummary(souls);
-      }
-
-      if (!souls.length) {
-        grid.innerHTML =
-          '<p class="admin-empty">No public assets are listed yet. Use <a href="/create.html">Create</a> to publish the first listing.</p>';
-        if (typeof renderOwnedSouls === 'function') renderOwnedSouls();
-        return { souls, loaded: true };
-      }
-
-      grid.innerHTML = soulCardsHelper.buildCatalogSoulCardsHtml({
+      const visible = renderCatalogGrid({
+        grid,
         souls,
-        isAccessible: isSoulAccessible,
+        searchQuery,
+        soulCardsHelper,
+        isSoulAccessible,
         listingHrefBuilder,
         lineageLabelForSoul
       });
+      if (typeof renderInventorySummary === 'function') {
+        renderInventorySummary(visible, '');
+      }
       if (typeof renderOwnedSouls === 'function') renderOwnedSouls();
       return { souls, loaded: true };
     } catch (error) {
@@ -221,6 +277,8 @@ async function loadSouls({
     updateSoulDetailMetadata,
     hydrateSoulDetailPage,
     renderOwnedSouls,
-    loadSouls
+    loadSouls,
+    filterSoulsByQuery,
+    renderCatalogGrid
   };
 })(typeof window !== 'undefined' ? window : globalThis);

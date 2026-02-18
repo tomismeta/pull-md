@@ -433,8 +433,10 @@ function renderPublishedList(items) {
       const description = formatCardDescription(item.description, 'Published markdown listing.');
       return `
         <article class="soul-card">
-          <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(item))}</div>
-          <h3>${escapeHtml(item.name || assetId)}</h3>
+          <div class="soul-card-title">
+            <span class="title-hash ${hashToneClass(assetId || item.name)}">#</span>
+            <h3>${escapeHtml(item.name || assetId)}</h3>
+          </div>
           <p>${escapeHtml(description)}</p>
           <div class="soul-card-meta">
             <div class="soul-lineage">
@@ -493,6 +495,16 @@ function formatCardDescription(value, fallback) {
     .replace(/\s+([:;,.!?])/g, '$1')
     .trim();
   return cleaned || fallback;
+}
+
+function hashToneClass(seed) {
+  const value = String(seed || 'asset');
+  const tones = ['hash-tone-blue', 'hash-tone-orange', 'hash-tone-green', 'hash-tone-purple', 'hash-tone-yellow'];
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+  }
+  return tones[Math.abs(hash) % tones.length];
 }
 
 async function refreshPublished() {

@@ -51,6 +51,16 @@
     return 'ASSET.md';
   }
 
+  function hashToneClass(seed) {
+    const value = String(seed || 'asset');
+    const tones = ['hash-tone-blue', 'hash-tone-orange', 'hash-tone-green', 'hash-tone-purple', 'hash-tone-yellow'];
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash * 31 + value.charCodeAt(i)) | 0;
+    }
+    return tones[Math.abs(hash) % tones.length];
+  }
+
   function renderInventorySummary({ souls, errorMessage = '', containerId = 'liveInventorySummary' } = {}) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -98,8 +108,10 @@
           typeof listingHrefBuilder === 'function' ? String(listingHrefBuilder(soul.id || soulId) || '#') : '#';
         return `
       <article class="soul-card" data-owned-soul-id="${escapeHtml(String(soul.id || soulId))}">
-        <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
-        <h3>${escapeHtml(String(soul.name || soul.id || soulId))}</h3>
+        <div class="soul-card-title">
+          <span class="title-hash ${hashToneClass(String(soul.id || soulId))}">#</span>
+          <h3>${escapeHtml(String(soul.name || soul.id || soulId))}</h3>
+        </div>
         <p>${escapeHtml(cardDescription)}</p>
         <div class="soul-card-meta">
           <div class="soul-lineage">
@@ -138,8 +150,10 @@
         const fallbackCreator = String(soul?.creator_address || soul?.wallet_address || soul?.seller_address || '-').trim();
         return `
       <article class="soul-card" data-soul-id="${escapeHtml(soulId)}">
-        <div class="soul-card-glyph">${escapeHtml(getSoulGlyph(soul))}</div>
-        <h3>${escapeHtml(String(soul?.name || soulId))}</h3>
+        <div class="soul-card-title">
+          <span class="title-hash ${hashToneClass(soulId || String(soul?.name || 'asset'))}">#</span>
+          <h3>${escapeHtml(String(soul?.name || soulId))}</h3>
+        </div>
         <p>${escapeHtml(cardDescription)}</p>
         ${
           soul?.source_url

@@ -26,6 +26,7 @@ const createdSoulCacheByWallet = new Map();
 let moderatorAllowlist = new Set();
 let soulCatalogCache = [];
 let currentAssetTypeFilter = 'all';
+let currentSearchQuery = '';
 
 let provider = null;
 let signer = null;
@@ -123,7 +124,8 @@ const HELPER_SPECS = Object.freeze({
       'updateSoulDetailMetadata',
       'hydrateSoulDetailPage',
       'renderOwnedSouls',
-      'loadSouls'
+      'loadSouls',
+      'renderCatalogGrid'
     ],
     error: 'Catalog UI helper unavailable'
   },
@@ -782,6 +784,38 @@ function bindAssetTypeFilters() {
   }
 }
 
+function bindAssetSearchFilter() {
+  const input = document.getElementById('assetSearchInput');
+  if (!(input instanceof HTMLInputElement)) return;
+  let debounceTimer = null;
+  const apply = () => {
+    currentSearchQuery = String(input.value || '').trim();
+    const grid = document.getElementById('soulsGrid');
+    if (!grid) return;
+    const visible = getCatalogUiHelper().renderCatalogGrid({
+      grid,
+      souls: soulCatalogCache,
+      searchQuery: currentSearchQuery,
+      soulCardsHelper: getSoulCardsHelper(),
+      isSoulAccessible,
+      listingHrefBuilder: soulListingHref,
+      lineageLabelForSoul: (soul) => formatCreatorLabel(
+        soul?.provenance?.raised_by ||
+        soul?.creator_address ||
+        soul?.wallet_address ||
+        soul?.seller_address ||
+        ''
+      )
+    });
+    renderInventorySummary(visible);
+  };
+
+  input.addEventListener('input', () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(apply, 120);
+  });
+}
+
 async function loadSouls() {
   await getCatalogUiHelper().loadSouls({
     fetchWithTimeout,
@@ -802,7 +836,8 @@ async function loadSouls() {
       ''
     ),
     soulsGridId: 'soulsGrid',
-    assetType: currentAssetTypeFilter
+    assetType: currentAssetTypeFilter,
+    searchQuery: currentSearchQuery
   });
 }
 
@@ -870,6 +905,7 @@ getAppBootstrapHelper().runStartup({
   updateSoulPagePurchaseState
 });
 bindAssetTypeFilters();
+bindAssetSearchFilter();
 
 window.openWalletModal = openWalletModal;
 window.closeWalletModal = closeWalletModal;
