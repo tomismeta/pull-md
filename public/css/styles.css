@@ -67,18 +67,17 @@ body {
 }
 
 .logo-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #eff6ff;
-  color: #1e3a8a;
-  border: 1px solid #c9d9f4;
+  background: transparent;
+  color: var(--brand);
+  border: 0;
   font-family: 'Manrope', sans-serif;
-  font-size: 0.72rem;
-  letter-spacing: 0.03em;
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
 }
 
 .nav {
@@ -1335,9 +1334,7 @@ body {
 }
 
 .logo-mark {
-  background: #1f2937;
-  color: #7cc3ff;
-  border-color: #334155;
+  color: #3b82f6;
 }
 
 .nav-link {

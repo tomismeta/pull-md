@@ -321,15 +321,50 @@ function applyTemplate(template) {
     .toLowerCase();
   const normalizedType = assetType === 'skill' ? 'skill' : 'soul';
   const fileName = normalizedType === 'skill' ? 'SKILL.md' : 'SOUL.md';
-  const templateTitle = normalizedType === 'skill' ? '# SKILL.md' : '# SOUL.md';
-  const templateBody =
-    normalizeTemplateMarkdown(payload.content_markdown || payload.soul_markdown || '').trim() ||
-    `${templateTitle}\n\n## Core Principles\n- Define your non-negotiable values and decision rules.\n\n## Operating Pattern\n- Describe how this markdown asset plans, executes, and iterates.\n\n## Boundaries\n- Clarify what this asset should not do and when to refuse.\n\n## Communication\n- Specify tone, brevity, formatting, and interaction style.\n\n## Continuity\n- Define memory expectations, handoff behavior, and long-term consistency rules.`;
+  const rawTemplateBody = normalizeTemplateMarkdown(payload.content_markdown || payload.soul_markdown || '').trim();
+  const soulTemplate = `# SOUL.md
 
-  const transformedBody = templateBody.replace(/^#\s+[^\n\r]+/i, templateTitle);
+## Core Principles
+- Define your non-negotiable values and decision rules.
+
+## Operating Pattern
+- Describe how this markdown asset plans, executes, and iterates.
+
+## Boundaries
+- Clarify what this asset should not do and when to refuse.
+
+## Communication
+- Specify tone, brevity, formatting, and interaction style.
+
+## Continuity
+- Define memory expectations, handoff behavior, and long-term consistency rules.`;
+  const skillTemplate = `# SKILL.md
+
+## Skill Scaffolding
+
+### 1. Operating Principle 1 
+
+### 2. Operating Principle 2
+
+### 3. Operating Principle 3
+
+## Task Management
+1. 
+2. 
+3. 
+
+## Core Principles
+- **One**: 
+- **Two**: 
+- **Three**: `;
+
+  const transformedBody =
+    normalizedType === 'skill'
+      ? skillTemplate
+      : rawTemplateBody || soulTemplate;
   const textareaPlaceholder =
     normalizedType === 'skill'
-      ? '# SKILL.md\n\n## Purpose\n...'
+      ? '# SKILL.md\n\n## Skill Scaffolding\n\n### 1. Operating Principle 1\n...'
       : '# SOUL.md\n\n## Core Principles\n...';
 
   document.getElementById('assetType').value = normalizedType;
