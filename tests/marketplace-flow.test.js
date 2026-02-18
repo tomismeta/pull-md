@@ -72,7 +72,7 @@ test('immediate publish + visibility removal flow', async () => {
     assert.equal(publish.listing.soul_id, 'creator-alpha-v1');
     assert.equal(publish.listing.visibility, 'public');
     assert.equal(publish.listing.price_micro_usdc, '310000');
-    assert.ok(String(publish.listing.share_path).startsWith('/soul.html?id='));
+    assert.ok(String(publish.listing.share_path).startsWith('/asset.html?id='));
 
     const publishedPublic = await listPublishedListingSummaries({ includeHidden: false });
     assert.equal(publishedPublic.some((item) => item.soul_id === 'creator-alpha-v1'), true);

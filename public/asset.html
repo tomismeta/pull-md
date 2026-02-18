@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asset — PULL.md</title>
+  <meta name="description" content="PULL.md listing details and x402 purchase access.">
+  <meta name="mcp:version" content="1.0">
+  <meta name="mcp:endpoint" content="/mcp">
+  <meta name="mcp:manifest" content="/api/mcp/manifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <script src="https://unpkg.com/ethers@6.16.0/dist/ethers.umd.min.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/" class="logo">
+          <span class="logo-mark">#</span>
+          <span>PULL.md</span>
+        </a>
+        <button
+          class="nav-toggle"
+          id="navToggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="topNav"
+          aria-label="Toggle navigation"
+        >
+          Menu
+        </button>
+        <nav class="nav" id="topNav">
+          <a href="/#assets" class="nav-link">Discover</a>
+          <a href="/#my-assets" class="nav-link">My Assets</a>
+          <a href="/create.html" class="nav-link">Create</a>
+          <a href="/#for-agents" class="nav-link">For Agents</a>
+          <a href="/admin.html" class="nav-link moderator-nav-link" style="display: none;">Moderate</a>
+          <button class="wallet-btn" id="walletBtn" onclick="openWalletModal()">
+            <span id="walletText">Connect Wallet</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="soul-detail" id="soulDetailPage">
+    <div class="container">
+      <div class="soul-hero">
+        <div class="soul-header-content">
+          <div class="soul-lineage">
+            <span class="badge badge-hybrid" id="soulDetailType">Hybrid</span>
+            <span class="lineage-text" id="soulDetailLineage">Creator listing</span>
+          </div>
+          <div class="soul-title-row">
+            <span class="title-hash hash-tone-blue" id="soulDetailHash">#</span>
+            <h1 class="soul-title" id="soulDetailName">Loading asset...</h1>
+          </div>
+          <p class="soul-description" id="soulDetailDescription">Fetching listing details.</p>
+          <div class="soul-tags" id="soulDetailTags">
+            <span class="tag">loading</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="soul-content-grid">
+        <div class="soul-preview">
+          <h3>Included File</h3>
+          <div class="file-list">
+            <div class="file-item">
+              <span class="file-icon">MD</span>
+              <div class="file-info">
+              <span class="file-name" id="assetDetailFileName">ASSET.md</span>
+                <span class="file-desc">Delivered only after successful payment or entitlement verification</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-section">
+            <h4>Preview</h4>
+            <blockquote class="preview-quote" id="soulDetailPreview">Preview unavailable.</blockquote>
+          </div>
+        </div>
+
+        <div class="soul-purchase">
+          <div class="purchase-card" id="purchaseCard">
+            <div class="price-display">
+              <span class="price" id="soulDetailPrice">$0.00</span>
+              <span class="currency">USDC</span>
+            </div>
+            <div class="network-badge">
+              <span class="dot dot-blue"></span>
+              <span>Base Network</span>
+            </div>
+            <button class="btn btn-primary btn-lg btn-full" id="buyBtn" data-soul-id="">
+              Purchase Asset
+            </button>
+            <p class="purchase-note" id="soulDetailPurchaseNote">Delivered instantly through canonical x402 settlement.</p>
+          </div>
+
+          <div class="purchase-card success-card" id="successCard" style="display: none;">
+            <div class="success-icon">OK</div>
+            <h3>Asset Acquired</h3>
+            <p>Your purchase is complete.</p>
+            <a id="downloadLink" href="#" class="btn btn-ghost btn-lg btn-full" download>
+              Download File
+            </a>
+            <div class="settlement-verification" id="settlementVerification" style="display: none;"></div>
+            <p class="tx-hash" id="txHash"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="modal" id="walletModal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Connect Wallet</h3>
+        <button class="modal-close" onclick="closeWalletModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="wallet-options">
+          <button class="wallet-option" data-wallet-kind="metamask">
+            <span class="wallet-icon">MM</span>
+            <div class="wallet-info">
+              <span class="wallet-name">MetaMask</span>
+              <span class="wallet-desc">Browser extension</span>
+            </div>
+          </button>
+
+          <button class="wallet-option" data-wallet-kind="rabby">
+            <span class="wallet-icon">RB</span>
+            <div class="wallet-info">
+              <span class="wallet-name">Rabby</span>
+              <span class="wallet-desc">Browser and mobile wallet</span>
+            </div>
+          </button>
+
+          <button class="wallet-option" data-wallet-kind="bankr">
+            <span class="wallet-icon">BK</span>
+            <div class="wallet-info">
+              <span class="wallet-name">Bankr Wallet</span>
+              <span class="wallet-desc">Agent and human compatible</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/lib/wallet-providers.js"></script>
+  <script src="/js/lib/wallet-common.js"></script>
+  <script src="/js/lib/wallet-connect.js"></script>
+  <script src="/js/lib/storage.js"></script>
+  <script src="/js/lib/wallet-state.js"></script>
+  <script src="/js/lib/siwe-messages.js"></script>
+  <script src="/js/lib/ui-shell.js"></script>
+  <script src="/js/lib/toast.js"></script>
+  <script src="/js/lib/settlement-verify.js"></script>
+  <script src="/js/lib/settlement-ui.js"></script>
+  <script src="/js/lib/x402-browser.js"></script>
+  <script src="/js/lib/redownload-flow.js"></script>
+  <script src="/js/lib/purchase-flow.js"></script>
+  <script src="/js/lib/soul-cards.js"></script>
+  <script src="/js/lib/catalog-ui.js"></script>
+  <script src="/js/lib/download-delivery.js"></script>
+  <script src="/js/lib/soul-detail-ui.js"></script>
+  <script src="/js/lib/seller-guard.js"></script>
+  <script src="/js/lib/app-bootstrap.js"></script>
+  <script src="/js/lib/network.js"></script>
+  <script src="/js/lib/mcp-client.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

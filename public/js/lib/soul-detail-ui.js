@@ -8,7 +8,7 @@
   }
 
   function soulListingHref(soulId) {
-    return `/soul.html?id=${encodeURIComponent(String(soulId || ''))}`;
+    return `/asset.html?id=${encodeURIComponent(String(soulId || ''))}`;
   }
 
   function formatCreatorLabel(raw, shortenAddress = (value) => String(value || '-')) {

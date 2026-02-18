@@ -475,11 +475,11 @@ function derivePreview(markdown) {
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith('#'))[0];
-  return clean || 'Published creator soul.';
+  return clean || 'Published creator markdown asset.';
 }
 
 function sharePathForAsset(soulId) {
-  return `/soul.html?id=${encodeURIComponent(String(soulId || ''))}`;
+  return `/asset.html?id=${encodeURIComponent(String(soulId || ''))}`;
 }
 
 function sharePathForSoul(soulId) {

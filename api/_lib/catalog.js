@@ -215,7 +215,7 @@ function toAssetSummary(asset) {
   const sharePath =
     typeof asset.sharePath === 'string' && asset.sharePath.trim()
       ? asset.sharePath
-      : `/soul.html?id=${encodeURIComponent(asset.id)}`;
+      : `/asset.html?id=${encodeURIComponent(asset.id)}`;
   const assetType = normalizeAssetType(asset.assetType || asset.asset_type) || 'soul';
   const fileName = normalizeMarkdownFileName(
     asset.fileName || asset.file_name,
@@ -223,6 +223,14 @@ function toAssetSummary(asset) {
   );
   const sellerAddress = String(asset.sellerAddress || asset.seller_address || '').trim() || null;
   const creatorWallet = String(asset.publishedBy || asset.wallet_address || '').trim() || null;
+  const previewFromMarkdown = String(
+    asset.contentInline || asset.content_markdown || asset.soul_markdown || ''
+  )
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith('#')) || '';
+  const previewExcerpt = String(asset.preview || '').trim() || previewFromMarkdown || String(asset.description || '').trim();
+
   return {
     id: asset.id,
     asset_id: asset.id,
@@ -242,7 +250,7 @@ function toAssetSummary(asset) {
     },
     provenance: asset.provenance,
     compatibility: asset.compatibility,
-    preview: { available: true, excerpt: asset.preview },
+    preview: { available: true, excerpt: previewExcerpt },
     source_label: asset.sourceLabel || null,
     source_url: asset.sourceUrl || null,
     seller_address: sellerAddress ? sellerAddress.toLowerCase() : null,
