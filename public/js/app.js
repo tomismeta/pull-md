@@ -16,7 +16,7 @@ const SIWE_URI = (typeof window !== 'undefined' && window.location?.origin) || `
 
 const X402_FETCH_SDK_VERSION = '2.3.0';
 const X402_EVM_SDK_VERSION = '2.3.1';
-const EXPECTED_SELLER_ADDRESS = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
+const EXPECTED_SELLER_ADDRESS = null;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
 const RECEIPT_PREFIX = 'soulstarter.receipt.';
 const REDOWNLOAD_SESSION_PREFIX = 'soulstarter.redownload.session.';
@@ -566,7 +566,6 @@ function normalizeAddress(address) {
 async function getExpectedSellerAddressForSoul(soulId) {
   return getSellerGuardHelper().resolveExpectedSellerAddress({
     soulId,
-    defaultSellerAddress: EXPECTED_SELLER_ADDRESS,
     cache: sellerAddressCache,
     fetchSoulDetails: async (id) => {
       try {
@@ -588,7 +587,7 @@ async function createX402SdkEngine({
     wallet,
     signer: activeSigner,
     expectedSeller,
-    defaultExpectedSeller: EXPECTED_SELLER_ADDRESS,
+    defaultExpectedSeller: null,
     preferredAssetTransferMethod,
     fetchSdkVersion: X402_FETCH_SDK_VERSION,
     evmSdkVersion: X402_EVM_SDK_VERSION
@@ -604,7 +603,7 @@ async function buildX402PaymentSignature(paymentRequired, soulId, x402Engine = n
   const result = await getX402Helper().createPaymentPayload({
     paymentRequired,
     expectedSeller,
-    defaultExpectedSeller: EXPECTED_SELLER_ADDRESS,
+    defaultExpectedSeller: null,
     preferredAssetTransferMethod: 'eip3009',
     engine: x402Engine,
     wallet: walletAddress,

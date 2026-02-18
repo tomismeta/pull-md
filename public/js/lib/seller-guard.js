@@ -11,7 +11,6 @@
 
   async function resolveExpectedSellerAddress({
     soulId,
-    defaultSellerAddress,
     cache,
     fetchSoulDetails
   } = {}) {
@@ -21,15 +20,23 @@
 
     try {
       const payload = typeof fetchSoulDetails === 'function' ? await fetchSoulDetails(soulId) : null;
-      const seller = payload?.soul?.seller_address;
-      const normalized = normalizeAddress(seller || defaultSellerAddress);
+      const seller =
+        payload?.asset?.seller_address ||
+        payload?.asset?.sellerAddress ||
+        payload?.asset?.creator_address ||
+        payload?.asset?.wallet_address ||
+        payload?.soul?.seller_address ||
+        payload?.soul?.sellerAddress ||
+        payload?.soul?.creator_address ||
+        payload?.soul?.wallet_address;
+      const normalized = normalizeAddress(seller);
       if (!normalized) throw new Error('invalid seller');
       if (cache && typeof cache.set === 'function') {
         cache.set(soulId, normalized);
       }
       return normalized;
     } catch (_) {
-      return normalizeAddress(defaultSellerAddress);
+      return null;
     }
   }
 

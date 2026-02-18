@@ -46,11 +46,6 @@ function toast(message, type = 'info') {
   });
 }
 
-function setStatus(text) {
-  const el = document.getElementById('publishStatus');
-  if (el) el.textContent = text;
-}
-
 function setOutput(value) {
   const output = document.getElementById('publishOutput');
   if (!output) return;
@@ -373,8 +368,6 @@ function applyTemplate(template) {
   document.getElementById('priceUsdc').value = payload.price_usdc || '';
   document.getElementById('soulMarkdown').value = transformedBody;
   document.getElementById('soulMarkdown').setAttribute('placeholder', textareaPlaceholder);
-  const typeHint = document.getElementById('assetTypeHint');
-  if (typeHint) typeHint.textContent = `Publishing as ${fileName}`;
 }
 
 function normalizeTemplateMarkdown(value) {
@@ -415,7 +408,7 @@ async function loadTemplate() {
   const template = { ...(payload?.template || {}), asset_type: selectedType };
   applyTemplate(template);
   setOutput(payload);
-  setStatus('Template loaded.');
+  toast('Template loaded', 'info');
 }
 
 function renderPublishedList(items) {
@@ -517,7 +510,7 @@ async function refreshPublished() {
     }
   });
   renderPublishedList(payload.listings || []);
-  setStatus(`Loaded ${payload.count || 0} published asset(s).`);
+  toast(`Loaded ${payload.count || 0} published asset(s).`, 'info');
 }
 
 async function publishNow() {
@@ -530,7 +523,7 @@ async function publishNow() {
     }
   });
   setOutput(payload);
-  setStatus(`Published ${payload?.listing?.asset_id || payload?.listing?.soul_id || 'listing'} successfully.`);
+  toast(`Published ${payload?.listing?.asset_id || payload?.listing?.soul_id || 'listing'} successfully.`, 'success');
   toast('Asset published', 'success');
 }
 
@@ -544,11 +537,6 @@ async function copyShareUrl(url) {
 }
 
 function bindEvents() {
-  document.getElementById('assetType')?.addEventListener('change', () => {
-    const type = String(document.getElementById('assetType')?.value || 'soul').toLowerCase();
-    const hint = document.getElementById('assetTypeHint');
-    if (hint) hint.textContent = `Publishing as ${type === 'skill' ? 'SKILL.md' : 'SOUL.md'}`;
-  });
   document.getElementById('loadTemplateBtn')?.addEventListener('click', async () => {
     try {
       await loadTemplate();
@@ -592,9 +580,10 @@ function initDefaults() {
   initProviderDiscovery();
   initMobileNav();
   setWalletButton();
-  const hint = document.getElementById('assetTypeHint');
-  if (hint) hint.textContent = 'Publishing as SOUL.md';
-  setStatus('Ready to publish.');
+  const priceInput = document.getElementById('priceUsdc');
+  if (priceInput && !String(priceInput.value || '').trim()) {
+    priceInput.value = '0.02';
+  }
   setOutput('No publish response yet.');
   renderPublishedList([]);
 }
@@ -614,7 +603,7 @@ async function handleWalletConnect(connectFn) {
     }
     toast('Wallet connected', 'success');
     renderPublishedList([]);
-    setStatus('Wallet connected. Publish now, or click Refresh to load your private listing view.');
+    toast('Wallet connected. Publish now, or refresh your private listing view.', 'info');
   } catch (error) {
     toast(error.message, 'error');
   } finally {

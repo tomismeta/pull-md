@@ -57,7 +57,7 @@
           <h3>Asset Details</h3>
           <div class="creator-form-grid">
             <label>Name<input id="name" class="creator-input" placeholder="My Markdown Asset"></label>
-            <label>Price (USDC)<input id="priceUsdc" class="creator-input" type="number" step="0.01" min="0.01" placeholder="0.49"></label>
+            <label>Price (USDC)<input id="priceUsdc" class="creator-input" type="number" step="0.01" min="0.01" value="0.02" placeholder="0.02"></label>
           </div>
           <label>Markdown Type
             <select id="assetType" class="creator-input">
@@ -65,14 +65,12 @@
               <option value="skill">SKILL.md</option>
             </select>
           </label>
-          <p id="assetTypeHint" class="creator-status">Publishing as SOUL.md</p>
           <label>Description<textarea id="description" class="creator-textarea" rows="3" placeholder="Short summary shown to buyers."></textarea></label>
           <label>Markdown Content<textarea id="soulMarkdown" class="creator-textarea" rows="14" placeholder="# SOUL.md&#10;&#10;## Core Principles&#10;..."></textarea></label>
           <div class="creator-action-row">
             <button id="loadTemplateBtn" class="btn btn-ghost">Use Markdown Template</button>
             <button id="publishBtn" class="btn btn-primary">Publish Now</button>
           </div>
-          <p id="publishStatus" class="creator-status">Ready to publish.</p>
         </div>
 
         <div class="agent-api-card">
