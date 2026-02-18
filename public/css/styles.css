@@ -727,6 +727,19 @@ main {
   font-size: 0.78rem;
 }
 
+.admin-empty a,
+.admin-empty a:visited {
+  color: #79b8ff;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(121, 184, 255, 0.45);
+  font-weight: 700;
+}
+
+.admin-empty a:hover {
+  color: #a9d4ff;
+  border-bottom-color: rgba(169, 212, 255, 0.8);
+}
+
 .creator-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
