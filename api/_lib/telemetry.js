@@ -175,6 +175,28 @@ async function ensureTelemetrySchema() {
         metadata JSONB NOT NULL DEFAULT '{}'::jsonb
       );
     `);
+    // Harden against schema drift from older deployments.
+    await pool.query(`
+      ALTER TABLE ${tableRef}
+      ADD COLUMN IF NOT EXISTS source TEXT,
+      ADD COLUMN IF NOT EXISTS route TEXT,
+      ADD COLUMN IF NOT EXISTS http_method TEXT,
+      ADD COLUMN IF NOT EXISTS rpc_method TEXT,
+      ADD COLUMN IF NOT EXISTS tool_name TEXT,
+      ADD COLUMN IF NOT EXISTS action TEXT,
+      ADD COLUMN IF NOT EXISTS success BOOLEAN,
+      ADD COLUMN IF NOT EXISTS status_code INTEGER,
+      ADD COLUMN IF NOT EXISTS error_code TEXT,
+      ADD COLUMN IF NOT EXISTS error_message TEXT,
+      ADD COLUMN IF NOT EXISTS asset_id TEXT,
+      ADD COLUMN IF NOT EXISTS asset_type TEXT,
+      ADD COLUMN IF NOT EXISTS wallet_hash TEXT,
+      ADD COLUMN IF NOT EXISTS wallet_preview TEXT,
+      ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+    `);
+    await pool.query(`UPDATE ${tableRef} SET metadata='{}'::jsonb WHERE metadata IS NULL;`);
+    await pool.query(`ALTER TABLE ${tableRef} ALTER COLUMN metadata SET DEFAULT '{}'::jsonb;`);
+    await pool.query(`ALTER TABLE ${tableRef} ALTER COLUMN metadata SET NOT NULL;`);
     await pool.query(`
       CREATE INDEX IF NOT EXISTS ${telemetryIndexName('occurred_at')}
       ON ${tableRef} (occurred_at DESC);
@@ -321,7 +343,16 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
     });
   }
 
-  await ensureTelemetrySchema();
+  try {
+    await ensureTelemetrySchema();
+  } catch (error) {
+    throw new AppError(503, {
+      error: 'Telemetry schema initialization failed',
+      code: 'telemetry_schema_init_failed',
+      detail: error instanceof Error ? error.message : String(error || 'unknown_error')
+    });
+  }
+
   const pool = getTelemetryDbPool();
   if (!pool) {
     throw new AppError(503, {
@@ -334,7 +365,8 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
   const safeLimit = normalizeTelemetryRowLimit(rowLimit);
   const tableRef = telemetryTableRef();
 
-  const overviewRes = await pool.query(
+  try {
+    const overviewRes = await pool.query(
     `
       SELECT
         COUNT(*)::int AS total_events,
@@ -363,7 +395,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
     [safeWindowHours]
   );
 
-  const topAssetsRes = await pool.query(
+    const topAssetsRes = await pool.query(
     `
       SELECT
         asset_id,
@@ -381,7 +413,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
     [safeWindowHours, safeLimit]
   );
 
-  const topToolsRes = await pool.query(
+    const topToolsRes = await pool.query(
     `
       SELECT
         tool_name,
@@ -398,7 +430,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
     [safeWindowHours, safeLimit]
   );
 
-  const routeStatsRes = await pool.query(
+    const routeStatsRes = await pool.query(
     `
       SELECT
         route,
@@ -415,7 +447,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
     [safeWindowHours, safeLimit]
   );
 
-  const recentErrorsRes = await pool.query(
+    const recentErrorsRes = await pool.query(
     `
       SELECT
         occurred_at,
@@ -441,7 +473,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
     [safeWindowHours, safeLimit]
   );
 
-  const timeseriesRes = await pool.query(
+    const timeseriesRes = await pool.query(
     `
       SELECT
         date_trunc('hour', occurred_at) AS bucket,
@@ -457,65 +489,72 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
     [safeWindowHours]
   );
 
-  const overviewRow = overviewRes.rows?.[0] || {};
-  const totalEvents = rowToInt(overviewRow, 'total_events');
-  const failedEvents = rowToInt(overviewRow, 'failed_events');
+    const overviewRow = overviewRes.rows?.[0] || {};
+    const totalEvents = rowToInt(overviewRow, 'total_events');
+    const failedEvents = rowToInt(overviewRow, 'failed_events');
 
-  return {
-    ok: true,
-    generated_at: new Date().toISOString(),
-    window_hours: safeWindowHours,
-    overview: {
-      total_events: totalEvents,
-      failed_events: failedEvents,
-      error_rate: totalEvents > 0 ? Number((failedEvents / totalEvents).toFixed(4)) : 0,
-      mcp_post_requests: rowToInt(overviewRow, 'mcp_post_requests'),
-      mcp_tool_invocations: rowToInt(overviewRow, 'mcp_tool_invocations'),
-      paywall_issued: rowToInt(overviewRow, 'paywall_issued'),
-      purchase_successes: rowToInt(overviewRow, 'purchase_successes'),
-      purchase_failures: rowToInt(overviewRow, 'purchase_failures'),
-      redownload_successes: rowToInt(overviewRow, 'redownload_successes'),
-      redownload_failures: rowToInt(overviewRow, 'redownload_failures'),
-      publish_successes: rowToInt(overviewRow, 'publish_successes'),
-      publish_failures: rowToInt(overviewRow, 'publish_failures'),
-      moderation_successes: rowToInt(overviewRow, 'moderation_successes'),
-      moderation_failures: rowToInt(overviewRow, 'moderation_failures')
-    },
-    top_assets: (topAssetsRes.rows || []).map((row) => ({
-      asset_id: row.asset_id,
-      asset_type: row.asset_type,
-      purchases: rowToInt(row, 'purchases'),
-      redownloads: rowToInt(row, 'redownloads'),
-      paywall_views: rowToInt(row, 'paywall_views')
-    })),
-    mcp_tools: (topToolsRes.rows || []).map((row) => ({
-      tool_name: row.tool_name,
-      calls: rowToInt(row, 'calls'),
-      failures: rowToInt(row, 'failures')
-    })),
-    api_routes: (routeStatsRes.rows || []).map((row) => ({
-      route: row.route,
-      method: row.http_method,
-      hits: rowToInt(row, 'hits'),
-      failures: rowToInt(row, 'failures')
-    })),
-    recent_errors: (recentErrorsRes.rows || []).map((row) => ({
-      occurred_at: row.occurred_at,
-      event_type: row.event_type,
-      route: row.route,
-      tool_name: row.tool_name,
-      action: row.action,
-      status_code: row.status_code,
-      error_code: row.error_code,
-      error_message: row.error_message,
-      asset_id: row.asset_id
-    })),
-    hourly: (timeseriesRes.rows || []).map((row) => ({
-      bucket: row.bucket,
-      total_events: rowToInt(row, 'total_events'),
-      mcp_tool_calls: rowToInt(row, 'mcp_tool_calls'),
-      purchases: rowToInt(row, 'purchases'),
-      redownloads: rowToInt(row, 'redownloads')
-    }))
-  };
+    return {
+      ok: true,
+      generated_at: new Date().toISOString(),
+      window_hours: safeWindowHours,
+      overview: {
+        total_events: totalEvents,
+        failed_events: failedEvents,
+        error_rate: totalEvents > 0 ? Number((failedEvents / totalEvents).toFixed(4)) : 0,
+        mcp_post_requests: rowToInt(overviewRow, 'mcp_post_requests'),
+        mcp_tool_invocations: rowToInt(overviewRow, 'mcp_tool_invocations'),
+        paywall_issued: rowToInt(overviewRow, 'paywall_issued'),
+        purchase_successes: rowToInt(overviewRow, 'purchase_successes'),
+        purchase_failures: rowToInt(overviewRow, 'purchase_failures'),
+        redownload_successes: rowToInt(overviewRow, 'redownload_successes'),
+        redownload_failures: rowToInt(overviewRow, 'redownload_failures'),
+        publish_successes: rowToInt(overviewRow, 'publish_successes'),
+        publish_failures: rowToInt(overviewRow, 'publish_failures'),
+        moderation_successes: rowToInt(overviewRow, 'moderation_successes'),
+        moderation_failures: rowToInt(overviewRow, 'moderation_failures')
+      },
+      top_assets: (topAssetsRes.rows || []).map((row) => ({
+        asset_id: row.asset_id,
+        asset_type: row.asset_type,
+        purchases: rowToInt(row, 'purchases'),
+        redownloads: rowToInt(row, 'redownloads'),
+        paywall_views: rowToInt(row, 'paywall_views')
+      })),
+      mcp_tools: (topToolsRes.rows || []).map((row) => ({
+        tool_name: row.tool_name,
+        calls: rowToInt(row, 'calls'),
+        failures: rowToInt(row, 'failures')
+      })),
+      api_routes: (routeStatsRes.rows || []).map((row) => ({
+        route: row.route,
+        method: row.http_method,
+        hits: rowToInt(row, 'hits'),
+        failures: rowToInt(row, 'failures')
+      })),
+      recent_errors: (recentErrorsRes.rows || []).map((row) => ({
+        occurred_at: row.occurred_at,
+        event_type: row.event_type,
+        route: row.route,
+        tool_name: row.tool_name,
+        action: row.action,
+        status_code: row.status_code,
+        error_code: row.error_code,
+        error_message: row.error_message,
+        asset_id: row.asset_id
+      })),
+      hourly: (timeseriesRes.rows || []).map((row) => ({
+        bucket: row.bucket,
+        total_events: rowToInt(row, 'total_events'),
+        mcp_tool_calls: rowToInt(row, 'mcp_tool_calls'),
+        purchases: rowToInt(row, 'purchases'),
+        redownloads: rowToInt(row, 'redownloads')
+      }))
+    };
+  } catch (error) {
+    throw new AppError(503, {
+      error: 'Telemetry query failed',
+      code: 'telemetry_query_failed',
+      detail: error instanceof Error ? error.message : String(error || 'unknown_error')
+    });
+  }
 }
