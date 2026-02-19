@@ -638,5 +638,3 @@ export async function invokeToolRegistry(name, args, context = {}) {
   }
   return tool.run(args || {}, context);
 }
-
-export const invokeMcpTool = invokeToolRegistry;
