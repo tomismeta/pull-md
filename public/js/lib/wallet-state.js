@@ -111,11 +111,11 @@
       });
       owned = new Set(
         (Array.isArray(payload?.entitlements) ? payload.entitlements : [])
-          .filter((entry) => entry?.entitled && entry?.soul_id)
-          .map((entry) => String(entry.soul_id))
+          .filter((entry) => entry?.entitled && entry?.asset_id)
+          .map((entry) => String(entry.asset_id))
       );
     } catch (_) {
-      owned = new Set(proofs.map((proof) => String(proof.soul_id)));
+      owned = new Set(proofs.map((proof) => String(proof.asset_id)));
     }
 
     entitlementCacheByWallet.set(normalizedWallet, owned);
@@ -138,7 +138,7 @@
       created = new Set(
         (Array.isArray(payload?.listings) ? payload.listings : [])
           .filter((entry) => String(entry?.wallet_address || '').toLowerCase() === normalizedWallet)
-          .map((entry) => String(entry?.soul_id || '').trim())
+          .map((entry) => String(entry?.asset_id || '').trim())
           .filter(Boolean)
       );
     } catch (_) {

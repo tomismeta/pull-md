@@ -46,7 +46,7 @@ test('immediate publish + visibility removal flow', async () => {
     template.name = 'Creator Alpha';
     template.description = 'Focused assistant for product launch execution.';
     template.price_usdc = 0.31;
-    template.soul_markdown = '# SOUL\n\nAct decisively.\nShip clearly.';
+    template.content_markdown = '# SOUL\n\nAct decisively.\nShip clearly.';
 
     const creatorTs = Date.now();
     const creatorMsg = buildCreatorAuthMessage({
@@ -69,13 +69,13 @@ test('immediate publish + visibility removal flow', async () => {
       payload: template
     });
     assert.equal(publish.ok, true);
-    assert.equal(publish.listing.soul_id, 'creator-alpha-v1');
+    assert.equal(publish.listing.asset_id, 'creator-alpha-v1');
     assert.equal(publish.listing.visibility, 'public');
     assert.equal(publish.listing.price_micro_usdc, '310000');
     assert.ok(String(publish.listing.share_path).startsWith('/asset.html?id='));
 
     const publishedPublic = await listPublishedListingSummaries({ includeHidden: false });
-    assert.equal(publishedPublic.some((item) => item.soul_id === 'creator-alpha-v1'), true);
+    assert.equal(publishedPublic.some((item) => item.asset_id === 'creator-alpha-v1'), true);
     const publishedByCreator = await listPublishedListingSummaries({
       includeHidden: true,
       publishedBy: creatorAuth.wallet
@@ -115,7 +115,7 @@ test('immediate publish + visibility removal flow', async () => {
     assert.deepEqual(listModeratorWallets(), [moderatorWallet.address.toLowerCase()]);
 
     const hidden = await setListingVisibility({
-      soulId: 'creator-alpha-v1',
+      assetId: 'creator-alpha-v1',
       visibility: 'hidden',
       moderator: moderatorAuth.wallet,
       reason: 'policy violation test'
@@ -124,7 +124,7 @@ test('immediate publish + visibility removal flow', async () => {
     assert.equal(hidden.listing.visibility, 'hidden');
 
     const afterHidePublic = await listPublishedListingSummaries({ includeHidden: false });
-    assert.equal(afterHidePublic.some((item) => item.soul_id === 'creator-alpha-v1'), false);
+    assert.equal(afterHidePublic.some((item) => item.asset_id === 'creator-alpha-v1'), false);
 
     const afterHideCreator = await listPublishedListingSummaries({
       includeHidden: true,
@@ -137,7 +137,7 @@ test('immediate publish + visibility removal flow', async () => {
     assert.equal(nowMissing, null);
 
     const unhidden = await setListingVisibility({
-      soulId: 'creator-alpha-v1',
+      assetId: 'creator-alpha-v1',
       visibility: 'public',
       moderator: moderatorAuth.wallet
     });
@@ -145,7 +145,7 @@ test('immediate publish + visibility removal flow', async () => {
     assert.equal(unhidden.listing.visibility, 'public');
 
     const updated = await updatePublishedListingByModerator({
-      soulId: 'creator-alpha-v1',
+      assetId: 'creator-alpha-v1',
       moderator: moderatorAuth.wallet,
       updates: {
         listing: {
@@ -161,20 +161,20 @@ test('immediate publish + visibility removal flow', async () => {
     assert.equal(updated.listing.price_micro_usdc, '420000');
 
     const moderationRows = await listModerationListingDetails();
-    const revised = moderationRows.find((item) => item.soul_id === 'creator-alpha-v1');
+    const revised = moderationRows.find((item) => item.asset_id === 'creator-alpha-v1');
     assert.ok(revised);
     assert.equal(revised.visibility, 'public');
     assert.equal(String(revised.content_markdown || '').includes('Moderator update content.'), true);
 
     const deleted = await deletePublishedListingByModerator({
-      soulId: 'creator-alpha-v1',
+      assetId: 'creator-alpha-v1',
       moderator: moderatorAuth.wallet,
       reason: 'cleanup test'
     });
     assert.equal(deleted.ok, true);
 
     const afterDelete = await listPublishedListingSummaries({ includeHidden: true });
-    assert.equal(afterDelete.some((item) => item.soul_id === 'creator-alpha-v1'), false);
+    assert.equal(afterDelete.some((item) => item.asset_id === 'creator-alpha-v1'), false);
 
     const auditPath = path.join(tempDir, '.marketplace-drafts', 'review-audit.jsonl');
     const auditRaw = await readFile(auditPath, 'utf8');
@@ -227,13 +227,13 @@ test('publishCreatorListingDirect dry_run returns field-level errors and does no
     assert.equal(invalid.ok, false);
     assert.equal(invalid.code, 'validation_failed');
     assert.equal(Array.isArray(invalid.field_errors), true);
-    assert.ok(invalid.field_errors.some((item) => String(item?.field || '') === 'listing.soul_markdown'));
+    assert.ok(invalid.field_errors.some((item) => String(item?.field || '') === 'listing.content_markdown'));
 
     const template = getMarketplaceDraftTemplate();
     template.name = 'Dry Run Soul';
     template.description = 'This listing is only validated and not persisted.';
     template.price_usdc = 0.05;
-    template.soul_markdown = '# SOUL\n\nDry-run validation only.';
+    template.content_markdown = '# SOUL\n\nDry-run validation only.';
 
     const validDryRun = await publishCreatorListingDirect({
       walletAddress: wallet.address.toLowerCase(),
@@ -306,7 +306,7 @@ test('catalog fallback reads Vercel draft directory when MARKETPLACE_DRAFTS_DIR 
           publishedBy: '0x7f46acb709cd8df5879f84915ca431fb740989e4',
           publishedAt: new Date().toISOString(),
           draftId: 'pub_test',
-          sharePath: '/soul.html?id=vercel-catalog-soul-v1',
+          sharePath: '/asset.html?id=vercel-catalog-soul-v1',
           visibility: 'public'
         }
       ]

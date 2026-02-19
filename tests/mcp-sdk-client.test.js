@@ -71,7 +71,6 @@ test('official MCP SDK client can connect and execute PULL.md tools/resources', 
     const tools = await client.listTools();
     const toolNames = (tools?.tools || []).map((tool) => String(tool?.name || ''));
     assert.ok(toolNames.includes('list_assets'));
-    assert.ok(toolNames.includes('list_souls'));
     assert.ok(toolNames.includes('get_auth_challenge'));
 
     const listAssetsResult = await client.callTool({

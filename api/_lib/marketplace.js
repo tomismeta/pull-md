@@ -4,9 +4,9 @@ import path from 'path';
 import { ethers } from 'ethers';
 import { Pool } from 'pg';
 
-const SOUL_TYPES = new Set(['synthetic', 'organic', 'hybrid']);
+const ASSET_PROFILES = new Set(['synthetic', 'organic', 'hybrid']);
 const ASSET_TYPES = new Set(['soul', 'skill']);
-const MAX_SOUL_MD_BYTES = 64 * 1024;
+const MAX_CONTENT_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 const MODERATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
@@ -96,7 +96,7 @@ function validateEthAddress(value) {
   return /^0x[a-fA-F0-9]{40}$/.test(String(value || ''));
 }
 
-function validateSoulId(value) {
+function validateAssetId(value) {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(value || ''));
 }
 
@@ -108,14 +108,14 @@ function normalizePlatformFeeBps() {
   return Math.round(raw);
 }
 
-function slugifySoulId(name) {
+function slugifyAssetId(name) {
   const base = String(name || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .replace(/-{2,}/g, '-')
     .slice(0, 48);
-  const slug = base || 'creator-soul';
+  const slug = base || 'creator-asset';
   return /-v\d+$/.test(slug) ? slug : `${slug}-v1`;
 }
 
@@ -141,7 +141,7 @@ function buildDraftInput(input, options = {}) {
   const description = asString(listing.description || payload.description);
   const longDescription = asString(listing.long_description || payload.long_description || description);
   const category = asString(listing.category || payload.category).toLowerCase() || assetType || 'creator';
-  const soulType = asString(listing.soul_type || payload.soul_type).toLowerCase() || 'hybrid';
+  const assetProfile = asString(listing.asset_profile || payload.asset_profile).toLowerCase() || 'hybrid';
   const icon = asString(listing.icon || payload.icon) || deriveIconFromName(name);
   const tags = normalizeTags(listing.tags || payload.tags);
   const priceUsdc =
@@ -156,36 +156,30 @@ function buildDraftInput(input, options = {}) {
   const sellerAddress = asString(listing.seller_address || payload.seller_address || walletSeller || configuredSeller || ZERO_ADDRESS);
   const sourceUrl = asString(assets.source_url || payload.source_url);
   const sourceLabel = asString(assets.source_label || payload.source_label);
-  const soulMarkdown =
+  const contentMarkdown =
     typeof assets.content_markdown === 'string'
       ? assets.content_markdown
-      : typeof assets.soul_markdown === 'string'
-        ? assets.soul_markdown
-      : typeof payload.soul_markdown === 'string'
-        ? payload.soul_markdown
-        : typeof payload.content_markdown === 'string'
-          ? payload.content_markdown
-        : typeof payload.soul_md === 'string'
-          ? payload.soul_md
-          : typeof payload.markdown_content === 'string'
-            ? payload.markdown_content
+      : typeof payload.content_markdown === 'string'
+        ? payload.content_markdown
+        : typeof payload.markdown_content === 'string'
+          ? payload.markdown_content
           : '';
 
-  const soulId = asString(listing.soul_id || payload.soul_id).toLowerCase() || slugifySoulId(name);
+  const assetId = asString(listing.asset_id || payload.asset_id).toLowerCase() || slugifyAssetId(name);
   const platformFeeBps = normalizePlatformFeeBps();
   const creatorRoyaltyBps = 10000 - platformFeeBps;
 
   return {
     schema_version: 'marketplace-draft-v1',
     listing: {
-      soul_id: soulId,
+      asset_id: assetId,
       asset_type: assetType,
       file_name: fileName,
       name,
       description,
       long_description: longDescription,
       category,
-      soul_type: soulType,
+      asset_profile: assetProfile,
       icon,
       tags,
       price_usdc: priceUsdc,
@@ -194,8 +188,7 @@ function buildDraftInput(input, options = {}) {
       platform_fee_bps: platformFeeBps
     },
     assets: {
-      content_markdown: soulMarkdown,
-      soul_markdown: soulMarkdown,
+      content_markdown: contentMarkdown,
       source_url: sourceUrl,
       source_label: sourceLabel
     }
@@ -278,8 +271,35 @@ async function ensureMarketplaceDbSchema() {
 
   dbSchemaReadyForDsn = dsn;
   dbSchemaReadyPromise = (async () => {
+    // One-time hard-cut migration from legacy soul_* table names.
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS soul_marketplace_drafts (
+      DO $$
+      BEGIN
+        IF to_regclass('public.asset_marketplace_drafts') IS NULL
+           AND to_regclass('public.soul_marketplace_drafts') IS NOT NULL THEN
+          ALTER TABLE public.soul_marketplace_drafts RENAME TO asset_marketplace_drafts;
+        END IF;
+
+        IF to_regclass('public.asset_marketplace_audit') IS NULL
+           AND to_regclass('public.soul_marketplace_audit') IS NOT NULL THEN
+          ALTER TABLE public.soul_marketplace_audit RENAME TO asset_marketplace_audit;
+        END IF;
+
+        IF to_regclass('public.asset_catalog_entries') IS NULL
+           AND to_regclass('public.soul_catalog_entries') IS NOT NULL THEN
+          ALTER TABLE public.soul_catalog_entries RENAME TO asset_catalog_entries;
+        END IF;
+
+        IF to_regclass('public.idx_asset_marketplace_drafts_status_updated') IS NULL
+           AND to_regclass('public.idx_soul_marketplace_drafts_status_updated') IS NOT NULL THEN
+          ALTER INDEX public.idx_soul_marketplace_drafts_status_updated
+            RENAME TO idx_asset_marketplace_drafts_status_updated;
+        END IF;
+      END $$;
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS asset_marketplace_drafts (
         wallet_address TEXT NOT NULL,
         draft_id TEXT NOT NULL,
         status TEXT NOT NULL,
@@ -292,11 +312,11 @@ async function ensureMarketplaceDbSchema() {
       );
     `);
     await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_soul_marketplace_drafts_status_updated
-      ON soul_marketplace_drafts (status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_asset_marketplace_drafts_status_updated
+      ON asset_marketplace_drafts (status, updated_at DESC);
     `);
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS soul_marketplace_audit (
+      CREATE TABLE IF NOT EXISTS asset_marketplace_audit (
         id BIGSERIAL PRIMARY KEY,
         at TIMESTAMPTZ NOT NULL,
         event TEXT NOT NULL,
@@ -311,7 +331,7 @@ async function ensureMarketplaceDbSchema() {
       );
     `);
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS soul_catalog_entries (
+      CREATE TABLE IF NOT EXISTS asset_catalog_entries (
         id TEXT PRIMARY KEY,
         entry JSONB NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -356,7 +376,7 @@ async function loadWalletDraftFile(walletAddress) {
       const { rows } = await pool.query(
         `
           SELECT draft_id, status, moderation, normalized, created_at, updated_at, published_at
-          FROM soul_marketplace_drafts
+          FROM asset_marketplace_drafts
           WHERE wallet_address = $1
           ORDER BY updated_at DESC
         `,
@@ -404,14 +424,14 @@ async function saveWalletDraftFile(walletAddress, payload) {
       const updatedAtIso = new Date().toISOString();
       try {
         await client.query('BEGIN');
-        await client.query('DELETE FROM soul_marketplace_drafts WHERE wallet_address = $1', [wallet]);
+        await client.query('DELETE FROM asset_marketplace_drafts WHERE wallet_address = $1', [wallet]);
         for (const draft of drafts) {
           const createdAtIso = draft?.created_at ? new Date(draft.created_at).toISOString() : updatedAtIso;
           const draftUpdatedAtIso = draft?.updated_at ? new Date(draft.updated_at).toISOString() : updatedAtIso;
           const publishedAtIso = draft?.published_at ? new Date(draft.published_at).toISOString() : null;
           await client.query(
             `
-              INSERT INTO soul_marketplace_drafts (
+              INSERT INTO asset_marketplace_drafts (
                 wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
               ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz)
             `,
@@ -462,7 +482,7 @@ async function appendReviewAudit(entry) {
       const pool = getMarketplaceDbPool();
       await pool.query(
         `
-          INSERT INTO soul_marketplace_audit (
+          INSERT INTO asset_marketplace_audit (
             at, event, wallet_address, draft_id, actor, decision, status_before, status_after, notes, payload
           ) VALUES ($1::timestamptz, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
         `,
@@ -503,12 +523,12 @@ function derivePreview(markdown) {
   return clean || 'Published creator markdown asset.';
 }
 
-function sharePathForAsset(soulId) {
-  return `/asset.html?id=${encodeURIComponent(String(soulId || ''))}`;
+function sharePathForAsset(assetId) {
+  return `/asset.html?id=${encodeURIComponent(String(assetId || ''))}`;
 }
 
-function sharePathForSoul(soulId) {
-  return sharePathForAsset(soulId);
+function sharePathForSoul(assetId) {
+  return sharePathForAsset(assetId);
 }
 
 function canonicalSharePath(value, id) {
@@ -534,7 +554,7 @@ async function loadPublishedCatalog() {
       const { rows } = await pool.query(
         `
           SELECT entry
-          FROM soul_catalog_entries
+          FROM asset_catalog_entries
           ORDER BY updated_at DESC, id ASC
         `
       );
@@ -571,12 +591,12 @@ async function savePublishedCatalog(payload) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await client.query('DELETE FROM soul_catalog_entries');
+        await client.query('DELETE FROM asset_catalog_entries');
         for (const entry of entries) {
           if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string') continue;
           await client.query(
             `
-              INSERT INTO soul_catalog_entries (id, entry, updated_at)
+              INSERT INTO asset_catalog_entries (id, entry, updated_at)
               VALUES ($1, $2::jsonb, NOW())
             `,
             [entry.id, JSON.stringify(entry)]
@@ -614,16 +634,14 @@ async function savePublishedCatalog(payload) {
 async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
   const listing = draft?.normalized?.listing || {};
   const assets = draft?.normalized?.assets || {};
-  const id = asString(listing.soul_id);
+  const id = asString(listing.asset_id);
   if (!id) return;
   const assetType = normalizeAssetType(listing.asset_type) || 'soul';
   const fileName = normalizeMarkdownFileName(listing.file_name, defaultFileNameForAssetType(assetType));
   const contentMarkdown =
     typeof assets.content_markdown === 'string'
       ? assets.content_markdown
-      : typeof assets.soul_markdown === 'string'
-        ? assets.soul_markdown
-        : '';
+      : '';
 
   const catalog = await loadPublishedCatalog();
   const existingEntry = catalog.entries.find((entry) => entry?.id === id) || null;
@@ -640,7 +658,7 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
     priceMicroUsdc: asString(listing.price_micro_usdc),
     priceDisplay: `$${(Number(listing.price_usdc) || 0).toFixed(2)}`,
     provenance: {
-      type: asString(listing.soul_type) || 'hybrid',
+      type: asString(listing.asset_profile) || 'hybrid',
       raised_by: `Creator ${String(walletAddress || '').toLowerCase()}`,
       days_nurtured: 0
     },
@@ -666,7 +684,7 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
       const pool = getMarketplaceDbPool();
       await pool.query(
         `
-          INSERT INTO soul_catalog_entries (id, entry, updated_at)
+          INSERT INTO asset_catalog_entries (id, entry, updated_at)
           VALUES ($1, $2::jsonb, NOW())
           ON CONFLICT (id)
           DO UPDATE SET entry = EXCLUDED.entry, updated_at = NOW()
@@ -693,7 +711,7 @@ async function loadAllWalletDraftStores() {
       const pool = getMarketplaceDbPool();
       const { rows } = await pool.query(`
         SELECT wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
-        FROM soul_marketplace_drafts
+        FROM asset_marketplace_drafts
         ORDER BY wallet_address ASC, updated_at DESC
       `);
       const storesByWallet = new Map();
@@ -903,32 +921,14 @@ export function getMarketplaceDraftTemplate() {
 
 ## Continuity
 - Define memory expectations, handoff behavior, and long-term consistency rules.`,
-    // Legacy alias preserved for existing clients.
-    soul_markdown: `# SOUL.md
-
-## Core Principles
-- Define your non-negotiable values and decision rules.
-
-## Operating Pattern
-- Describe how this soul plans, executes, and iterates.
-
-## Boundaries
-- Clarify what this soul should not do and when to refuse.
-
-## Communication
-- Specify tone, brevity, formatting, and interaction style.
-
-## Continuity
-- Define memory expectations, handoff behavior, and long-term consistency rules.`,
     notes: {
       enabled_asset_types: ['soul', 'skill'],
       auto_fields: [
-        'soul_id (derived from name)',
+        'asset_id (derived from name)',
         'seller_address (set to connected creator wallet)',
-        'category, soul_type, icon, tags',
+        'category, asset_profile, icon, tags',
         'share_path'
       ],
-      aliases: ['soul_markdown is accepted as alias for content_markdown'],
       publish_mode: 'immediate'
     }
   };
@@ -1024,35 +1024,33 @@ export function validateMarketplaceDraft(input, options = {}) {
   const listing = prepared.listing || {};
   const assets = prepared.assets || {};
 
-  const soulId = asString(listing.soul_id).toLowerCase();
+  const assetId = asString(listing.asset_id).toLowerCase();
   const assetType = normalizeAssetType(listing.asset_type) || 'soul';
   const fileName = asString(listing.file_name) || defaultFileNameForAssetType(assetType);
   const name = asString(listing.name);
   const description = asString(listing.description);
   const longDescription = asString(listing.long_description);
   const category = asString(listing.category).toLowerCase();
-  const soulType = asString(listing.soul_type).toLowerCase();
+  const assetProfile = asString(listing.asset_profile).toLowerCase();
   const icon = asString(listing.icon);
   const tags = normalizeTags(listing.tags);
   const sellerAddress = asString(listing.seller_address);
   const sourceUrl = asString(assets.source_url);
   const sourceLabel = asString(assets.source_label);
-  const soulMarkdown =
+  const contentMarkdown =
     typeof assets.content_markdown === 'string'
       ? assets.content_markdown
-      : typeof assets.soul_markdown === 'string'
-        ? assets.soul_markdown
-        : '';
+      : '';
 
-  if (!validateSoulId(soulId)) {
+  if (!validateAssetId(assetId)) {
     addFieldError({
       errors,
       fieldErrors,
-      field: 'listing.soul_id',
-      expected: 'kebab-case string like "example-soul-v1"',
-      received: listing.soul_id,
-      fix: 'Provide a valid soul_id or allow it to auto-derive from name.',
-      message: 'listing.soul_id must be kebab-case alphanumeric (example-soul-v1).'
+      field: 'listing.asset_id',
+      expected: 'kebab-case string like "example-asset-v1"',
+      received: listing.asset_id,
+      fix: 'Provide a valid asset_id or allow it to auto-derive from name.',
+      message: 'listing.asset_id must be kebab-case alphanumeric (example-asset-v1).'
     });
   }
   if (!ASSET_TYPES.has(assetType)) {
@@ -1121,15 +1119,15 @@ export function validateMarketplaceDraft(input, options = {}) {
       message: 'listing.category is required.'
     });
   }
-  if (!SOUL_TYPES.has(soulType)) {
+  if (!ASSET_PROFILES.has(assetProfile)) {
     addFieldError({
       errors,
       fieldErrors,
-      field: 'listing.soul_type',
+      field: 'listing.asset_profile',
       expected: 'one of: synthetic | organic | hybrid',
-      received: listing.soul_type,
-      fix: 'Set listing.soul_type to synthetic, organic, or hybrid.',
-      message: 'listing.soul_type must be synthetic, organic, or hybrid.'
+      received: listing.asset_profile,
+      fix: 'Set listing.asset_profile to synthetic, organic, or hybrid.',
+      message: 'listing.asset_profile must be synthetic, organic, or hybrid.'
     });
   }
   if (!validateEthAddress(sellerAddress)) {
@@ -1143,26 +1141,26 @@ export function validateMarketplaceDraft(input, options = {}) {
       message: 'listing.seller_address must be a valid EVM address.'
     });
   }
-  if (!soulMarkdown.trim()) {
+  if (!contentMarkdown.trim()) {
     addFieldError({
       errors,
       fieldErrors,
-      field: 'listing.soul_markdown',
-      expected: `string (markdown content, 1-${MAX_SOUL_MD_BYTES} bytes)`,
-      received: assets.content_markdown ?? assets.soul_markdown ?? input?.content_markdown ?? input?.soul_markdown ?? null,
-      fix: 'Include content_markdown (or legacy soul_markdown alias) in the payload.',
-      message: 'assets.soul_markdown is required.'
+      field: 'listing.content_markdown',
+      expected: `string (markdown content, 1-${MAX_CONTENT_MD_BYTES} bytes)`,
+      received: assets.content_markdown ?? input?.content_markdown ?? null,
+      fix: 'Include content_markdown in the payload.',
+      message: 'assets.content_markdown is required.'
     });
   }
-  if (Buffer.byteLength(soulMarkdown, 'utf8') > MAX_SOUL_MD_BYTES) {
+  if (Buffer.byteLength(contentMarkdown, 'utf8') > MAX_CONTENT_MD_BYTES) {
     addFieldError({
       errors,
       fieldErrors,
-      field: 'listing.soul_markdown',
-      expected: `string <= ${MAX_SOUL_MD_BYTES} bytes`,
-      received: `bytes:${Buffer.byteLength(soulMarkdown, 'utf8')}`,
+      field: 'listing.content_markdown',
+      expected: `string <= ${MAX_CONTENT_MD_BYTES} bytes`,
+      received: `bytes:${Buffer.byteLength(contentMarkdown, 'utf8')}`,
       fix: 'Shorten markdown content.',
-      message: `assets.soul_markdown exceeds ${MAX_SOUL_MD_BYTES} bytes.`
+      message: `assets.content_markdown exceeds ${MAX_CONTENT_MD_BYTES} bytes.`
     });
   }
 
@@ -1233,14 +1231,14 @@ export function validateMarketplaceDraft(input, options = {}) {
   const normalized = {
     schema_version: 'marketplace-draft-v1',
     listing: {
-      soul_id: soulId,
+      asset_id: assetId,
       asset_type: assetType,
       file_name: normalizeMarkdownFileName(fileName, defaultFileNameForAssetType(assetType)),
       name,
       description,
       long_description: longDescription,
       category,
-      soul_type: soulType,
+      asset_profile: assetProfile,
       icon: icon || 'spark',
       tags,
       price_usdc: Number(listing.price_usdc),
@@ -1250,8 +1248,7 @@ export function validateMarketplaceDraft(input, options = {}) {
       platform_fee_bps: platformFeeBps
     },
     assets: {
-      content_markdown: soulMarkdown,
-      soul_markdown: soulMarkdown,
+      content_markdown: contentMarkdown,
       source_url: sourceUrl || null,
       source_label: sourceLabel || null
     }
@@ -1304,7 +1301,7 @@ export async function listCreatorDrafts(walletAddress) {
       moderation: draft.moderation || null,
       created_at: draft.created_at,
       updated_at: draft.updated_at,
-      soul_id: draft.normalized?.listing?.soul_id || null,
+      asset_id: draft.normalized?.listing?.asset_id || null,
       name: draft.normalized?.listing?.name || null,
       price_micro_usdc: draft.normalized?.listing?.price_micro_usdc || null
     }));
@@ -1515,7 +1512,7 @@ export async function listDraftsByStatus(statuses = []) {
         status,
         moderation: draft.moderation || null,
         updated_at: draft.updated_at || null,
-        soul_id: draft.normalized?.listing?.soul_id || null,
+        asset_id: draft.normalized?.listing?.asset_id || null,
         name: draft.normalized?.listing?.name || null
       });
     }
@@ -1574,7 +1571,6 @@ function summarizePublishedListing(entry) {
   const sharePath = canonicalSharePath(listing.sharePath, id);
   return {
     asset_id: id,
-    soul_id: id,
     asset_type: assetType,
     file_name: fileName,
     name: asString(listing.name),
@@ -1607,19 +1603,17 @@ function toModerationListing(entry) {
   return {
     ...summarizePublishedListing(listing),
     asset_id: id,
-    soul_id: id,
     asset_type: assetType,
     file_name: fileName,
     long_description: asString(listing.longDescription || listing.long_description),
     category: asString(listing.category),
-    soul_type: asString(listing?.provenance?.type || listing.soul_type) || 'hybrid',
+    asset_profile: asString(listing?.provenance?.type || listing.asset_profile) || 'hybrid',
     icon: asString(listing.icon),
     tags,
     price_usdc: priceUsdc,
     source_url: sourceUrl || null,
     source_label: sourceLabel || null,
-    content_markdown: markdown,
-    soul_markdown: markdown
+    content_markdown: markdown
   };
 }
 
@@ -1682,7 +1676,7 @@ export async function publishCreatorListingDirect({ walletAddress, payload, dryR
     includeHidden: true,
     publishedBy: wallet
   });
-  const entry = entries.find((row) => row?.id === result.normalized.listing.soul_id) || null;
+  const entry = entries.find((row) => row?.id === result.normalized.listing.asset_id) || null;
   return {
     ok: true,
     warnings: result.warnings,
@@ -1691,9 +1685,9 @@ export async function publishCreatorListingDirect({ walletAddress, payload, dryR
   };
 }
 
-export async function setListingVisibility({ soulId, visibility, moderator, reason }) {
-  const id = asString(soulId);
-  if (!id) return { ok: false, error: 'Missing soul_id' };
+export async function setListingVisibility({ assetId, visibility, moderator, reason }) {
+  const id = asString(assetId);
+  if (!id) return { ok: false, error: 'Missing asset_id' };
   const mode = normalizeVisibility(visibility);
   if (mode !== 'hidden' && mode !== 'public') {
     return { ok: false, error: 'visibility must be hidden or public' };
@@ -1724,7 +1718,7 @@ export async function setListingVisibility({ soulId, visibility, moderator, reas
     status_before: previousVisibility,
     status_after: mode,
     notes: updated.hiddenReason || null,
-    soul_id: id
+    asset_id: id
   });
 
   return {
@@ -1740,7 +1734,7 @@ function buildModerationUpdateInput(existing, updates) {
   const patchAssets = patch.assets && typeof patch.assets === 'object' ? patch.assets : patch;
 
   const existingId = asString(current.id);
-  const requestedId = asString(patchListing.asset_id || patchListing.soul_id || patch.asset_id || patch.soul_id).toLowerCase();
+  const requestedId = asString(patchListing.asset_id || patch.asset_id).toLowerCase();
   if (requestedId && existingId && requestedId !== existingId) {
     return {
       ok: false,
@@ -1758,14 +1752,14 @@ function buildModerationUpdateInput(existing, updates) {
 
   const merged = {
     listing: {
-      soul_id: existingId,
+      asset_id: existingId,
       asset_type: normalizeAssetType(patchListing.asset_type || current.assetType || current.asset_type) || 'soul',
       file_name: asString(patchListing.file_name || current.fileName || current.file_name),
       name: patchListing.name ?? current.name,
       description: patchListing.description ?? current.description,
       long_description: patchListing.long_description ?? current.longDescription ?? current.long_description,
       category: patchListing.category ?? current.category,
-      soul_type: patchListing.soul_type ?? current?.provenance?.type ?? current.soul_type,
+      asset_profile: patchListing.asset_profile ?? current?.provenance?.type ?? current.asset_profile,
       icon: patchListing.icon ?? current.icon,
       tags: patchListing.tags ?? current.tags,
       price_usdc:
@@ -1778,11 +1772,8 @@ function buildModerationUpdateInput(existing, updates) {
     assets: {
       content_markdown:
         patchAssets.content_markdown ??
-        patchAssets.soul_markdown ??
         patchListing.content_markdown ??
-        patchListing.soul_markdown ??
         patch.content_markdown ??
-        patch.soul_markdown ??
         current.contentInline ??
         '',
       source_url: patchAssets.source_url ?? patch.source_url ?? current.sourceUrl ?? current.source_url ?? null,
@@ -1792,9 +1783,9 @@ function buildModerationUpdateInput(existing, updates) {
   return { ok: true, payload: merged };
 }
 
-export async function updatePublishedListingByModerator({ soulId, updates, moderator }) {
-  const id = asString(soulId);
-  if (!id) return { ok: false, error: 'Missing soul_id' };
+export async function updatePublishedListingByModerator({ assetId, updates, moderator }) {
+  const id = asString(assetId);
+  if (!id) return { ok: false, error: 'Missing asset_id' };
 
   const catalog = await loadPublishedCatalog();
   const idx = catalog.entries.findIndex((entry) => entry?.id === id);
@@ -1826,7 +1817,7 @@ export async function updatePublishedListingByModerator({ soulId, updates, moder
       warnings: validated.warnings || []
     };
   }
-  if (String(validated.normalized?.listing?.soul_id || '').toLowerCase() !== id.toLowerCase()) {
+  if (String(validated.normalized?.listing?.asset_id || '').toLowerCase() !== id.toLowerCase()) {
     return {
       ok: false,
       code: 'validation_failed',
@@ -1834,10 +1825,10 @@ export async function updatePublishedListingByModerator({ soulId, updates, moder
       errors: ['asset_id is immutable for moderator edits'],
       field_errors: [
         {
-          field: 'listing.soul_id',
+          field: 'listing.asset_id',
           expected: id.toLowerCase(),
-          received: validated.normalized?.listing?.soul_id || null,
-          fix: 'Keep listing.soul_id unchanged when editing.'
+          received: validated.normalized?.listing?.asset_id || null,
+          fix: 'Keep listing.asset_id unchanged when editing.'
         }
       ]
     };
@@ -1868,7 +1859,7 @@ export async function updatePublishedListingByModerator({ soulId, updates, moder
     status_before: normalizeVisibility(current.visibility),
     status_after: normalizeVisibility(updated.visibility),
     notes: 'Moderator edited published listing',
-    soul_id: id
+    asset_id: id
   });
 
   return {
@@ -1878,9 +1869,9 @@ export async function updatePublishedListingByModerator({ soulId, updates, moder
   };
 }
 
-export async function deletePublishedListingByModerator({ soulId, moderator, reason }) {
-  const id = asString(soulId);
-  if (!id) return { ok: false, error: 'Missing soul_id' };
+export async function deletePublishedListingByModerator({ assetId, moderator, reason }) {
+  const id = asString(assetId);
+  if (!id) return { ok: false, error: 'Missing asset_id' };
 
   const catalog = await loadPublishedCatalog();
   const idx = catalog.entries.findIndex((entry) => entry?.id === id);
@@ -1901,7 +1892,7 @@ export async function deletePublishedListingByModerator({ soulId, moderator, rea
     status_before: normalizeVisibility(removed?.visibility),
     status_after: 'deleted',
     notes: asString(reason) || null,
-    soul_id: id
+    asset_id: id
   });
 
   return {

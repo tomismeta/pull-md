@@ -4,14 +4,14 @@
   const DEFAULT_RECEIPT_PREFIX = 'pullmd.receipt.';
   const DEFAULT_REDOWNLOAD_SESSION_PREFIX = 'pullmd.redownload.session.';
 
-  function receiptStorageKey(wallet, soulId, { receiptPrefix = DEFAULT_RECEIPT_PREFIX } = {}) {
+  function receiptStorageKey(wallet, assetId, { receiptPrefix = DEFAULT_RECEIPT_PREFIX } = {}) {
     const normalizedWallet = String(wallet || '').toLowerCase().trim();
-    const normalizedSoulId = String(soulId || '').trim();
-    if (!normalizedWallet || !normalizedSoulId) return '';
-    return `${receiptPrefix}${normalizedWallet}.${normalizedSoulId}`;
+    const normalizedAssetId = String(assetId || '').trim();
+    if (!normalizedWallet || !normalizedAssetId) return '';
+    return `${receiptPrefix}${normalizedWallet}.${normalizedAssetId}`;
   }
 
-  function parseSoulIdFromReceiptKey(key, wallet, { receiptPrefix = DEFAULT_RECEIPT_PREFIX } = {}) {
+  function parseAssetIdFromReceiptKey(key, wallet, { receiptPrefix = DEFAULT_RECEIPT_PREFIX } = {}) {
     const prefix = `${receiptPrefix}${String(wallet || '').toLowerCase().trim()}.`;
     if (!prefix || !String(key || '').startsWith(prefix)) return null;
     return String(key).slice(prefix.length);
@@ -24,19 +24,19 @@
       if (!normalizedWallet) return proofs;
       for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i);
-        const soulId = parseSoulIdFromReceiptKey(key, normalizedWallet, { receiptPrefix });
-        if (!soulId) continue;
+        const assetId = parseAssetIdFromReceiptKey(key, normalizedWallet, { receiptPrefix });
+        if (!assetId) continue;
         const receipt = localStorage.getItem(String(key || ''));
         if (!receipt) continue;
-        proofs.push({ soul_id: soulId, receipt });
+        proofs.push({ asset_id: assetId, receipt });
       }
     } catch (_) {}
     return proofs;
   }
 
-  function getStoredReceipt(soulId, wallet, { receiptPrefix = DEFAULT_RECEIPT_PREFIX } = {}) {
+  function getStoredReceipt(assetId, wallet, { receiptPrefix = DEFAULT_RECEIPT_PREFIX } = {}) {
     try {
-      const key = receiptStorageKey(wallet, soulId, { receiptPrefix });
+      const key = receiptStorageKey(wallet, assetId, { receiptPrefix });
       if (!key) return null;
       return localStorage.getItem(key);
     } catch (_) {
@@ -44,9 +44,9 @@
     }
   }
 
-  function storeReceipt(soulId, wallet, receipt, { receiptPrefix = DEFAULT_RECEIPT_PREFIX } = {}) {
+  function storeReceipt(assetId, wallet, receipt, { receiptPrefix = DEFAULT_RECEIPT_PREFIX } = {}) {
     try {
-      const key = receiptStorageKey(wallet, soulId, { receiptPrefix });
+      const key = receiptStorageKey(wallet, assetId, { receiptPrefix });
       if (!key) return false;
       localStorage.setItem(key, String(receipt || ''));
       return true;
@@ -105,7 +105,7 @@
 
   globalScope.PullMdStorage = {
     receiptStorageKey,
-    parseSoulIdFromReceiptKey,
+    parseAssetIdFromReceiptKey,
     collectStoredProofs,
     getStoredReceipt,
     storeReceipt,

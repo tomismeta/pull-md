@@ -34,10 +34,6 @@
       "handle": "filesystem"
     },
     {
-      "src": "/soul",
-      "dest": "/soul.html"
-    },
-    {
       "src": "/(.*)",
       "dest": "/$1"
     }

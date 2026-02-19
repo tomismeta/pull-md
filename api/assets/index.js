@@ -1,6 +1,6 @@
 import { isAppError } from '../_lib/errors.js';
 import { setCors } from '../_lib/payments.js';
-import { buildPublicAssetsResponse, listAssetsCatalog } from '../_lib/services/souls.js';
+import { buildPublicAssetsResponse, listAssetsCatalog } from '../_lib/services/assets.js';
 import { recordTelemetryEvent } from '../_lib/telemetry.js';
 
 export default async function handler(req, res) {

@@ -33,8 +33,8 @@ Use this skill for agent workflows against a deployed PullMd instance.
 
 - `GET {base_url}/api/mcp/manifest`
 - `POST {base_url}/mcp` with method `tools/list`
-- `POST {base_url}/mcp` with method `tools/call`, params `{ "name": "list_souls", "arguments": {} }`
-- `POST {base_url}/mcp` with method `tools/call`, params `{ "name": "get_soul_details", "arguments": { "id": "{soul_id}" } }`
+- `POST {base_url}/mcp` with method `tools/call`, params `{ "name": "list_assets", "arguments": {} }`
+- `POST {base_url}/mcp` with method `tools/call`, params `{ "name": "get_asset_details", "arguments": { "id": "{asset_id}" } }`
 
 Domain rule:
 - Use `https://pullmd.vercel.app` for production runs.
@@ -45,7 +45,7 @@ Domain rule:
 Strict headless agent mode requires a live SIWE proof on every re-download call.
 
 1. Call:
-- `GET {base_url}/api/assets/{soul_id}/download`
+- `GET {base_url}/api/assets/{asset_id}/download`
 - Headers:
 `X-CLIENT-MODE: agent`, `X-WALLET-ADDRESS`, `X-PURCHASE-RECEIPT`
 
@@ -60,7 +60,7 @@ Strict headless agent mode requires a live SIWE proof on every re-download call.
 ## 3. Purchase Flow (Strict x402)
 
 1. Request paywall:
-- `GET {base_url}/api/assets/{soul_id}/download` (authoritative endpoint)
+- `GET {base_url}/api/assets/{asset_id}/download` (authoritative endpoint)
 - Expect `402` with `PAYMENT-REQUIRED`.
 
 2. Decode `PAYMENT-REQUIRED` and create x402 payment payload.
@@ -72,7 +72,7 @@ Strict headless agent mode requires a live SIWE proof on every re-download call.
 - Preferred:
 `PAYMENT-SIGNATURE: <base64-json-payload>`
 4. On success:
-- Read soul content from response body.
+- Read asset content from response body.
 - Read settlement details from `PAYMENT-RESPONSE`.
 - Persist `X-PURCHASE-RECEIPT`.
 
@@ -149,13 +149,13 @@ Use:
 
 - `POST {base_url}/mcp` with method `tools/call`, params `{ "name": "check_entitlements", "arguments": { ... } }`
 - Body:
-`{ "wallet_address": "...", "proofs": [{ "soul_id": "...", "receipt": "..." }] }`
+`{ "wallet_address": "...", "proofs": [{ "asset_id": "...", "receipt": "..." }] }`
 
 ## Output Expectations
 
 When this skill is used, return:
 
-1. `soul_id`
+1. `asset_id`
 2. acquisition mode: `redownload` or `purchase`
 3. settlement transaction id (if present)
 4. whether receipt was refreshed

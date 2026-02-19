@@ -3,7 +3,7 @@ import {
   buildMcpAssetDetailsResponse,
   listAssetsCatalog,
   resolveAssetDetails
-} from './services/souls.js';
+} from './services/assets.js';
 
 function baseUrlFromHeaders(headers = {}) {
   const host = String(headers['x-forwarded-host'] || headers.host || 'www.pull.md').trim();
@@ -17,10 +17,6 @@ function asJson(value) {
 
 function assetResourceUri(id) {
   return `pullmd://assets/${encodeURIComponent(String(id || ''))}`;
-}
-
-function soulResourceUri(id) {
-  return `pullmd://souls/${encodeURIComponent(String(id || ''))}`;
 }
 
 function normalizeResourceUri(uri) {
@@ -50,31 +46,16 @@ export async function getMcpResourcesList() {
       name: 'Public Asset Catalog',
       description: 'Publicly listed markdown asset summaries',
       mimeType: 'application/json'
-    },
-    {
-      uri: 'pullmd://souls',
-      aliases: ['pullmd://souls'],
-      name: 'Public Soul Catalog',
-      description: 'Legacy alias for pullmd://assets',
-      mimeType: 'application/json'
     }
   ];
 
-  const assetResources = assets.flatMap((asset) => [
-    {
-      uri: assetResourceUri(asset.id),
-      aliases: [`pullmd://assets/${encodeURIComponent(String(asset.id || ''))}`],
-      name: String(asset.name || asset.id || ''),
-      description: `${String(asset.description || 'Asset listing')}`,
-      mimeType: 'application/json'
-    },
-    {
-      uri: soulResourceUri(asset.id),
-      name: `${String(asset.name || asset.id || '')} (Legacy Soul URI)`,
-      description: 'Legacy alias for pullmd://assets/{id}',
-      mimeType: 'application/json'
-    }
-  ]);
+  const assetResources = assets.map((asset) => ({
+    uri: assetResourceUri(asset.id),
+    aliases: [`pullmd://assets/${encodeURIComponent(String(asset.id || ''))}`],
+    name: String(asset.name || asset.id || ''),
+    description: `${String(asset.description || 'Asset listing')}`,
+    mimeType: 'application/json'
+  }));
 
   return [...docs, ...assetResources];
 }
@@ -108,18 +89,17 @@ export async function readMcpResource(uri, context = {}) {
     };
   }
 
-  if (normalizedUri === 'pullmd://assets' || normalizedUri === 'pullmd://souls') {
+  if (normalizedUri === 'pullmd://assets') {
     const assets = await listAssetsCatalog({});
     return {
       uri: requestedUri || normalizedUri,
       mimeType: 'application/json',
-      text: asJson({ count: assets.length, assets, souls: assets })
+      text: asJson({ count: assets.length, assets })
     };
   }
 
-  if (normalizedUri.startsWith('pullmd://assets/') || normalizedUri.startsWith('pullmd://souls/')) {
-    const prefix = normalizedUri.startsWith('pullmd://assets/') ? 'pullmd://assets/' : 'pullmd://souls/';
-    const id = decodeURIComponent(normalizedUri.slice(prefix.length));
+  if (normalizedUri.startsWith('pullmd://assets/')) {
+    const id = decodeURIComponent(normalizedUri.slice('pullmd://assets/'.length));
     const details = await resolveAssetDetails(id);
     const body = buildMcpAssetDetailsResponse(details);
     return {
@@ -167,27 +147,6 @@ const MCP_PROMPTS = [
       { name: 'price_usdc', required: true, description: 'Price in USDC' },
       { name: 'description', required: true, description: 'Buyer-facing summary' }
     ]
-  },
-  {
-    name: 'purchase_soul',
-    description: 'Legacy alias for purchase_asset',
-    arguments: [
-      { name: 'soul_id', required: true, description: 'Legacy alias for asset_id' },
-      { name: 'wallet_address', required: true, description: 'Buyer wallet address' }
-    ]
-  },
-  {
-    name: 'redownload_soul',
-    description: 'Legacy alias for redownload_asset',
-    arguments: [
-      { name: 'soul_id', required: true, description: 'Legacy alias for asset_id' },
-      { name: 'wallet_address', required: true, description: 'Buyer wallet address' },
-      {
-        name: 'purchase_receipt',
-        required: true,
-        description: 'Saved X-PURCHASE-RECEIPT value'
-      }
-    ]
   }
 ];
 
@@ -197,7 +156,7 @@ export function getMcpPromptsList() {
 
 function resolvePromptAssetId(args = {}) {
   const parsedArgs = args && typeof args === 'object' ? args : {};
-  return String(parsedArgs.asset_id || parsedArgs.soul_id || '<asset_id>');
+  return String(parsedArgs.asset_id || '<asset_id>');
 }
 
 export function getMcpPrompt(name, args = {}) {
@@ -205,7 +164,7 @@ export function getMcpPrompt(name, args = {}) {
   const parsedArgs = args && typeof args === 'object' ? args : {};
   const wallet = String(parsedArgs.wallet_address || '<wallet_address>');
 
-  if (promptName === 'purchase_asset' || promptName === 'purchase_soul') {
+  if (promptName === 'purchase_asset') {
     const assetId = resolvePromptAssetId(parsedArgs);
     return {
       name: promptName,
@@ -230,7 +189,7 @@ export function getMcpPrompt(name, args = {}) {
     };
   }
 
-  if (promptName === 'redownload_asset' || promptName === 'redownload_soul') {
+  if (promptName === 'redownload_asset') {
     const assetId = resolvePromptAssetId(parsedArgs);
     return {
       name: promptName,

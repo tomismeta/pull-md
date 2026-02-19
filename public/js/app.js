@@ -598,13 +598,7 @@ async function getExpectedSellerAddressForSoul(soulId) {
   return getSellerGuardHelper().resolveExpectedSellerAddress({
     soulId,
     cache: sellerAddressCache,
-    fetchSoulDetails: async (id) => {
-      try {
-        return await toolCall('get_asset_details', { id });
-      } catch (_) {
-        return toolCall('get_soul_details', { id });
-      }
-    }
+    fetchSoulDetails: async (id) => toolCall('get_asset_details', { id })
   });
 }
 

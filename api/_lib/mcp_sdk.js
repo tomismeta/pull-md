@@ -58,7 +58,7 @@ function walletFromToolArgs(args) {
 
 function assetIdFromToolArgs(args) {
   const parsed = args && typeof args === 'object' ? args : {};
-  const value = parsed.asset_id || parsed.soul_id || parsed.id;
+  const value = parsed.asset_id || parsed.id;
   return typeof value === 'string' ? value : null;
 }
 

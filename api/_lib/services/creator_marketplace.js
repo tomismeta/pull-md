@@ -149,7 +149,7 @@ function ensureAction(action) {
   return normalized;
 }
 
-const AUTO_GENERATED_FIELDS = ['asset_id', 'soul_id', 'asset_type', 'file_name', 'share_path', 'seller_address'];
+const AUTO_GENERATED_FIELDS = ['asset_id', 'asset_type', 'file_name', 'share_path', 'seller_address'];
 const CREATOR_PROVIDED_FIELDS = ['name', 'description', 'price_usdc', 'content_markdown'];
 const DEFAULT_WINDOW_HOURS = 24;
 const DEFAULT_ROW_LIMIT = 10;
@@ -218,7 +218,7 @@ export async function executeCreatorMarketplaceAction({
     return {
       template: getMarketplaceDraftTemplate(),
       notes: [
-        'Immediate publish workflow: name, price_usdc, description, content_markdown (soul_markdown accepted as alias).',
+        'Immediate publish workflow: name, price_usdc, description, content_markdown.',
         'No drafts, no approval queue, no publish state transitions.',
         'Successful publish returns a shareable asset page URL.'
       ]
@@ -320,8 +320,7 @@ export async function executeCreatorMarketplaceAction({
 
     const listing = withShareUrl(baseUrl, result.listing);
     const listingCreated = {
-      asset_id: listing.asset_id || listing.soul_id,
-      soul_id: listing.soul_id,
+      asset_id: listing.asset_id,
       auto_generated: AUTO_GENERATED_FIELDS,
       creator_provided: CREATOR_PROVIDED_FIELDS
     };
@@ -332,7 +331,7 @@ export async function executeCreatorMarketplaceAction({
       eventType: 'creator.publish_success',
       action: normalizedAction,
       walletAddress: auth.wallet,
-      assetId: listing.asset_id || listing.soul_id,
+      assetId: listing.asset_id,
       assetType: listing.asset_type || null,
       success: true,
       statusCode: 200,
@@ -349,7 +348,7 @@ export async function executeCreatorMarketplaceAction({
       auto_generated: AUTO_GENERATED_FIELDS,
       creator_provided: CREATOR_PROVIDED_FIELDS,
       share_url: listing.share_url,
-      purchase_endpoint: `/api/assets/${listing.asset_id || listing.soul_id}/download`,
+      purchase_endpoint: `/api/assets/${listing.asset_id}/download`,
       warnings: result.warnings || [],
       storage_warning: marketplaceStorageWarning()
     };
@@ -470,12 +469,12 @@ export async function executeCreatorMarketplaceAction({
     if (!moderator.ok) {
       throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
     }
-    const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
+    const assetId = String(requestBody.asset_id || '').trim();
     const reason = typeof requestBody.reason === 'string' ? requestBody.reason : '';
-    if (!soulId) throw new AppError(400, { error: 'Missing required field: asset_id (or soul_id alias)' });
+    if (!assetId) throw new AppError(400, { error: 'Missing required field: asset_id' });
 
     const result = await setListingVisibility({
-      soulId,
+      assetId,
       visibility: 'hidden',
       moderator: moderator.wallet,
       reason
@@ -491,7 +490,7 @@ export async function executeCreatorMarketplaceAction({
       httpMethod: telemetryMethod,
       action: normalizedAction,
       walletAddress: moderator.wallet,
-      assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
+      assetId: result?.listing?.asset_id || assetId,
       success: true,
       statusCode: 200
     });
@@ -506,12 +505,12 @@ export async function executeCreatorMarketplaceAction({
     if (!moderator.ok) {
       throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
     }
-    const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
+    const assetId = String(requestBody.asset_id || '').trim();
     const reason = typeof requestBody.reason === 'string' ? requestBody.reason : '';
-    if (!soulId) throw new AppError(400, { error: 'Missing required field: asset_id (or soul_id alias)' });
+    if (!assetId) throw new AppError(400, { error: 'Missing required field: asset_id' });
 
     const result = await setListingVisibility({
-      soulId,
+      assetId,
       visibility: 'public',
       moderator: moderator.wallet,
       reason
@@ -527,7 +526,7 @@ export async function executeCreatorMarketplaceAction({
       httpMethod: telemetryMethod,
       action: normalizedAction,
       walletAddress: moderator.wallet,
-      assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
+      assetId: result?.listing?.asset_id || assetId,
       success: true,
       statusCode: 200
     });
@@ -542,17 +541,17 @@ export async function executeCreatorMarketplaceAction({
     if (!moderator.ok) {
       throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
     }
-    const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
+    const assetId = String(requestBody.asset_id || '').trim();
     const listingPayload =
       requestBody.listing && typeof requestBody.listing === 'object'
         ? requestBody.listing
         : requestBody.update && typeof requestBody.update === 'object'
           ? requestBody.update
           : requestBody;
-    if (!soulId) throw new AppError(400, { error: 'Missing required field: asset_id (or soul_id alias)' });
+    if (!assetId) throw new AppError(400, { error: 'Missing required field: asset_id' });
 
     const result = await updatePublishedListingByModerator({
-      soulId,
+      assetId,
       updates: listingPayload,
       moderator: moderator.wallet
     });
@@ -574,7 +573,7 @@ export async function executeCreatorMarketplaceAction({
       httpMethod: telemetryMethod,
       action: normalizedAction,
       walletAddress: moderator.wallet,
-      assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
+      assetId: result?.listing?.asset_id || assetId,
       assetType: result?.listing?.asset_type || null,
       success: true,
       statusCode: 200
@@ -591,12 +590,12 @@ export async function executeCreatorMarketplaceAction({
     if (!moderator.ok) {
       throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
     }
-    const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
+    const assetId = String(requestBody.asset_id || '').trim();
     const reason = typeof requestBody.reason === 'string' ? requestBody.reason : '';
-    if (!soulId) throw new AppError(400, { error: 'Missing required field: asset_id (or soul_id alias)' });
+    if (!assetId) throw new AppError(400, { error: 'Missing required field: asset_id' });
 
     const result = await deletePublishedListingByModerator({
-      soulId,
+      assetId,
       moderator: moderator.wallet,
       reason
     });
@@ -611,7 +610,7 @@ export async function executeCreatorMarketplaceAction({
       httpMethod: telemetryMethod,
       action: normalizedAction,
       walletAddress: moderator.wallet,
-      assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
+      assetId: result?.listing?.asset_id || assetId,
       success: true,
       statusCode: 200
     });

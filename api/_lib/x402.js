@@ -865,8 +865,7 @@ function routeConfigForAsset({ assetId, asset, sellerAddress, assetTransferMetho
       body: {
         error: 'Payment required',
         message: `x402 payment required to download ${assetId}`,
-        asset_id: assetId,
-        soul_id: assetId
+        asset_id: assetId
       }
     })
   };

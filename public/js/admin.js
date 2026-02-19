@@ -42,13 +42,12 @@ function applyListingFilters(items) {
     const haystack = normalizeSearchText(
       [
         item?.asset_id,
-        item?.soul_id,
         item?.name,
         item?.description,
         item?.wallet_address,
         item?.seller_address,
         item?.category,
-        item?.soul_type,
+        item?.asset_profile,
         ...(Array.isArray(item?.tags) ? item.tags : [])
       ]
         .filter(Boolean)
@@ -572,18 +571,18 @@ function renderVisible(items) {
       (item) => `
         <article class="admin-card">
           <div class="admin-card-row">
-            <h4>${escapeHtml(item.name || item.soul_id)}</h4>
+            <h4>${escapeHtml(item.name || item.asset_id)}</h4>
             <span class="badge badge-organic">public</span>
           </div>
-          <p class="admin-line">asset_id: <code>${escapeHtml(item.asset_id || item.soul_id || '-')}</code></p>
+          <p class="admin-line">asset_id: <code>${escapeHtml(item.asset_id || '-')}</code></p>
           <p class="admin-line">creator: <code>${escapeHtml(item.wallet_address || '-')}</code></p>
           <p class="admin-line">type: <code>${escapeHtml(String(item.asset_type || 'soul').toUpperCase())}</code></p>
           <p class="admin-line">published: <code>${escapeHtml(formatDate(item.published_at))}</code></p>
           <div class="admin-card-actions">
             ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
-            <button class="btn btn-ghost" data-action="edit-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">edit</button>
-            <button class="btn btn-primary" data-action="hide-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">remove visibility</button>
-            <button class="btn btn-ghost btn-danger" data-action="delete-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">delete</button>
+            <button class="btn btn-ghost" data-action="edit-listing" data-asset="${escapeHtml(item.asset_id)}">edit</button>
+            <button class="btn btn-primary" data-action="hide-listing" data-asset="${escapeHtml(item.asset_id)}">remove visibility</button>
+            <button class="btn btn-ghost btn-danger" data-action="delete-listing" data-asset="${escapeHtml(item.asset_id)}">delete</button>
           </div>
         </article>
       `
@@ -603,19 +602,19 @@ function renderHidden(items) {
       (item) => `
         <article class="admin-card">
           <div class="admin-card-row">
-            <h4>${escapeHtml(item.name || item.soul_id)}</h4>
+            <h4>${escapeHtml(item.name || item.asset_id)}</h4>
             <span class="badge badge-hybrid">hidden</span>
           </div>
-          <p class="admin-line">asset_id: <code>${escapeHtml(item.asset_id || item.soul_id || '-')}</code></p>
+          <p class="admin-line">asset_id: <code>${escapeHtml(item.asset_id || '-')}</code></p>
           <p class="admin-line">type: <code>${escapeHtml(String(item.asset_type || 'soul').toUpperCase())}</code></p>
           <p class="admin-line">hidden_by: <code>${escapeHtml(item.hidden_by || '-')}</code></p>
           <p class="admin-line">hidden_at: <code>${escapeHtml(formatDate(item.hidden_at))}</code></p>
           <p class="admin-line">reason: <code>${escapeHtml(item.hidden_reason || '-')}</code></p>
           <div class="admin-card-actions">
             ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
-            <button class="btn btn-ghost" data-action="edit-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">edit</button>
-            <button class="btn btn-primary" data-action="restore-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">restore visibility</button>
-            <button class="btn btn-ghost btn-danger" data-action="delete-listing" data-soul="${escapeHtml(item.asset_id || item.soul_id)}">delete</button>
+            <button class="btn btn-ghost" data-action="edit-listing" data-asset="${escapeHtml(item.asset_id)}">edit</button>
+            <button class="btn btn-primary" data-action="restore-listing" data-asset="${escapeHtml(item.asset_id)}">restore visibility</button>
+            <button class="btn btn-ghost btn-danger" data-action="delete-listing" data-asset="${escapeHtml(item.asset_id)}">delete</button>
           </div>
         </article>
       `
@@ -870,48 +869,46 @@ async function loadModerationListings() {
   renderListings();
 }
 
-async function hideListing(soulId) {
+async function hideListing(assetId) {
   await requireAllowedModerator();
   const reason = window.prompt('Optional reason for removal from public visibility:', '') || '';
   await apiCall('remove_listing_visibility', {
     method: 'POST',
     moderatorAuth: true,
-    body: { soul_id: soulId, reason }
+    body: { asset_id: assetId, reason }
   });
 }
 
-async function restoreListing(soulId) {
+async function restoreListing(assetId) {
   await requireAllowedModerator();
   const reason = window.prompt('Optional reason for restoring visibility:', '') || '';
   await apiCall('restore_listing_visibility', {
     method: 'POST',
     moderatorAuth: true,
-    body: { soul_id: soulId, reason }
+    body: { asset_id: assetId, reason }
   });
 }
 
-async function deleteListing(soulId) {
+async function deleteListing(assetId) {
   await requireAllowedModerator();
-  const confirmText = window.prompt(`Type "${soulId}" to permanently delete this listing:`, '');
-  if (String(confirmText || '').trim() !== soulId) return false;
+  const confirmText = window.prompt(`Type "${assetId}" to permanently delete this listing:`, '');
+  if (String(confirmText || '').trim() !== assetId) return false;
   const reason = window.prompt('Optional deletion reason for audit trail:', '') || '';
   await apiCall('delete_listing', {
     method: 'POST',
     moderatorAuth: true,
-    body: { soul_id: soulId, reason }
+    body: { asset_id: assetId, reason }
   });
   return true;
 }
 
-function findListingById(soulId) {
-  const id = String(soulId || '').trim();
-  return [...state.visibleListings, ...state.hiddenListings].find(
-    (item) => String(item?.asset_id || item?.soul_id || '').trim() === id
-  );
+function findListingById(assetId) {
+  const id = String(assetId || '').trim();
+  return [...state.visibleListings, ...state.hiddenListings].find((item) => String(item?.asset_id || '').trim() === id);
 }
 
-function openEditListingModal(soulId) {
-  const item = findListingById(soulId);
+function openEditListingModal(assetId) {
+  const item = findListingById(assetId);
   if (!item) throw new Error('Listing not found');
   const setValue = (id, value) => {
     const el = document.getElementById(id);
@@ -919,7 +916,7 @@ function openEditListingModal(soulId) {
     el.value = value == null ? '' : String(value);
   };
 
-  setValue('editAssetId', item.asset_id || item.soul_id || '');
+  setValue('editAssetId', item.asset_id || '');
   setValue('editAssetType', item.asset_type || 'soul');
   setValue('editFileName', item.file_name || (String(item.asset_type || 'soul') === 'skill' ? 'SKILL.md' : 'SOUL.md'));
   setValue('editName', item.name || '');
@@ -927,12 +924,12 @@ function openEditListingModal(soulId) {
   setValue('editPriceUsdc', item.price_usdc ?? '');
   setValue('editSellerAddress', item.seller_address || '');
   setValue('editCategory', item.category || '');
-  setValue('editSoulType', item.soul_type || 'hybrid');
+  setValue('editSoulType', item.asset_profile || 'hybrid');
   setValue('editIcon', item.icon || '');
   setValue('editTags', Array.isArray(item.tags) ? item.tags.join(', ') : '');
   setValue('editSourceUrl', item.source_url || '');
   setValue('editSourceLabel', item.source_label || '');
-  setValue('editContentMarkdown', item.content_markdown || item.soul_markdown || '');
+  setValue('editContentMarkdown', item.content_markdown || '');
   getUiShell().openModal('editListingModal');
 }
 
@@ -951,7 +948,7 @@ function buildListingPayloadFromEditForm() {
   return {
     asset_id: read('editAssetId'),
     listing: {
-      soul_id: read('editAssetId'),
+      asset_id: read('editAssetId'),
       asset_type: read('editAssetType') || 'soul',
       file_name: read('editFileName'),
       name: read('editName'),
@@ -959,7 +956,7 @@ function buildListingPayloadFromEditForm() {
       price_usdc: Number.isFinite(price) ? price : null,
       seller_address: read('editSellerAddress'),
       category: read('editCategory'),
-      soul_type: read('editSoulType') || 'hybrid',
+      asset_profile: read('editSoulType') || 'hybrid',
       icon: read('editIcon'),
       tags,
       source_url: read('editSourceUrl') || null,
@@ -1152,29 +1149,29 @@ function bindEvents() {
     if (!(target instanceof HTMLElement)) return;
     const action = target.getAttribute('data-action');
     if (!action) return;
-    const soulId = target.getAttribute('data-soul');
-    if (!soulId) return;
+    const assetId = target.getAttribute('data-asset');
+    if (!assetId) return;
     if (action !== 'hide-listing' && action !== 'restore-listing' && action !== 'delete-listing' && action !== 'edit-listing') {
       return;
     }
     if (action !== 'edit-listing') target.setAttribute('disabled', 'true');
     try {
       if (action === 'hide-listing') {
-        await hideListing(soulId);
+        await hideListing(assetId);
         showToast('Listing removed from public visibility', 'success');
         await loadModerationListings();
       } else if (action === 'restore-listing') {
-        await restoreListing(soulId);
+        await restoreListing(assetId);
         showToast('Listing restored to public visibility', 'success');
         await loadModerationListings();
       } else if (action === 'delete-listing') {
-        const deleted = await deleteListing(soulId);
+        const deleted = await deleteListing(assetId);
         if (deleted) {
           showToast('Listing permanently deleted', 'success');
           await loadModerationListings();
         }
       } else if (action === 'edit-listing') {
-        openEditListingModal(soulId);
+        openEditListingModal(assetId);
       }
     } catch (error) {
       showToast(error.message, 'error');

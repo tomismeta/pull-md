@@ -1,10 +1,7 @@
 import {
   assetIdsResolved,
   getAssetResolved,
-  getSoulResolved,
-  listAssetsResolved,
-  listSoulsResolved,
-  soulIdsResolved
+  listAssetsResolved
 } from '../catalog.js';
 import { buildSiweAuthMessage, getSellerAddress, verifyPurchaseReceipt } from '../payments.js';
 import { AppError } from '../errors.js';
@@ -43,7 +40,6 @@ export async function listSoulsCatalog({ category } = {}) {
 export function buildMcpListAssetsResponse(assets) {
   return {
     assets,
-    souls: assets,
     count: assets.length,
     meta: {
       agent_friendly: true,
@@ -57,14 +53,9 @@ export function buildMcpListAssetsResponse(assets) {
   };
 }
 
-export function buildMcpListSoulsResponse(souls) {
-  return buildMcpListAssetsResponse(souls);
-}
-
 export function buildPublicAssetsResponse(assets) {
   return {
     assets,
-    souls: assets,
     count: assets.length,
     meta: {
       discovery: 'public_catalog',
@@ -72,19 +63,6 @@ export function buildPublicAssetsResponse(assets) {
       mcp_endpoint: '/mcp',
       mcp_list_tool: 'list_assets',
       enabled_asset_types: [...enabledAssetTypes()],
-      purchase_flow: 'GET /api/assets/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE'
-    }
-  };
-}
-
-export function buildPublicSoulsResponse(souls) {
-  const body = buildPublicAssetsResponse(souls);
-  return {
-    ...body,
-    souls: body.assets,
-    meta: {
-      ...body.meta,
-      mcp_list_tool: 'list_souls',
       purchase_flow: 'GET /api/assets/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE'
     }
   };
@@ -101,8 +79,7 @@ export async function resolveAssetDetails(id) {
     const ids = await assetIdsResolved();
     throw new AppError(404, {
       error: 'Asset not found',
-      available_assets: ids,
-      available_souls: ids
+      available_assets: ids
     });
   }
   const summary = (await listAssetsResolved()).find((item) => item.id === assetId) || null;
@@ -118,16 +95,12 @@ export async function resolveAssetDetails(id) {
   }
 
   const sellerAddress = asset.sellerAddress || getSellerAddress();
-  return { assetId, soulId: assetId, asset, soul: asset, summary, sellerAddress };
+  return { assetId, asset, summary, sellerAddress };
 }
 
-export async function resolveSoulDetails(id) {
-  return resolveAssetDetails(id);
-}
-
-export function buildMcpAssetDetailsResponse({ assetId, soulId, asset, soul, summary, sellerAddress }) {
-  const effectiveAsset = asset || soul || {};
-  const id = String(assetId || soulId || summary?.id || effectiveAsset.id || '').trim();
+export function buildMcpAssetDetailsResponse({ assetId, asset, summary, sellerAddress }) {
+  const effectiveAsset = asset || {};
+  const id = String(assetId || summary?.id || effectiveAsset.id || '').trim();
   const fileName =
     String(summary?.file_name || effectiveAsset.fileName || effectiveAsset.file_name || '').trim() || 'SOUL.md';
   return {
@@ -230,14 +203,6 @@ export function buildMcpAssetDetailsResponse({ assetId, soulId, asset, soul, sum
       ],
       seller_address: sellerAddress
     },
-    soul: {
-      ...summary,
-      long_description: effectiveAsset.longDescription,
-      files: [fileName],
-      purchase_endpoint: `/api/assets/${id}/download`,
-      payment_protocol: 'x402',
-      seller_address: sellerAddress
-    },
     meta: {
       agent_friendly: true,
       purchase_flow: 'x402',
@@ -252,10 +217,6 @@ export function buildMcpAssetDetailsResponse({ assetId, soulId, asset, soul, sum
   };
 }
 
-export function buildMcpSoulDetailsResponse(details) {
-  return buildMcpAssetDetailsResponse(details);
-}
-
 export async function checkReceiptEntitlements({ walletAddress, proofs }) {
   const wallet = String(walletAddress || '').trim().toLowerCase();
   if (!/^0x[a-f0-9]{40}$/i.test(wallet)) {
@@ -266,25 +227,23 @@ export async function checkReceiptEntitlements({ walletAddress, proofs }) {
   if (proofList.length === 0) {
     throw new AppError(400, {
       error: 'Missing proofs',
-      message: 'Provide proofs: [{ asset_id|soul_id, receipt }]'
+      message: 'Provide proofs: [{ asset_id, receipt }]'
     });
   }
 
   const availableAssetIds = await assetIdsResolved();
   const results = await Promise.all(
     proofList.map(async (proof) => {
-      const assetId = String(proof?.asset_id || proof?.soul_id || '');
+      const assetId = String(proof?.asset_id || '');
       const receipt = String(proof?.receipt || '');
 
       const asset = await getAssetResolved(assetId);
       if (!asset) {
         return {
           asset_id: assetId,
-          soul_id: assetId,
           entitled: false,
           reason: 'Unknown asset',
-          available_assets: availableAssetIds,
-          available_souls: availableAssetIds
+          available_assets: availableAssetIds
         };
       }
 
@@ -296,7 +255,6 @@ export async function checkReceiptEntitlements({ walletAddress, proofs }) {
 
       return {
         asset_id: assetId,
-        soul_id: assetId,
         entitled: check.ok,
         reason: check.ok ? null : check.error,
         transaction: check.transaction || null

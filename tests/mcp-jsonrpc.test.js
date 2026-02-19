@@ -97,8 +97,6 @@ test('MCP tools/list exposes expected tool names', async () => {
   const names = (res.body?.result?.tools || []).map((tool) => String(tool?.name || ''));
   assert.ok(names.includes('list_assets'));
   assert.ok(names.includes('get_asset_details'));
-  assert.ok(names.includes('list_souls'));
-  assert.ok(names.includes('get_soul_details'));
   assert.ok(names.includes('get_auth_challenge'));
   assert.ok(names.includes('publish_listing'));
   assert.equal(names.includes('list_moderators'), false);
@@ -115,20 +113,18 @@ test('MCP tools/list exposes expected tool names', async () => {
   assert.ok(listingSchema.required.includes('name'));
   assert.ok(listingSchema.required.includes('description'));
   assert.ok(listingSchema.required.includes('price_usdc'));
-  assert.equal(Array.isArray(listingSchema.anyOf), true);
-  assert.ok(listingSchema.anyOf.some((rule) => Array.isArray(rule?.required) && rule.required.includes('content_markdown')));
-  assert.ok(listingSchema.anyOf.some((rule) => Array.isArray(rule?.required) && rule.required.includes('soul_markdown')));
+  assert.ok(listingSchema.required.includes('content_markdown'));
   assert.equal(publishTool?.inputSchema?.properties?.dry_run?.type, 'boolean');
 });
 
-test('MCP tools/call executes list_souls and returns structured content', async () => {
+test('MCP tools/call executes list_assets and returns structured content', async () => {
   const res = await runMcpRequest({
     body: {
       jsonrpc: '2.0',
       id: 3,
       method: 'tools/call',
       params: {
-        name: 'list_souls',
+        name: 'list_assets',
         arguments: {}
       }
     }
@@ -137,7 +133,7 @@ test('MCP tools/call executes list_souls and returns structured content', async 
   assert.equal(res.body?.jsonrpc, '2.0');
   assert.equal(res.body?.id, 3);
   assert.equal(res.body?.result?.isError, undefined);
-  assert.equal(Array.isArray(res.body?.result?.structuredContent?.souls), true);
+  assert.equal(Array.isArray(res.body?.result?.structuredContent?.assets), true);
 });
 
 test('MCP get_auth_challenge returns SIWE template and timestamp guidance', async () => {
@@ -185,7 +181,7 @@ test('MCP get_auth_challenge returns suggested listing for creator publish actio
   const payload = res.body?.result?.structuredContent || {};
   assert.equal(payload.ok, true);
   assert.equal(typeof payload?.suggested_listing?.name, 'string');
-  assert.equal(typeof payload?.suggested_listing?.soul_markdown, 'string');
+  assert.equal(typeof payload?.suggested_listing?.content_markdown, 'string');
 });
 
 test('MCP tools/call returns tool error payload for unknown tool', async () => {
@@ -229,8 +225,6 @@ test('MCP prompts/list and prompts/get return workflow helpers', async () => {
   const promptNames = (listRes.body?.result?.prompts || []).map((item) => String(item?.name || ''));
   assert.ok(promptNames.includes('purchase_asset'));
   assert.ok(promptNames.includes('redownload_asset'));
-  assert.ok(promptNames.includes('purchase_soul'));
-  assert.ok(promptNames.includes('redownload_soul'));
 
   const getRes = await runMcpRequest({
     body: {

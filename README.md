@@ -1,6 +1,6 @@
 # PULL.md
 
-PULL.md is an agent-focused marketplace for purchasing and re-downloading AI "soul starter" files.
+PULL.md is an agent-focused marketplace for purchasing and re-downloading markdown assets.
 
 ## Current Implementation
 
@@ -45,8 +45,8 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 
 - `GET /api/mcp/manifest`
 - `POST /mcp` (JSON-RPC streamable HTTP endpoint, implemented with `@modelcontextprotocol/sdk`)
-- `POST /mcp` + `tools/call` `name=list_souls`
-- `POST /mcp` + `tools/call` `name=get_soul_details` (`arguments: { "id": "<soul_id>" }`)
+- `POST /mcp` + `tools/call` `name=list_assets`
+- `POST /mcp` + `tools/call` `name=get_asset_details` (`arguments: { "id": "<asset_id>" }`)
 - `POST /mcp` + `tools/call` `name=check_entitlements`
 - `POST /mcp` + `tools/call` `name=get_auth_challenge` (SIWE challenge-first auth helper)
 - `POST /mcp` + `tools/call` `name=get_listing_template`
@@ -69,9 +69,9 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 `get_auth_challenge(flow=creator, action=publish_listing)` includes a `suggested_listing` payload scaffold.
 - No drafts, no approval queue, no intermediate states.
 - Successful publish response includes:
-`soul_id`, `share_url`, and `purchase_endpoint`.
+`asset_id`, `share_url`, and `purchase_endpoint`.
 - Published listings are immediately discoverable in:
-`POST /mcp` `tools/call` `name=list_souls` and purchasable through `GET /api/assets/{id}/download`.
+`POST /mcp` `tools/call` `name=list_assets` and purchasable through `GET /api/assets/{id}/download`.
 - Catalog persistence:
 when `MARKETPLACE_DATABASE_URL` (or `DATABASE_URL`/`POSTGRES_URL`) is configured, published catalog and moderation audit data are stored in Postgres JSONB tables for Vercel-safe durability.
 On Vercel, creator publish requires one of these DB vars. Without DB config, publish now returns `503 marketplace_persistence_unconfigured` to prevent non-durable ghost listings.
@@ -97,19 +97,19 @@ On Vercel, creator publish requires one of these DB vars. Without DB config, pub
 Audit trail:
 - Marketplace moderation actions append immutable JSONL entries at:
 `.marketplace-drafts/review-audit.jsonl`
-- If Postgres is configured, moderation audit events are stored in `soul_marketplace_audit` and published catalog entries are stored in `soul_catalog_entries`.
+- If Postgres is configured, moderation audit events are stored in `asset_marketplace_audit` and published catalog entries are stored in `asset_catalog_entries`.
 - Lightweight moderation UI:
 `/admin.html` (requires connected wallet in moderator allowlist; action requests are signed per call).
 - Moderation scope:
 remove listing visibility only (`remove_listing_visibility`). No approval/publish queue workflow.
 - Creator UI:
-`/create.html` (wallet-authenticated immediate publish with share-link output + list of creator-owned published souls).
+`/create.html` (wallet-authenticated immediate publish with share-link output + list of creator-owned published assets).
 
 ## Environment Variables
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `SELLER_ADDRESS` | yes | Recipient wallet for soul purchases |
+| `SELLER_ADDRESS` | yes | Recipient wallet for asset purchases |
 | `PURCHASE_RECEIPT_SECRET` | yes | HMAC secret for signed re-download receipts |
 | `CDP_API_KEY_ID` | required for Base mainnet | CDP Secret API key ID used for facilitator JWT auth |
 | `CDP_API_KEY_SECRET` | required for Base mainnet | CDP Secret API key secret (multiline supported) |
@@ -243,8 +243,8 @@ const result = await callTool({
 ```
 
 Multi-spend guardrails:
-- In-flight settlement submissions are idempotent by payer+soul+nonce to reduce duplicate settlement attempts.
-- Recent successful entitlements are cached server-side and short-circuit future paid retries for that wallet+soul.
+- In-flight settlement submissions are idempotent by payer+asset+nonce to reduce duplicate settlement attempts.
+- Recent successful entitlements are cached server-side and short-circuit future paid retries for that wallet+asset.
 
 Anti-address-poisoning guardrails:
 - Verify full `PAYMENT-REQUIRED.accepts[0].payTo` against trusted seller metadata before signing.
@@ -297,7 +297,7 @@ Open `http://localhost:3000`.
 WebMCP discovery metadata is published in:
 
 - `/public/index.html`
-- `/public/soul.html`
+- `/public/asset.html`
 
 and points to `/api/mcp/manifest`.
 

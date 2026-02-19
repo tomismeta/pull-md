@@ -7,7 +7,7 @@ This document describes the exact agent-facing contract implemented by PULL.md.
 Agents should discover capabilities through:
 
 - `GET /api/mcp/manifest`
-- `mcp:*` meta tags in `/public/index.html` and `/public/soul.html`
+- `mcp:*` meta tags in `/public/index.html` and `/public/asset.html`
 
 Canonical production host:
 
@@ -34,17 +34,17 @@ Tool invocation contract:
 - JSON-RPC method: `tools/call`
 - Params: `{ "name": "<tool_name>", "arguments": { ... } }`
 
-1. `name=list_souls`
+1. `name=list_assets`
 - Lists available souls and pricing metadata.
 - Returns DB-backed published listings by default.
 - Bundled static souls are returned only when `ENABLE_BUNDLED_SOULS=1`.
 
-2. `name=get_soul_details` with `arguments.id=<soul_id>`
+2. `name=get_asset_details` with `arguments.id=<asset_id>`
 - Returns detailed metadata and endpoint usage details for one soul.
 
 3. `name=check_entitlements`
 - Verifies receipt proof(s) for re-download:
-`{ wallet_address, proofs: [{ soul_id, receipt }] }`
+`{ wallet_address, proofs: [{ asset_id, receipt }] }`
 
 4. `name=get_auth_challenge`
 - Returns SIWE message template + exact timestamp requirements for:
@@ -84,7 +84,7 @@ Tool invocation contract:
 - Headers:
 `X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
 - Body:
-`{ soul_id, reason? }`
+`{ asset_id, reason? }`
 - Hides listing from public discovery/purchase without draft state transitions.
 
 UI companion:
@@ -102,8 +102,8 @@ UI companion:
 
 - `POST /mcp` method `prompts/list` exposes built-in workflow prompts.
 - `POST /mcp` method `prompts/get` supports:
-  - `purchase_soul`
-  - `redownload_soul`
+  - `purchase_asset`
+  - `redownload_asset`
   - `publish_listing`
 - `POST /mcp` method `resources/list` exposes canonical `pullmd://` URIs.
 - `POST /mcp` method `resources/read` reads:
@@ -111,7 +111,6 @@ UI companion:
   - `pullmd://docs/webmcp`
   - `pullmd://assets`
   - `pullmd://assets/{id}`
-- Legacy soul aliases are available via `pullmd://souls` and `pullmd://souls/{id}`.
 - Response streaming: currently non-streaming responses over Streamable HTTP.
 - Sampling: not supported in this deployment.
 
@@ -249,7 +248,7 @@ Only the PULL.md server needs facilitator credentials.
 ### Headless Agent Quickstart (Redacted)
 
 Use placeholders only:
-- `<SOUL_ID>`
+- `<ASSET_ID>`
 - `<WALLET_ADDRESS>`
 - `<UNIX_MS>`
 - `<PURCHASE_RECEIPT>`
@@ -259,7 +258,7 @@ Use placeholders only:
 `GET /api/mcp/manifest`
 
 2. Get paywall:
-`GET /api/assets/<SOUL_ID>/download`
+`GET /api/assets/<ASSET_ID>/download`
 headers:
 - `X-CLIENT-MODE: agent`
 - `X-WALLET-ADDRESS: <WALLET_ADDRESS>` (wallet binding for strict flow)
@@ -269,7 +268,7 @@ headers:
    Optional explicit override on request: `X-ASSET-TRANSFER-METHOD: eip3009|permit2`.
 
 4. Submit paid retry:
-`GET /api/assets/<SOUL_ID>/download`
+`GET /api/assets/<ASSET_ID>/download`
 headers:
 - `X-CLIENT-MODE: agent`
 - `X-WALLET-ADDRESS: <WALLET_ADDRESS>`
@@ -292,13 +291,13 @@ Chain ID: 8453
 Nonce: <deterministic_nonce>
 Issued At: <iso_timestamp>
 Expiration Time: <iso_timestamp_plus_5m>
-Request ID: redownload:<SOUL_ID>
+Request ID: redownload:<ASSET_ID>
 Resources:
 - urn:pullmd:action:redownload
-- urn:pullmd:soul:<SOUL_ID>
+- urn:pullmd:asset:<ASSET_ID>
 ```
 Then call:
-`GET /api/assets/<SOUL_ID>/download`
+`GET /api/assets/<ASSET_ID>/download`
 headers:
 - `X-CLIENT-MODE: agent`
 - `X-WALLET-ADDRESS: <WALLET_ADDRESS>`
@@ -317,9 +316,9 @@ Required base headers:
 - `X-REDOWNLOAD-TIMESTAMP`
 
 This receipt + signature challenge set is the strict canonical flow for headless agents.
-If receipt is valid for wallet+soul, response is `200` with soul file.
+If receipt is valid for wallet+asset, response is `200` with soul file.
 If re-download headers are present, server prioritizes entitlement delivery over purchase processing, even if a payment header is also present.
-Treat `X-PURCHASE-RECEIPT` as sensitive proof material; keep it in secure storage keyed by wallet+soul.
+Treat `X-PURCHASE-RECEIPT` as sensitive proof material; keep it in secure storage keyed by wallet+asset.
 
 Strict agent mode rules:
 - `X-CLIENT-MODE: agent` disables browser recovery branches.
@@ -366,7 +365,7 @@ Expiration Time: <iso_timestamp_plus_5m>
 Request ID: session:*
 Resources:
 - urn:pullmd:action:session
-- urn:pullmd:soul:*
+- urn:pullmd:asset:*
 ```
 
 Success response includes:
@@ -449,10 +448,10 @@ Chain ID: 8453
 Nonce: <deterministic_nonce>
 Issued At: <iso_timestamp>
 Expiration Time: <iso_timestamp_plus_5m>
-Request ID: redownload:<soul_id>
+Request ID: redownload:<asset_id>
 Resources:
 - urn:pullmd:action:redownload
-- urn:pullmd:soul:<soul_id>
+- urn:pullmd:asset:<asset_id>
 ```
 
 ## Creator Publish Auth Message

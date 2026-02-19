@@ -234,7 +234,7 @@ function toAssetSummary(asset) {
   const sellerAddress = String(asset.sellerAddress || asset.seller_address || '').trim() || null;
   const creatorWallet = String(asset.publishedBy || asset.wallet_address || '').trim() || null;
   const previewFromMarkdown = String(
-    asset.contentInline || asset.content_markdown || asset.soul_markdown || ''
+    asset.contentInline || asset.content_markdown || ''
   )
     .split('\n')
     .map((line) => line.trim())
@@ -244,7 +244,6 @@ function toAssetSummary(asset) {
   return {
     id: asset.id,
     asset_id: asset.id,
-    soul_id: asset.id,
     asset_type: assetType,
     file_name: fileName,
     name: asset.name,

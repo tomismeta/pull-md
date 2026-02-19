@@ -299,7 +299,7 @@ function collectListing() {
   const description = document.getElementById('description')?.value.trim() || '';
   const price = Number(document.getElementById('priceUsdc')?.value);
   const assetType = String(document.getElementById('assetType')?.value || 'soul').trim().toLowerCase();
-  const soulMarkdown = document.getElementById('soulMarkdown')?.value || '';
+  const contentMarkdown = document.getElementById('soulMarkdown')?.value || '';
   const fileName = assetType === 'skill' ? 'SKILL.md' : 'SOUL.md';
   return {
     asset_type: assetType,
@@ -307,7 +307,7 @@ function collectListing() {
     name,
     price_usdc: Number.isFinite(price) ? price : 0,
     description,
-    content_markdown: soulMarkdown
+    content_markdown: contentMarkdown
   };
 }
 
@@ -318,7 +318,7 @@ function applyTemplate(template) {
     .toLowerCase();
   const normalizedType = assetType === 'skill' ? 'skill' : 'soul';
   const fileName = normalizedType === 'skill' ? 'SKILL.md' : 'SOUL.md';
-  const rawTemplateBody = normalizeTemplateMarkdown(payload.content_markdown || payload.soul_markdown || '').trim();
+  const rawTemplateBody = normalizeTemplateMarkdown(payload.content_markdown || '').trim();
   const soulTemplate = `# SOUL.md
 
 ## Core Principles
@@ -428,7 +428,7 @@ function renderPublishedList(items) {
     .map((item) => {
       const visibility = String(item.visibility || 'public');
       const shareUrl = String(item.share_url || '');
-      const assetId = String(item.asset_id || item.soul_id || '').trim();
+      const assetId = String(item.asset_id || '').trim();
       const type = String(item.asset_type || 'asset').toLowerCase();
       const fileName = String(item.file_name || 'ASSET.md').trim() || 'ASSET.md';
       const creator = shortenAddress(item.wallet_address || STATE.wallet || '');
@@ -466,7 +466,7 @@ function renderPublishedList(items) {
 }
 
 function getSoulGlyph(item) {
-  const name = String(item?.name || item?.asset_id || item?.soul_id || 'Asset').trim();
+  const name = String(item?.name || item?.asset_id || 'Asset').trim();
   const clean = name.replace(/[^a-zA-Z0-9 ]/g, '');
   const parts = clean.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
@@ -537,7 +537,7 @@ async function publishNow() {
     }
   });
   setOutput(payload);
-  toast(`Published ${payload?.listing?.asset_id || payload?.listing?.soul_id || 'listing'} successfully.`, 'success');
+  toast(`Published ${payload?.listing?.asset_id || 'listing'} successfully.`, 'success');
   toast('Asset published', 'success');
 }
 
