@@ -8,7 +8,7 @@ import {
   normalizeAssetTransferMethod,
   resolveAssetTransferMethodForRequest,
   validatePaymentPayloadContract
-} from '../api/souls/[id]/download.js';
+} from '../api/assets/[id]/download.js';
 
 const BASE_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const SELLER = '0x7F46aCB709cd8DF5879F84915CA431fB740989E4';
@@ -224,4 +224,3 @@ test('validatePaymentPayloadContract rejects signer mismatch for eip3009', async
   assert.equal(result.ok, false);
   assert.equal(result.code, 'signature_authorizer_mismatch');
 });
-

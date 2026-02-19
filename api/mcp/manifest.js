@@ -148,7 +148,7 @@ export default function handler(req, res) {
         'pullmd://assets/<id>',
         'pullmd://souls',
         'pullmd://souls/<id>',
-        'soulstarter://assets/<id> (legacy alias)'
+        'soulstarter://assets/<id> (URI compatibility alias)'
       ],
       legacy_alias_scheme: 'soulstarter://'
     },
@@ -156,7 +156,6 @@ export default function handler(req, res) {
     download_contract: {
       canonical_base_url: baseUrl,
       endpoint_pattern: '/api/assets/{id}/download',
-      endpoint_pattern_legacy: '/api/souls/{id}/download',
       method: 'GET',
       flow_profiles: {
         headless_agent: {
@@ -171,7 +170,7 @@ export default function handler(req, res) {
         }
       },
       canonical_purchase_flow:
-        'GET /api/assets/{id}/download is the authoritative x402 flow for payment requirements and paid retry. Legacy /api/souls/{id}/download remains supported.',
+        'GET /api/assets/{id}/download is the authoritative x402 flow for payment requirements and paid retry.',
       first_request:
         'No payment headers -> returns 402 + PAYMENT-REQUIRED. Include X-WALLET-ADDRESS on this first request for strict wallet binding and deterministic retries.',
       claim_request: 'Include PAYMENT-SIGNATURE with base64-encoded x402 payload to claim entitlement and download',

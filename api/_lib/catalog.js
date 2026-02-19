@@ -268,7 +268,6 @@ function toAssetSummary(asset) {
     creator_address: creatorWallet ? creatorWallet.toLowerCase() : (sellerAddress ? sellerAddress.toLowerCase() : null),
     share_path: sharePath,
     purchase_endpoint: `/api/assets/${asset.id}/download`,
-    purchase_endpoint_legacy: `/api/souls/${asset.id}/download`,
     payment_protocol: 'x402',
     delivery: {
       mime_type: 'text/markdown',

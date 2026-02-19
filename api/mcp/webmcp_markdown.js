@@ -77,7 +77,6 @@ function renderWebmcpMarkdown(manifest) {
     '- MCP transport: `POST /mcp`',
     '- Public catalog: `GET /api/assets`',
     '- Purchase + re-download runtime: `GET /api/assets/{id}/download`',
-    '- Legacy runtime alias: `GET /api/souls/{id}/download`',
     '',
     '## Identity',
     `- Name: ${escapeCell(manifest?.name || '')}`,

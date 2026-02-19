@@ -29,7 +29,7 @@ function makePaymentRequired({ accepts }) {
     x402Version: 2,
     error: 'Payment required',
     resource: {
-      url: 'https://soulstarter.vercel.app/api/souls/the-rock-v1/download',
+      url: 'https://soulstarter.vercel.app/api/assets/the-rock-v1/download',
       description: 'Soul purchase for the-rock-v1',
       mimeType: 'text/markdown'
     },
@@ -94,7 +94,7 @@ test('x402 SDK fetch wrapper performs 402 -> sign -> retry and preserves settlem
     schemes: [{ network: 'eip155:*', client: new ExactEvmScheme(signer) }]
   });
 
-  const response = await paidFetch('https://soulstarter.vercel.app/api/souls/the-rock-v1/download', {
+  const response = await paidFetch('https://soulstarter.vercel.app/api/assets/the-rock-v1/download', {
     method: 'GET',
     headers: {
       'X-WALLET-ADDRESS': wallet.address.toLowerCase(),
@@ -159,7 +159,7 @@ test('x402 SDK selector enforces eip3009 default when multiple methods are offer
     }
   });
 
-  const response = await paidFetch('https://soulstarter.vercel.app/api/souls/the-rock-v1/download', {
+  const response = await paidFetch('https://soulstarter.vercel.app/api/assets/the-rock-v1/download', {
     method: 'GET',
     headers: {
       'X-WALLET-ADDRESS': wallet.address.toLowerCase()
@@ -171,4 +171,3 @@ test('x402 SDK selector enforces eip3009 default when multiple methods are offer
   const paymentPayload = decodePaymentSignatureHeader(calls[1].headers.get('PAYMENT-SIGNATURE'));
   assert.equal(paymentPayload.accepted?.extra?.assetTransferMethod, 'eip3009');
 });
-

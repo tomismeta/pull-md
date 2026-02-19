@@ -186,7 +186,6 @@ function buildAuthChallengePayload(args = {}, context = {}) {
     authMessage = buildSiweAuthMessage({ wallet, soulId: assetId, action, timestamp: timestampMs, domain: siweDomain, uri: siweUri });
     submitVia = {
       endpoint: `/api/assets/${encodeURIComponent(assetId)}/download`,
-      legacy_endpoint: `/api/souls/${encodeURIComponent(assetId)}/download`,
       method: 'GET',
       required_headers: [
         'X-CLIENT-MODE',
@@ -343,7 +342,7 @@ const MCP_TOOL_REGISTRY = [
       parameters: {
         category: { type: 'string', required: false, description: 'Optional category filter' }
       },
-      returns: { type: 'object', description: 'Soul list with metadata and pricing (legacy alias)' }
+      returns: { type: 'object', description: 'Compatibility alias for list_assets.' }
     },
     async run(args) {
       const category = String(args?.category || '').trim();
@@ -368,7 +367,7 @@ const MCP_TOOL_REGISTRY = [
       parameters: {
         id: { type: 'string', required: true, description: 'Soul identifier' }
       },
-      returns: { type: 'object', description: 'Soul details and x402 interaction contract (legacy alias)' }
+      returns: { type: 'object', description: 'Compatibility alias for get_asset_details.' }
     },
     async run(args) {
       const details = await resolveAssetDetails(args?.id);

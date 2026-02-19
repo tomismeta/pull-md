@@ -350,7 +350,6 @@ export async function executeCreatorMarketplaceAction({
       creator_provided: CREATOR_PROVIDED_FIELDS,
       share_url: listing.share_url,
       purchase_endpoint: `/api/assets/${listing.asset_id || listing.soul_id}/download`,
-      purchase_endpoint_legacy: `/api/souls/${listing.soul_id}/download`,
       warnings: result.warnings || [],
       storage_warning: marketplaceStorageWarning()
     };

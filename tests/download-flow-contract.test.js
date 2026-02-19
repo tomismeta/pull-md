@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { classifyClientMode, classifyRedownloadHeaders } from '../api/souls/[id]/download.js';
+import { classifyClientMode, classifyRedownloadHeaders } from '../api/assets/[id]/download.js';
 
 const WALLET = '0xa7d395faf5e0a77a8d42d68ea01d2336671e5f55';
 

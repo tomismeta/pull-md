@@ -45,7 +45,7 @@ Domain rule:
 Strict headless agent mode requires a live SIWE proof on every re-download call.
 
 1. Call:
-- `GET {base_url}/api/souls/{soul_id}/download`
+- `GET {base_url}/api/assets/{soul_id}/download`
 - Headers:
 `X-CLIENT-MODE: agent`, `X-WALLET-ADDRESS`, `X-PURCHASE-RECEIPT`
 
@@ -60,7 +60,7 @@ Strict headless agent mode requires a live SIWE proof on every re-download call.
 ## 3. Purchase Flow (Strict x402)
 
 1. Request paywall:
-- `GET {base_url}/api/souls/{soul_id}/download` (authoritative endpoint)
+- `GET {base_url}/api/assets/{soul_id}/download` (authoritative endpoint)
 - Expect `402` with `PAYMENT-REQUIRED`.
 
 2. Decode `PAYMENT-REQUIRED` and create x402 payment payload.

@@ -231,7 +231,7 @@ export function getMcpPrompt(name, args = {}) {
               '3) Retry GET /api/assets/{id}/download with PAYMENT-SIGNATURE.',
               '4) Persist X-PURCHASE-RECEIPT from successful 200 response.',
               '5) Treat X-PURCHASE-RECEIPT as wallet-scoped secret proof for re-download. Do not print, publish, or share it.',
-              'Legacy alias endpoint remains available at /api/souls/{id}/download.'
+              'Download endpoint: /api/assets/{id}/download.'
             ].join('\n')
           }
         }

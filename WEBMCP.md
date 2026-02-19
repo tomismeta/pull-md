@@ -151,11 +151,11 @@ const result = await callTool({
 
 ## Download Endpoint
 
-`GET /api/souls/{id}/download`
+`GET /api/assets/{id}/download`
 
 Authoritative purchase flow:
 
-- `GET /api/souls/{id}/download` is the canonical x402 entrypoint.
+- `GET /api/assets/{id}/download` is the canonical x402 entrypoint.
 
 ### Purchase (x402 strict)
 
@@ -228,7 +228,7 @@ Only the PULL.md server needs facilitator credentials.
 
 #### Bankr Self-Orchestrated Flow
 
-1. `GET /api/souls/{id}/download` to receive `402` + `PAYMENT-REQUIRED`.
+1. `GET /api/assets/{id}/download` to receive `402` + `PAYMENT-REQUIRED`.
 2. Decode `PAYMENT-REQUIRED`, copy `accepts[0]` into `accepted` unchanged.
 3. Call Bankr `GET /agent/me` and choose the EVM wallet signer.
 4. Read `accepted.extra.assetTransferMethod` and sign with Bankr `POST /agent/sign`:
@@ -259,7 +259,7 @@ Use placeholders only:
 `GET /api/mcp/manifest`
 
 2. Get paywall:
-`GET /api/souls/<SOUL_ID>/download`
+`GET /api/assets/<SOUL_ID>/download`
 headers:
 - `X-CLIENT-MODE: agent`
 - `X-WALLET-ADDRESS: <WALLET_ADDRESS>` (wallet binding for strict flow)
@@ -269,7 +269,7 @@ headers:
    Optional explicit override on request: `X-ASSET-TRANSFER-METHOD: eip3009|permit2`.
 
 4. Submit paid retry:
-`GET /api/souls/<SOUL_ID>/download`
+`GET /api/assets/<SOUL_ID>/download`
 headers:
 - `X-CLIENT-MODE: agent`
 - `X-WALLET-ADDRESS: <WALLET_ADDRESS>`
@@ -298,7 +298,7 @@ Resources:
 - urn:soulstarter:soul:<SOUL_ID>
 ```
 Then call:
-`GET /api/souls/<SOUL_ID>/download`
+`GET /api/assets/<SOUL_ID>/download`
 headers:
 - `X-CLIENT-MODE: agent`
 - `X-WALLET-ADDRESS: <WALLET_ADDRESS>`
@@ -382,7 +382,7 @@ Purchase still succeeds when a valid paid header is submitted.
 ## Common Error -> Fix (Strict)
 
 - `auth_message_template` in `402`:
-continue purchase flow; submit `PAYMENT-SIGNATURE` on `GET /api/souls/{id}/download`.
+continue purchase flow; submit `PAYMENT-SIGNATURE` on `GET /api/assets/{id}/download`.
 - `No matching payment requirements`:
 your `accepted` object is stale or mutated.
 Refresh `PAYMENT-REQUIRED` and copy `accepts[0]` exactly, unchanged.

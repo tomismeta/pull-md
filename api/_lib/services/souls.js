@@ -85,7 +85,7 @@ export function buildPublicSoulsResponse(souls) {
     meta: {
       ...body.meta,
       mcp_list_tool: 'list_souls',
-      purchase_flow: 'GET /api/souls/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE'
+      purchase_flow: 'GET /api/assets/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE'
     }
   };
 }
@@ -136,7 +136,6 @@ export function buildMcpAssetDetailsResponse({ assetId, soulId, asset, soul, sum
       long_description: effectiveAsset.longDescription,
       files: [fileName],
       purchase_endpoint: `/api/assets/${id}/download`,
-      purchase_endpoint_legacy: `/api/souls/${id}/download`,
       payment_protocol: 'x402',
       auth_headers: {
         purchase: ['PAYMENT-SIGNATURE', 'X-WALLET-ADDRESS', 'X-ASSET-TRANSFER-METHOD'],
@@ -235,7 +234,7 @@ export function buildMcpAssetDetailsResponse({ assetId, soulId, asset, soul, sum
       ...summary,
       long_description: effectiveAsset.longDescription,
       files: [fileName],
-      purchase_endpoint: `/api/souls/${id}/download`,
+      purchase_endpoint: `/api/assets/${id}/download`,
       payment_protocol: 'x402',
       seller_address: sellerAddress
     },

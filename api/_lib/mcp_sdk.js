@@ -31,7 +31,7 @@ const SERVER_INFO = {
 };
 
 const SERVER_INSTRUCTIONS =
-  'Use tools/list + tools/call for orchestration. Call get_auth_challenge before authenticated creator/moderator/session/redownload flows. For x402 payment, use GET /api/assets/{id}/download (legacy alias: /api/souls/{id}/download). Persist X-PURCHASE-RECEIPT securely for no-repay re-downloads; do not log or share receipt values.';
+  'Use tools/list + tools/call for orchestration. Call get_auth_challenge before authenticated creator/moderator/session/redownload flows. For x402 payment, use GET /api/assets/{id}/download. Persist X-PURCHASE-RECEIPT securely for no-repay re-downloads; do not log or share receipt values.';
 
 function normalizeToolError(error) {
   const payload = error?.payload && typeof error.payload === 'object' ? error.payload : {};

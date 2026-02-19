@@ -4,7 +4,7 @@ PULL.md is an agent-focused marketplace for purchasing and re-downloading AI "so
 
 ## Current Implementation
 
-- Strict x402 v2 purchase flow on `GET /api/souls/{id}/download`
+- Strict x402 v2 purchase flow on `GET /api/assets/{id}/download`
 - Required x402 headers for payment flow:
 `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE`
 - Deprecated payment headers (hard-deprecated):
@@ -56,7 +56,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - `POST /mcp` + `tools/call` `name=list_moderation_listings` (moderator wallet auth)
 - `POST /mcp` + `tools/call` `name=remove_listing_visibility` (moderator wallet auth)
 - `POST /mcp` + `tools/call` `name=list_published_listings`
-- `GET /api/souls/{id}/download`
+- `GET /api/assets/{id}/download`
 - `GET /api/auth/session`
 - `GET /api/health/facilitator`
 - `POST /mcp` + `prompts/list` / `prompts/get`
@@ -71,7 +71,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - Successful publish response includes:
 `soul_id`, `share_url`, and `purchase_endpoint`.
 - Published listings are immediately discoverable in:
-`POST /mcp` `tools/call` `name=list_souls` and purchasable through `GET /api/souls/{id}/download`.
+`POST /mcp` `tools/call` `name=list_souls` and purchasable through `GET /api/assets/{id}/download`.
 - Catalog persistence:
 when `MARKETPLACE_DATABASE_URL` (or `DATABASE_URL`/`POSTGRES_URL`) is configured, published catalog and moderation audit data are stored in Postgres JSONB tables for Vercel-safe durability.
 On Vercel, creator publish requires one of these DB vars. Without DB config, publish now returns `503 marketplace_persistence_unconfigured` to prevent non-durable ghost listings.
@@ -185,7 +185,7 @@ If a `402` body contains `auth_message_template`, treat it as optional re-downlo
 It does **not** replace the purchase flow.
 
 Copy-paste guidance on payment errors:
-- When payment verification fails, `GET /api/souls/{id}/download` `402` bodies now include:
+- When payment verification fails, `GET /api/assets/{id}/download` `402` bodies now include:
 `accepted_copy_paste` and `copy_paste_payment_payload`.
 - `402` bodies also include `payment_signing_instructions` with method-specific required/forbidden payload fields and expected EIP-712 primary type.
 - Use `accepted_copy_paste` unchanged as top-level `accepted`.
@@ -257,7 +257,7 @@ Use this as strict error-to-fix mapping:
 
 - `{"auth_message_template": ...}`:
 this is not a purchase rejection; it is helper text for optional re-download auth.
-Keep using purchase flow and submit `PAYMENT-SIGNATURE` to `GET /api/souls/{id}/download`.
+Keep using purchase flow and submit `PAYMENT-SIGNATURE` to `GET /api/assets/{id}/download`.
 - `No matching payment requirements`:
 your submitted `accepted` object did not match the latest `PAYMENT-REQUIRED.accepts[0]`.
 Re-fetch paywall and copy `accepts[0]` exactly (including `maxTimeoutSeconds` and `extra`).
