@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import { AppError } from './errors.js';
 
 const DB_CONN_ENV_KEYS = ['MARKETPLACE_DATABASE_URL', 'DATABASE_URL', 'POSTGRES_URL'];
+const DEFAULT_TELEMETRY_SCHEMA = 'telemetry';
 const METADATA_MAX_BYTES_RAW = Number(process.env.TELEMETRY_METADATA_MAX_BYTES || '12288');
 const METADATA_MAX_BYTES =
   Number.isFinite(METADATA_MAX_BYTES_RAW) && METADATA_MAX_BYTES_RAW >= 1024 ? METADATA_MAX_BYTES_RAW : 12288;
@@ -13,6 +14,7 @@ const MAX_WINDOW_HOURS = 24 * 30;
 const MAX_ROW_LIMIT = 50;
 const HASH_PREFIX_LENGTH = 24;
 const WALLET_RE = /^0x[a-f0-9]{40}$/i;
+const PG_IDENTIFIER_RE = /^[a-z_][a-z0-9_]*$/i;
 const TELEMETRY_DISABLED_VALUES = new Set(['0', 'false', 'off', 'no', 'disabled']);
 
 let dbPool = null;
@@ -65,6 +67,35 @@ function getTelemetryDatabaseUrl() {
   return '';
 }
 
+function quoteIdentifier(value) {
+  return `"${String(value).replace(/"/g, '""')}"`;
+}
+
+export function normalizeTelemetrySchema(raw) {
+  const source = String(raw || '').trim();
+  const candidate = source || DEFAULT_TELEMETRY_SCHEMA;
+  if (!PG_IDENTIFIER_RE.test(candidate)) {
+    return DEFAULT_TELEMETRY_SCHEMA;
+  }
+  return candidate.toLowerCase();
+}
+
+function telemetrySchemaName() {
+  return normalizeTelemetrySchema(process.env.TELEMETRY_DB_SCHEMA);
+}
+
+function telemetryTableRef() {
+  const schema = telemetrySchemaName();
+  return `${quoteIdentifier(schema)}.${quoteIdentifier('marketplace_telemetry_events')}`;
+}
+
+function telemetryIndexName(suffix) {
+  const schema = telemetrySchemaName().replace(/[^a-z0-9_]/g, '').slice(0, 24);
+  const normalizedSuffix = String(suffix || '').replace(/[^a-z0-9_]/gi, '').toLowerCase();
+  const raw = `${schema}_marketplace_telemetry_${normalizedSuffix}`;
+  return quoteIdentifier(raw.slice(0, 63));
+}
+
 export function isTelemetryEnabled() {
   const raw = String(process.env.TELEMETRY_ENABLED || '').trim().toLowerCase();
   if (!raw) return true;
@@ -98,15 +129,19 @@ async function ensureTelemetrySchema() {
   const pool = getTelemetryDbPool();
   if (!pool) return false;
   const dsn = getTelemetryDatabaseUrl();
-  if (dbSchemaReadyPromise && dbSchemaReadyForDsn === dsn) {
+  const schema = telemetrySchemaName();
+  const schemaReadyKey = `${dsn}::${schema}`;
+  if (dbSchemaReadyPromise && dbSchemaReadyForDsn === schemaReadyKey) {
     await dbSchemaReadyPromise;
     return true;
   }
 
-  dbSchemaReadyForDsn = dsn;
+  dbSchemaReadyForDsn = schemaReadyKey;
   dbSchemaReadyPromise = (async () => {
+    const tableRef = telemetryTableRef();
+    await pool.query(`CREATE SCHEMA IF NOT EXISTS ${quoteIdentifier(schema)};`);
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS marketplace_telemetry_events (
+      CREATE TABLE IF NOT EXISTS ${tableRef} (
         id BIGSERIAL PRIMARY KEY,
         occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         event_type TEXT NOT NULL,
@@ -128,25 +163,30 @@ async function ensureTelemetrySchema() {
       );
     `);
     await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_marketplace_telemetry_occurred_at
-      ON marketplace_telemetry_events (occurred_at DESC);
+      CREATE INDEX IF NOT EXISTS ${telemetryIndexName('occurred_at')}
+      ON ${tableRef} (occurred_at DESC);
     `);
     await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_marketplace_telemetry_event_type
-      ON marketplace_telemetry_events (event_type);
+      CREATE INDEX IF NOT EXISTS ${telemetryIndexName('event_type')}
+      ON ${tableRef} (event_type);
     `);
     await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_marketplace_telemetry_tool_name
-      ON marketplace_telemetry_events (tool_name);
+      CREATE INDEX IF NOT EXISTS ${telemetryIndexName('tool_name')}
+      ON ${tableRef} (tool_name);
     `);
     await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_marketplace_telemetry_route
-      ON marketplace_telemetry_events (route);
+      CREATE INDEX IF NOT EXISTS ${telemetryIndexName('route')}
+      ON ${tableRef} (route);
     `);
     await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_marketplace_telemetry_asset_id
-      ON marketplace_telemetry_events (asset_id);
+      CREATE INDEX IF NOT EXISTS ${telemetryIndexName('asset_id')}
+      ON ${tableRef} (asset_id);
     `);
+
+    // User-requested cleanup: drop old public table instead of migrating rows.
+    if (schema !== 'public') {
+      await pool.query(`DROP TABLE IF EXISTS public.marketplace_telemetry_events;`).catch(() => {});
+    }
   })();
 
   await dbSchemaReadyPromise;
@@ -219,9 +259,10 @@ export async function recordTelemetryEvent(event = {}) {
       sanitizeMetadata(event.metadata)
     ];
 
+    const tableRef = telemetryTableRef();
     await pool.query(
       `
-        INSERT INTO marketplace_telemetry_events (
+        INSERT INTO ${tableRef} (
           event_type,
           source,
           route,
@@ -278,6 +319,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
 
   const safeWindowHours = normalizeTelemetryWindowHours(windowHours);
   const safeLimit = normalizeTelemetryRowLimit(rowLimit);
+  const tableRef = telemetryTableRef();
 
   const overviewRes = await pool.query(
     `
@@ -302,7 +344,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
              OR status_code >= 400
              OR event_type LIKE '%.failed'
         )::int AS failed_events
-      FROM marketplace_telemetry_events
+      FROM ${tableRef}
       WHERE occurred_at >= NOW() - make_interval(hours => $1::int);
     `,
     [safeWindowHours]
@@ -316,7 +358,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
         COUNT(*) FILTER (WHERE event_type = 'purchase.settlement_success')::int AS purchases,
         COUNT(*) FILTER (WHERE event_type = 'redownload.success')::int AS redownloads,
         COUNT(*) FILTER (WHERE event_type = 'purchase.paywall_issued')::int AS paywall_views
-      FROM marketplace_telemetry_events
+      FROM ${tableRef}
       WHERE occurred_at >= NOW() - make_interval(hours => $1::int)
         AND asset_id IS NOT NULL
       GROUP BY asset_id
@@ -332,7 +374,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
         tool_name,
         COUNT(*)::int AS calls,
         COUNT(*) FILTER (WHERE success = false OR event_type LIKE '%.failed')::int AS failures
-      FROM marketplace_telemetry_events
+      FROM ${tableRef}
       WHERE occurred_at >= NOW() - make_interval(hours => $1::int)
         AND event_type = 'mcp.tool_invocation'
         AND tool_name IS NOT NULL
@@ -350,7 +392,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
         COALESCE(http_method, '-') AS http_method,
         COUNT(*)::int AS hits,
         COUNT(*) FILTER (WHERE success = false OR status_code >= 400)::int AS failures
-      FROM marketplace_telemetry_events
+      FROM ${tableRef}
       WHERE occurred_at >= NOW() - make_interval(hours => $1::int)
         AND route IS NOT NULL
       GROUP BY route, http_method
@@ -372,7 +414,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
         error_code,
         error_message,
         asset_id
-      FROM marketplace_telemetry_events
+      FROM ${tableRef}
       WHERE occurred_at >= NOW() - make_interval(hours => $1::int)
         AND (
           success = false
@@ -394,7 +436,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
         COUNT(*) FILTER (WHERE event_type = 'mcp.tool_invocation')::int AS mcp_tool_calls,
         COUNT(*) FILTER (WHERE event_type = 'purchase.settlement_success')::int AS purchases,
         COUNT(*) FILTER (WHERE event_type = 'redownload.success')::int AS redownloads
-      FROM marketplace_telemetry_events
+      FROM ${tableRef}
       WHERE occurred_at >= NOW() - make_interval(hours => $1::int)
       GROUP BY bucket
       ORDER BY bucket ASC;

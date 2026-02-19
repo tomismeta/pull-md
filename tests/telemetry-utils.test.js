@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isTelemetryEnabled, normalizeTelemetryWindowHours, recordTelemetryEvent } from '../api/_lib/telemetry.js';
+import {
+  isTelemetryEnabled,
+  normalizeTelemetrySchema,
+  normalizeTelemetryWindowHours,
+  recordTelemetryEvent
+} from '../api/_lib/telemetry.js';
 
 test('normalizeTelemetryWindowHours clamps to supported bounds', () => {
   assert.equal(normalizeTelemetryWindowHours(undefined), 24);
@@ -9,6 +14,14 @@ test('normalizeTelemetryWindowHours clamps to supported bounds', () => {
   assert.equal(normalizeTelemetryWindowHours('-5'), 1);
   assert.equal(normalizeTelemetryWindowHours('24'), 24);
   assert.equal(normalizeTelemetryWindowHours('9999'), 720);
+});
+
+test('normalizeTelemetrySchema enforces safe postgres identifiers', () => {
+  assert.equal(normalizeTelemetrySchema(undefined), 'telemetry');
+  assert.equal(normalizeTelemetrySchema('TELEMETRY'), 'telemetry');
+  assert.equal(normalizeTelemetrySchema('telemetry_v2'), 'telemetry_v2');
+  assert.equal(normalizeTelemetrySchema('bad-name'), 'telemetry');
+  assert.equal(normalizeTelemetrySchema('public;drop table x'), 'telemetry');
 });
 
 test('recordTelemetryEvent returns unconfigured when no database URL is present', async () => {

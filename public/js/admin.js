@@ -433,6 +433,15 @@ function renderTelemetryEmpty(message) {
   }
 }
 
+function formatBucketLabel(value, windowHours) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  if (windowHours <= 24) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 function renderTelemetryDashboard(data) {
   const overviewEl = document.getElementById('telemetryOverview');
   const topAssetsEl = document.getElementById('telemetryTopAssets');
@@ -444,112 +453,153 @@ function renderTelemetryDashboard(data) {
   if (!overviewEl || !topAssetsEl || !topToolsEl || !routesEl || !errorsEl || !hourlyEl) return;
 
   const overview = data?.overview || {};
+  const errorRate = Number(overview.error_rate || 0);
   const kpis = [
-    { label: 'Events', value: formatCount(overview.total_events) },
-    { label: 'MCP POST', value: formatCount(overview.mcp_post_requests) },
-    { label: 'Tool Calls', value: formatCount(overview.mcp_tool_invocations) },
-    { label: 'Paywalls', value: formatCount(overview.paywall_issued) },
-    { label: 'Purchases', value: formatCount(overview.purchase_successes) },
-    { label: 'Re-downloads', value: formatCount(overview.redownload_successes) },
-    { label: 'Publishes', value: formatCount(overview.publish_successes) },
-    { label: 'Error Rate', value: formatPercent(overview.error_rate) }
+    {
+      label: 'Events',
+      value: formatCount(overview.total_events),
+      helper: `Last ${formatCount(data?.window_hours || state.telemetryWindowHours)}h`
+    },
+    { label: 'MCP POST', value: formatCount(overview.mcp_post_requests), helper: 'Transport requests' },
+    { label: 'Tool Calls', value: formatCount(overview.mcp_tool_invocations), helper: 'tools/call volume' },
+    { label: 'Paywalls', value: formatCount(overview.paywall_issued), helper: '402 responses issued' },
+    { label: 'Purchases', value: formatCount(overview.purchase_successes), helper: 'Successful settlement' },
+    { label: 'Re-downloads', value: formatCount(overview.redownload_successes), helper: 'No-repay deliveries' },
+    { label: 'Publishes', value: formatCount(overview.publish_successes), helper: 'Creator publishes' },
+    {
+      label: 'Error Rate',
+      value: formatPercent(errorRate),
+      helper: `${formatCount(overview.failed_events)} failed events`,
+      tone: errorRate > 0.05 ? 'danger' : errorRate > 0.01 ? 'warning' : 'neutral'
+    }
   ];
 
   overviewEl.innerHTML = kpis
     .map(
       (item) => `
-      <article class="telemetry-kpi">
+      <article class="telemetry-kpi telemetry-kpi-${escapeHtml(item.tone || 'neutral')}">
         <strong>${escapeHtml(item.value)}</strong>
         <span>${escapeHtml(item.label)}</span>
+        <small>${escapeHtml(item.helper || '')}</small>
       </article>
     `
     )
     .join('');
 
+  const renderRankedRows = (rows, options) => {
+    const items = Array.isArray(rows) ? rows : [];
+    if (!items.length) {
+      return `<p class="admin-empty">${escapeHtml(options.emptyMessage)}</p>`;
+    }
+    const scores = items.map((item) => Number(options.score(item) || 0)).filter((n) => Number.isFinite(n));
+    const maxScore = Math.max(...scores, 1);
+    return `
+      <div class="telemetry-stack">
+        ${items
+          .map((item) => {
+            const score = Number(options.score(item) || 0);
+            const width = maxScore > 0 ? Math.max(4, Math.round((score / maxScore) * 100)) : 0;
+            return `
+              <article class="telemetry-row-card">
+                <div class="telemetry-row-head">
+                  <strong>${escapeHtml(options.title(item))}</strong>
+                  <span class="telemetry-row-metric">${escapeHtml(formatCount(score))}</span>
+                </div>
+                <div class="telemetry-bar-track">
+                  <span class="telemetry-bar-fill" style="width:${width}%"></span>
+                </div>
+                <p class="telemetry-row-meta">${escapeHtml(options.meta(item))}</p>
+              </article>
+            `;
+          })
+          .join('')}
+      </div>
+    `;
+  };
+
   const topAssets = Array.isArray(data?.top_assets) ? data.top_assets : [];
-  if (!topAssets.length) {
-    topAssetsEl.innerHTML = '<p class="admin-empty">No asset activity in selected window.</p>';
-  } else {
-    topAssetsEl.innerHTML = topAssets
-      .map(
-        (item) => `
-        <article class="admin-card">
-          <p class="admin-line"><strong>${escapeHtml(item.asset_id || '-')}</strong></p>
-          <p class="admin-line">type: <code>${escapeHtml(String(item.asset_type || 'unknown').toUpperCase())}</code></p>
-          <p class="admin-line">purchases: <code>${escapeHtml(formatCount(item.purchases))}</code></p>
-          <p class="admin-line">re-downloads: <code>${escapeHtml(formatCount(item.redownloads))}</code></p>
-        </article>
-      `
-      )
-      .join('');
-  }
+  topAssetsEl.innerHTML = renderRankedRows(topAssets, {
+    emptyMessage: 'No asset activity in selected window.',
+    score: (item) => Number(item.purchases || 0) + Number(item.redownloads || 0) + Number(item.paywall_views || 0),
+    title: (item) => item.asset_id || '-',
+    meta: (item) =>
+      `type ${String(item.asset_type || 'unknown').toUpperCase()} · purchases ${formatCount(item.purchases)} · re-downloads ${formatCount(
+        item.redownloads
+      )} · paywalls ${formatCount(item.paywall_views)}`
+  });
 
   const topTools = Array.isArray(data?.mcp_tools) ? data.mcp_tools : [];
-  if (!topTools.length) {
-    topToolsEl.innerHTML = '<p class="admin-empty">No MCP tool calls in selected window.</p>';
-  } else {
-    topToolsEl.innerHTML = topTools
-      .map(
-        (item) => `
-        <article class="admin-card">
-          <p class="admin-line"><strong>${escapeHtml(item.tool_name || '-')}</strong></p>
-          <p class="admin-line">calls: <code>${escapeHtml(formatCount(item.calls))}</code></p>
-          <p class="admin-line">failures: <code>${escapeHtml(formatCount(item.failures))}</code></p>
-        </article>
-      `
-      )
-      .join('');
-  }
+  topToolsEl.innerHTML = renderRankedRows(topTools, {
+    emptyMessage: 'No MCP tool calls in selected window.',
+    score: (item) => Number(item.calls || 0),
+    title: (item) => item.tool_name || '-',
+    meta: (item) => `calls ${formatCount(item.calls)} · failures ${formatCount(item.failures)}`
+  });
 
   const routes = Array.isArray(data?.api_routes) ? data.api_routes : [];
-  if (!routes.length) {
-    routesEl.innerHTML = '<p class="admin-empty">No API route traffic in selected window.</p>';
-  } else {
-    routesEl.innerHTML = routes
-      .map(
-        (item) => `
-        <article class="admin-card">
-          <p class="admin-line"><strong>${escapeHtml(item.method || '-')}</strong> <code>${escapeHtml(item.route || '-')}</code></p>
-          <p class="admin-line">hits: <code>${escapeHtml(formatCount(item.hits))}</code></p>
-          <p class="admin-line">failures: <code>${escapeHtml(formatCount(item.failures))}</code></p>
-        </article>
-      `
-      )
-      .join('');
-  }
+  routesEl.innerHTML = renderRankedRows(routes, {
+    emptyMessage: 'No API route traffic in selected window.',
+    score: (item) => Number(item.hits || 0),
+    title: (item) => `${item.method || '-'} ${item.route || '-'}`,
+    meta: (item) => `hits ${formatCount(item.hits)} · failures ${formatCount(item.failures)}`
+  });
 
   const errors = Array.isArray(data?.recent_errors) ? data.recent_errors : [];
   if (!errors.length) {
     errorsEl.innerHTML = '<p class="admin-empty">No recent errors in selected window.</p>';
   } else {
-    errorsEl.innerHTML = errors
-      .map(
-        (item) => `
-        <article class="admin-card">
-          <p class="admin-line"><strong>${escapeHtml(item.event_type || '-')}</strong> · <code>${escapeHtml(formatDate(item.occurred_at))}</code></p>
-          <p class="admin-line">code: <code>${escapeHtml(item.error_code || '-')}</code> status: <code>${escapeHtml(item.status_code || '-')}</code></p>
-          <p class="admin-line">${escapeHtml(item.error_message || 'Unknown error')}</p>
-        </article>
-      `
-      )
-      .join('');
+    errorsEl.innerHTML = `
+      <div class="telemetry-stack">
+        ${errors
+          .map(
+            (item) => `
+            <article class="telemetry-row-card telemetry-row-error">
+              <div class="telemetry-row-head">
+                <strong>${escapeHtml(item.event_type || '-')}</strong>
+                <span class="telemetry-row-metric">${escapeHtml(formatDate(item.occurred_at))}</span>
+              </div>
+              <p class="telemetry-row-meta">code ${escapeHtml(item.error_code || '-')} · status ${escapeHtml(item.status_code || '-')}</p>
+              <p class="telemetry-row-message">${escapeHtml(item.error_message || 'Unknown error')}</p>
+            </article>
+          `
+          )
+          .join('')}
+      </div>
+    `;
   }
 
   const hourly = Array.isArray(data?.hourly) ? data.hourly : [];
   if (!hourly.length) {
     hourlyEl.innerHTML = '<p class="admin-empty">No hourly activity available in selected window.</p>';
   } else {
-    hourlyEl.innerHTML = hourly
-      .slice(-24)
-      .map(
-        (bucket) => `
-        <article class="admin-card">
-          <p class="admin-line"><strong>${escapeHtml(formatDate(bucket.bucket))}</strong></p>
-          <p class="admin-line">events: <code>${escapeHtml(formatCount(bucket.total_events))}</code> · tools: <code>${escapeHtml(formatCount(bucket.mcp_tool_calls))}</code> · purchases: <code>${escapeHtml(formatCount(bucket.purchases))}</code> · re-downloads: <code>${escapeHtml(formatCount(bucket.redownloads))}</code></p>
-        </article>
-      `
-      )
-      .join('');
+    const maxBars = state.telemetryWindowHours > 24 ? 36 : 24;
+    const buckets = hourly.slice(-maxBars);
+    const maxEvents = Math.max(...buckets.map((bucket) => Number(bucket.total_events || 0)), 1);
+    hourlyEl.innerHTML = `
+      <div class="telemetry-chart-scroll">
+        <div class="telemetry-hourly-chart">
+          ${buckets
+            .map((bucket) => {
+              const totalEvents = Number(bucket.total_events || 0);
+              const height = Math.max(6, Math.round((totalEvents / maxEvents) * 100));
+              const tooltip = `events ${formatCount(bucket.total_events)} · tools ${formatCount(
+                bucket.mcp_tool_calls
+              )} · purchases ${formatCount(bucket.purchases)} · re-downloads ${formatCount(bucket.redownloads)}`;
+              return `
+                <div class="telemetry-hourly-col" title="${escapeHtml(tooltip)}">
+                  <div class="telemetry-hourly-bar-wrap">
+                    <span class="telemetry-hourly-bar" style="height:${height}%"></span>
+                  </div>
+                  <span class="telemetry-hourly-value">${escapeHtml(formatCount(bucket.total_events))}</span>
+                  <span class="telemetry-hourly-label">${escapeHtml(formatBucketLabel(bucket.bucket, state.telemetryWindowHours))}</span>
+                </div>
+              `;
+            })
+            .join('')}
+        </div>
+      </div>
+      <p class="telemetry-row-meta">Bar height represents total events per hour. Hover bars for tool/purchase/re-download details.</p>
+    `;
   }
 }
 

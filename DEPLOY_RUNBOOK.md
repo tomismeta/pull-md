@@ -74,6 +74,15 @@ Immediate kill switch (no code rollback):
 
 This disables telemetry ingestion and moderator telemetry dashboard reads while keeping purchase/re-download flows active.
 
+Telemetry schema isolation:
+
+1. In Vercel project env vars, set:
+   - `TELEMETRY_DB_SCHEMA=telemetry`
+2. Redeploy production.
+
+Telemetry tables will be created under `<schema>.marketplace_telemetry_events`.
+When schema is non-`public`, legacy `public.marketplace_telemetry_events` is dropped automatically (no migration path).
+
 Full code rollback:
 
 1. Revert the isolated telemetry commit:
