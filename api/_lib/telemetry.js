@@ -21,6 +21,24 @@ let dbPool = null;
 let dbSchemaReadyPromise = null;
 let dbSchemaReadyForDsn = null;
 
+function telemetryDbTimeoutMs() {
+  const raw = Number(process.env.TELEMETRY_DB_CONNECT_TIMEOUT_MS || '5000');
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 5000;
+}
+
+function isTransientTelemetryDbError(error) {
+  const text = String(error?.message || error || '').toLowerCase();
+  return (
+    text.includes('authentication timed out') ||
+    text.includes('timeout') ||
+    text.includes('timed out') ||
+    text.includes('connection terminated') ||
+    text.includes('connection reset') ||
+    text.includes('econnreset') ||
+    text.includes('etimedout')
+  );
+}
+
 function clampInt(value, min, max, fallback) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed)) return fallback;
@@ -133,13 +151,27 @@ function getTelemetryDbPool() {
 
   dbPool = new Pool({
     connectionString,
-    ssl: needsSsl ? { rejectUnauthorized: false } : undefined
+    ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+    connectionTimeoutMillis: telemetryDbTimeoutMs(),
+    idleTimeoutMillis: 30000,
+    max: 3
   });
   return dbPool;
 }
 
-async function ensureTelemetrySchema() {
-  const pool = getTelemetryDbPool();
+async function resetTelemetryDbPool() {
+  const activePool = dbPool;
+  dbPool = null;
+  dbSchemaReadyPromise = null;
+  dbSchemaReadyForDsn = null;
+  if (!activePool) return;
+  try {
+    await activePool.end();
+  } catch (_) {}
+}
+
+async function ensureTelemetrySchema(attempt = 0) {
+  let pool = getTelemetryDbPool();
   if (!pool) return false;
   const dsn = getTelemetryDatabaseUrl();
   const schema = telemetrySchemaName();
@@ -224,8 +256,16 @@ async function ensureTelemetrySchema() {
     }
   })();
 
-  await dbSchemaReadyPromise;
-  return true;
+  try {
+    await dbSchemaReadyPromise;
+    return true;
+  } catch (error) {
+    if (attempt === 0 && isTransientTelemetryDbError(error)) {
+      await resetTelemetryDbPool();
+      return ensureTelemetrySchema(1);
+    }
+    throw error;
+  }
 }
 
 function sanitizeMetadata(value) {
@@ -269,34 +309,37 @@ export async function recordTelemetryEvent(event = {}) {
   if (!telemetryConfigured()) return { ok: false, reason: 'telemetry_unconfigured' };
 
   try {
-    await ensureTelemetrySchema();
-    const pool = getTelemetryDbPool();
-    if (!pool) return { ok: false, reason: 'telemetry_unconfigured' };
+    let pool = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await ensureTelemetrySchema();
+        pool = getTelemetryDbPool();
+        if (!pool) return { ok: false, reason: 'telemetry_unconfigured' };
 
-    const eventType = normalizeText(event.eventType || event.event_type || 'unknown', 120) || 'unknown';
-    const wallet = normalizeWalletAddress(event.walletAddress || event.wallet_address);
-    const params = [
-      eventType,
-      normalizeText(event.source, 64),
-      normalizeText(event.route, 160),
-      normalizeText(event.httpMethod || event.http_method, 12),
-      normalizeText(event.rpcMethod || event.rpc_method, 64),
-      normalizeText(event.toolName || event.tool_name, 120),
-      normalizeText(event.action, 120),
-      typeof event.success === 'boolean' ? event.success : null,
-      asNumberOrNull(event.statusCode || event.status_code),
-      normalizeText(event.errorCode || event.error_code, 120),
-      normalizeText(event.errorMessage || event.error_message, 512),
-      normalizeText(event.assetId || event.asset_id, 160),
-      normalizeText(event.assetType || event.asset_type, 64),
-      hashWallet(wallet),
-      walletPreview(wallet),
-      sanitizeMetadata(event.metadata)
-    ];
+        const eventType = normalizeText(event.eventType || event.event_type || 'unknown', 120) || 'unknown';
+        const wallet = normalizeWalletAddress(event.walletAddress || event.wallet_address);
+        const params = [
+          eventType,
+          normalizeText(event.source, 64),
+          normalizeText(event.route, 160),
+          normalizeText(event.httpMethod || event.http_method, 12),
+          normalizeText(event.rpcMethod || event.rpc_method, 64),
+          normalizeText(event.toolName || event.tool_name, 120),
+          normalizeText(event.action, 120),
+          typeof event.success === 'boolean' ? event.success : null,
+          asNumberOrNull(event.statusCode || event.status_code),
+          normalizeText(event.errorCode || event.error_code, 120),
+          normalizeText(event.errorMessage || event.error_message, 512),
+          normalizeText(event.assetId || event.asset_id, 160),
+          normalizeText(event.assetType || event.asset_type, 64),
+          hashWallet(wallet),
+          walletPreview(wallet),
+          sanitizeMetadata(event.metadata)
+        ];
 
-    const tableRef = telemetryTableRef();
-    await pool.query(
-      `
+        const tableRef = telemetryTableRef();
+        await pool.query(
+          `
         INSERT INTO ${tableRef} (
           event_type,
           source,
@@ -318,10 +361,19 @@ export async function recordTelemetryEvent(event = {}) {
         VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb
         );
-      `,
-      params
-    );
-    return { ok: true };
+          `,
+          params
+        );
+        return { ok: true };
+      } catch (error) {
+        if (attempt === 0 && isTransientTelemetryDbError(error)) {
+          await resetTelemetryDbPool();
+          continue;
+        }
+        throw error;
+      }
+    }
+    return { ok: false, reason: 'telemetry_retry_exhausted' };
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error || 'telemetry_error') };
   }
@@ -365,7 +417,8 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
   const safeLimit = normalizeTelemetryRowLimit(rowLimit);
   const tableRef = telemetryTableRef();
 
-  try {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
     const overviewRes = await pool.query(
     `
       SELECT
@@ -493,7 +546,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
     const totalEvents = rowToInt(overviewRow, 'total_events');
     const failedEvents = rowToInt(overviewRow, 'failed_events');
 
-    return {
+      return {
       ok: true,
       generated_at: new Date().toISOString(),
       window_hours: safeWindowHours,
@@ -549,12 +602,32 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
         purchases: rowToInt(row, 'purchases'),
         redownloads: rowToInt(row, 'redownloads')
       }))
-    };
-  } catch (error) {
-    throw new AppError(503, {
-      error: 'Telemetry query failed',
-      code: 'telemetry_query_failed',
-      detail: error instanceof Error ? error.message : String(error || 'unknown_error')
-    });
+      };
+    } catch (error) {
+      if (attempt === 0 && isTransientTelemetryDbError(error)) {
+        await resetTelemetryDbPool();
+        const retryPool = getTelemetryDbPool();
+        if (!retryPool) {
+          throw new AppError(503, {
+            error: 'Telemetry database unavailable',
+            code: 'telemetry_database_unavailable'
+          });
+        }
+        await ensureTelemetrySchema();
+        // eslint-disable-next-line no-param-reassign
+        pool = retryPool;
+        continue;
+      }
+      throw new AppError(503, {
+        error: 'Telemetry query failed',
+        code: 'telemetry_query_failed',
+        detail: error instanceof Error ? error.message : String(error || 'unknown_error')
+      });
+    }
   }
+  throw new AppError(503, {
+    error: 'Telemetry query failed',
+    code: 'telemetry_query_failed',
+    detail: 'retry_exhausted'
+  });
 }
