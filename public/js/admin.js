@@ -19,7 +19,8 @@ const state = {
   assetTypeFilter: 'all',
   searchQuery: '',
   telemetryWindowHours: 24,
-  telemetry: null
+  telemetry: null,
+  moderatorAuthCache: new Map()
 };
 
 function normalizeSearchText(value) {
@@ -280,6 +281,7 @@ function saveModeratorSession() {
 function clearModeratorSession() {
   state.moderatorSession = null;
   state.moderatorSessionPromise = null;
+  state.moderatorAuthCache.clear();
   try {
     localStorage.removeItem(MODERATOR_SESSION_KEY);
   } catch (_) {}
@@ -434,6 +436,19 @@ async function moderatorSignatureHeaders(action) {
   const normalizedAction = String(action || '').trim();
   if (!normalizedAction) throw new Error('Missing moderation action');
   await requireAllowedModerator();
+  const cached = state.moderatorAuthCache.get(normalizedAction);
+  if (
+    cached &&
+    cached.wallet === state.wallet &&
+    Number.isFinite(cached.expiresAtMs) &&
+    Date.now() < cached.expiresAtMs - 15 * 1000
+  ) {
+    return {
+      'X-MODERATOR-ADDRESS': state.wallet,
+      'X-MODERATOR-SIGNATURE': cached.signature,
+      'X-MODERATOR-TIMESTAMP': String(cached.timestamp)
+    };
+  }
   const challenge = await mcpToolCall('get_auth_challenge', {
     flow: 'moderator',
     wallet_address: state.wallet,
@@ -451,6 +466,15 @@ async function moderatorSignatureHeaders(action) {
   if (!/^0x[0-9a-fA-F]+$/.test(signature)) {
     throw new Error('Wallet returned an invalid signature format for moderator authentication');
   }
+  const expiresAtMs = Number.isFinite(Number(challenge?.expires_at_ms))
+    ? Number(challenge.expires_at_ms)
+    : timestamp + 5 * 60 * 1000;
+  state.moderatorAuthCache.set(normalizedAction, {
+    wallet: state.wallet,
+    signature,
+    timestamp,
+    expiresAtMs
+  });
   return {
     'X-MODERATOR-ADDRESS': state.wallet,
     'X-MODERATOR-SIGNATURE': signature,
@@ -489,11 +513,10 @@ async function moderationRequest(action, { method = 'GET', headers = {}, body, q
 async function apiCall(action, { method = 'GET', body, query, moderatorAuth = false } = {}) {
   const normalizedAction = String(action || '').trim();
   let attempt = 0;
-  let useSignatureFallback = false;
-  while (attempt < 3) {
+  while (attempt < 2) {
     try {
       const headers = moderatorAuth
-        ? (useSignatureFallback ? await moderatorSignatureHeaders(normalizedAction) : await moderatorAuthHeaders())
+        ? await moderatorSignatureHeaders(normalizedAction)
         : {};
       return await moderationRequest(normalizedAction, {
         method,
@@ -506,26 +529,13 @@ async function apiCall(action, { method = 'GET', body, query, moderatorAuth = fa
       const code = String(error?.code || '').toLowerCase();
       const canRefresh =
         moderatorAuth &&
-        attempt <= 1 &&
-        (code.includes('session') ||
-          message.includes('moderator session invalid') ||
+        attempt === 0 &&
+        (message.includes('authentication message expired') ||
           message.includes('re-download session') ||
-          message.includes('authentication message expired') ||
-          message.includes('authentication timed out'));
+          message.includes('signature does not match') ||
+          code.includes('session'));
       if (!canRefresh) throw error;
-      clearModeratorSession();
-      if (!useSignatureFallback) {
-        try {
-          await bootstrapModeratorSession(true);
-        } catch (_) {
-          useSignatureFallback = true;
-        }
-      } else {
-        useSignatureFallback = true;
-      }
-      if (message.includes('moderator session invalid') || message.includes('re-download session')) {
-        useSignatureFallback = true;
-      }
+      state.moderatorAuthCache.delete(normalizedAction);
       attempt += 1;
     }
   }
@@ -960,10 +970,7 @@ async function connectWallet() {
   state.moderatorConnectPromise = (async () => {
     if (!state.signer || !state.wallet) throw new Error('No wallet session found');
     if (isAllowedModerator(state.wallet)) {
-      restoreModeratorSession();
-      // Always rotate to a freshly signed moderator session on explicit connect.
-      // This avoids stale local tokens after secret rotation or deployment changes.
-      await bootstrapModeratorSession(true);
+      clearModeratorSession();
       setStatus(`Connected moderator: ${shortWallet(state.wallet)}`);
       showToast('Moderator wallet connected', 'success');
       await loadModerationListings();
