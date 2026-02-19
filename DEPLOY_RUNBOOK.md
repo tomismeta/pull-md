@@ -97,3 +97,5 @@ git push origin main
 ```bash
 npx vercel --prod --yes --token <VERCEL_TOKEN>
 ```
+
+- Auto-deploy smoke check: 2026-02-19
