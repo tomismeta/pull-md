@@ -919,7 +919,9 @@ async function connectWallet() {
     if (!state.signer || !state.wallet) throw new Error('No wallet session found');
     if (isAllowedModerator(state.wallet)) {
       restoreModeratorSession();
-      await bootstrapModeratorSession(false);
+      // Always rotate to a freshly signed moderator session on explicit connect.
+      // This avoids stale local tokens after secret rotation or deployment changes.
+      await bootstrapModeratorSession(true);
       setStatus(`Connected moderator: ${shortWallet(state.wallet)}`);
       showToast('Moderator wallet connected', 'success');
       await loadModerationListings();
@@ -967,20 +969,6 @@ async function restoreWalletSession() {
     }
 
     restoreModeratorSession();
-    if (
-      state.moderatorSession?.token &&
-      Number(state.moderatorSession.expiresAtMs) > Date.now() + MODERATOR_SESSION_REFRESH_GRACE_MS
-    ) {
-      setStatus(`Connected moderator: ${shortWallet(state.wallet)}`);
-      await loadModerationListings();
-      try {
-        await loadTelemetryDashboard();
-      } catch (error) {
-        renderTelemetryEmpty(`Telemetry unavailable: ${error.message}`);
-      }
-      return;
-    }
-
     setStatus(`Wallet restored: ${shortWallet(state.wallet)}. Click Connect Wallet to authorize moderation access.`);
     renderEmpty('visibleContainer', 'Wallet connected. Click Connect Wallet once to sign and load public assets.');
     renderEmpty('hiddenContainer', 'Wallet connected. Click Connect Wallet once to sign and load removed assets.');
