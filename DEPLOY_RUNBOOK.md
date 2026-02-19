@@ -99,3 +99,4 @@ npx vercel --prod --yes --token <VERCEL_TOKEN>
 ```
 
 - Auto-deploy smoke check: 2026-02-19
+- Deploy auth owner fix: 2026-02-19
