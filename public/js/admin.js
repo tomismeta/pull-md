@@ -93,11 +93,10 @@ function showToast(message, type = 'info') {
 
 function sanitizeHeaderValue(name, value) {
   if (value == null) return null;
-  const text = String(value);
-  if (!text.trim()) return null;
-  if (/[\r\n\0]/.test(text)) {
-    throw new Error(`Invalid header value for ${name}`);
-  }
+  const text = String(value)
+    .replace(/[\r\n\0]+/g, '')
+    .trim();
+  if (!text) return null;
   return text;
 }
 
