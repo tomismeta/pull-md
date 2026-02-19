@@ -91,6 +91,26 @@ function showToast(message, type = 'info') {
   });
 }
 
+function sanitizeHeaderValue(name, value) {
+  if (value == null) return null;
+  const text = String(value);
+  if (!text.trim()) return null;
+  if (/[\r\n\0]/.test(text)) {
+    throw new Error(`Invalid header value for ${name}`);
+  }
+  return text;
+}
+
+function buildRequestHeaders(input = {}) {
+  const out = {};
+  for (const [key, value] of Object.entries(input || {})) {
+    const normalized = sanitizeHeaderValue(key, value);
+    if (normalized == null) continue;
+    out[key] = normalized;
+  }
+  return out;
+}
+
 function initProviderDiscovery() {
   window?.SoulStarterWalletProviders?.initDiscovery?.();
 }
@@ -366,15 +386,20 @@ async function bootstrapModeratorSession(force = false) {
     if (!message || !Number.isFinite(timestamp)) {
       throw new Error('Failed to build moderator session challenge');
     }
-    const signature = await state.signer.signMessage(message);
+    const signatureRaw = await state.signer.signMessage(message);
+    const signature = String(signatureRaw || '').trim();
+    if (!/^0x[0-9a-fA-F]+$/.test(signature)) {
+      throw new Error('Wallet returned an invalid signature format for moderator session');
+    }
+    const sessionHeaders = buildRequestHeaders({
+      Accept: 'application/json',
+      'X-WALLET-ADDRESS': state.wallet,
+      'X-AUTH-SIGNATURE': signature,
+      'X-AUTH-TIMESTAMP': String(timestamp)
+    });
     const response = await fetch('/api/auth/session', {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'X-WALLET-ADDRESS': state.wallet,
-        'X-AUTH-SIGNATURE': signature,
-        'X-AUTH-TIMESTAMP': String(timestamp)
-      }
+      headers: sessionHeaders
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -414,13 +439,14 @@ async function moderationRequest(action, { method = 'GET', headers = {}, body, q
     if (value == null || value === '') continue;
     params.set(key, String(value));
   }
+  const requestHeaders = buildRequestHeaders({
+    Accept: 'application/json',
+    ...(body ? { 'Content-Type': 'application/json' } : {}),
+    ...headers
+  });
   const response = await fetch(`/api/moderation?${params.toString()}`, {
     method: normalizedMethod,
-    headers: {
-      Accept: 'application/json',
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-      ...headers
-    },
+    headers: requestHeaders,
     body: body ? JSON.stringify(body) : undefined
   });
 

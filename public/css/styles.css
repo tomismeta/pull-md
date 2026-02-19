@@ -184,42 +184,6 @@ main {
   font-size: 1rem;
 }
 
-.hero-agent-signal {
-  margin-top: 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #f8fbff;
-  padding: 8px 12px;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.74rem;
-}
-
-.hero-agent-label {
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
-}
-
-.hero-agent-signal code {
-  border: 1px solid #cbdcf4;
-  border-radius: 999px;
-  padding: 3px 8px;
-  color: #35527a;
-  background: #ffffff;
-}
-
-.hero-agent-signal a {
-  color: var(--brand);
-  text-decoration: none;
-  font-family: 'Manrope', sans-serif;
-  font-weight: 700;
-}
-
-.hero-agent-signal a:hover {
-  text-decoration: underline;
-}
 
 .hero-actions {
   margin-top: 24px;
@@ -1670,13 +1634,6 @@ main {
 
   .hero-actions .btn {
     width: 100%;
-  }
-
-  .hero-agent-signal {
-    display: flex;
-    width: 100%;
-    flex-wrap: wrap;
-    border-radius: 12px;
   }
 
   .hero-inventory {
