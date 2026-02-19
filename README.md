@@ -318,3 +318,5 @@ An OpenClaw-ready skill is included at:
 Stored receipts should be treated as sensitive proof material and kept out of logs.
 4. Run the skill flow:
 discovery -> receipt re-download attempt -> strict x402 purchase fallback.
+
+<!-- vercel git auto-deploy check: 2026-02-19 -->
