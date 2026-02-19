@@ -500,6 +500,21 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
     [safeWindowHours, safeLimit]
   );
 
+    const sourceStatsRes = await pool.query(
+    `
+      SELECT
+        COALESCE(NULLIF(source, ''), 'unknown') AS source,
+        COUNT(*)::int AS hits,
+        COUNT(*) FILTER (WHERE success = false OR status_code >= 400)::int AS failures
+      FROM ${tableRef}
+      WHERE occurred_at >= NOW() - make_interval(hours => $1::int)
+      GROUP BY source
+      ORDER BY hits DESC, failures DESC, source ASC
+      LIMIT $2::int;
+    `,
+    [safeWindowHours, safeLimit]
+  );
+
     const recentErrorsRes = await pool.query(
     `
       SELECT
@@ -581,6 +596,11 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
       api_routes: (routeStatsRes.rows || []).map((row) => ({
         route: row.route,
         method: row.http_method,
+        hits: rowToInt(row, 'hits'),
+        failures: rowToInt(row, 'failures')
+      })),
+      source_breakdown: (sourceStatsRes.rows || []).map((row) => ({
+        source: row.source,
         hits: rowToInt(row, 'hits'),
         failures: rowToInt(row, 'failures')
       })),

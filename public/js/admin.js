@@ -624,7 +624,15 @@ function renderHidden(items) {
 }
 
 function renderTelemetryEmpty(message) {
-  const targets = ['telemetryOverview', 'telemetryTopAssets', 'telemetryTopTools', 'telemetryRoutes', 'telemetryErrors', 'telemetryHourly'];
+  const targets = [
+    'telemetryOverview',
+    'telemetryTopAssets',
+    'telemetryTopTools',
+    'telemetryRoutes',
+    'telemetrySources',
+    'telemetryErrors',
+    'telemetryHourly'
+  ];
   for (const id of targets) {
     const el = document.getElementById(id);
     if (!el) continue;
@@ -646,10 +654,11 @@ function renderTelemetryDashboard(data) {
   const topAssetsEl = document.getElementById('telemetryTopAssets');
   const topToolsEl = document.getElementById('telemetryTopTools');
   const routesEl = document.getElementById('telemetryRoutes');
+  const sourcesEl = document.getElementById('telemetrySources');
   const errorsEl = document.getElementById('telemetryErrors');
   const hourlyEl = document.getElementById('telemetryHourly');
 
-  if (!overviewEl || !topAssetsEl || !topToolsEl || !routesEl || !errorsEl || !hourlyEl) return;
+  if (!overviewEl || !topAssetsEl || !topToolsEl || !routesEl || !sourcesEl || !errorsEl || !hourlyEl) return;
 
   const overview = data?.overview || {};
   const errorRate = Number(overview.error_rate || 0);
@@ -740,6 +749,14 @@ function renderTelemetryDashboard(data) {
     emptyMessage: 'No API route traffic in selected window.',
     score: (item) => Number(item.hits || 0),
     title: (item) => `${item.method || '-'} ${item.route || '-'}`,
+    meta: (item) => `hits ${formatCount(item.hits)} · failures ${formatCount(item.failures)}`
+  });
+
+  const sources = Array.isArray(data?.source_breakdown) ? data.source_breakdown : [];
+  sourcesEl.innerHTML = renderRankedRows(sources, {
+    emptyMessage: 'No source telemetry in selected window.',
+    score: (item) => Number(item.hits || 0),
+    title: (item) => String(item.source || 'unknown'),
     meta: (item) => `hits ${formatCount(item.hits)} · failures ${formatCount(item.failures)}`
   });
 
