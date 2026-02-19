@@ -112,8 +112,14 @@ export default async function handler(req, res) {
     });
     return res.status(200).json(payload);
   } catch (error) {
-    const status = Number.isFinite(Number(error?.statusCode)) ? Number(error.statusCode) : 500;
-    const body = error instanceof AppError ? error.body : { error: error?.message || 'Internal server error' };
+    const status =
+      Number.isFinite(Number(error?.status)) ? Number(error.status) : Number.isFinite(Number(error?.statusCode)) ? Number(error.statusCode) : 500;
+    const body =
+      error instanceof AppError
+        ? error.payload
+        : {
+            error: error?.message || 'Internal server error'
+          };
     void recordTelemetryEvent({
       eventType: 'moderation.request',
       source: 'api',
