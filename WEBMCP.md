@@ -1,6 +1,6 @@
 # WebMCP Contract
 
-This document describes the exact agent-facing contract implemented by SoulStarter.
+This document describes the exact agent-facing contract implemented by PULL.md.
 
 ## Discovery
 
@@ -11,7 +11,7 @@ Agents should discover capabilities through:
 
 Canonical production host:
 
-- `https://soulstarter.vercel.app`
+- `https://www.pull.md`
 - Do not rely on preview/alias domains for contract verification.
 
 ## Wallet Compatibility Status (2026-02-14)
@@ -89,7 +89,7 @@ Tool invocation contract:
 
 UI companion:
 - `/admin.html` provides a lightweight human moderation console for visibility removal only.
-- It requires connected allowlisted moderator wallet and signs `SoulStarter Moderator Authentication` messages per moderation action.
+- It requires connected allowlisted moderator wallet and signs SIWE (EIP-4361) authentication messages per moderation action.
 - `/create.html` provides a lightweight creator console for immediate publish and share-link retrieval.
 - Creator/moderator auth requires SIWE (EIP-4361) message signatures with action-scoped timestamps.
 - For creator/moderator SIWE auth:
@@ -105,12 +105,13 @@ UI companion:
   - `purchase_soul`
   - `redownload_soul`
   - `publish_listing`
-- `POST /mcp` method `resources/list` exposes `soulstarter://` URIs.
+- `POST /mcp` method `resources/list` exposes canonical `pullmd://` URIs.
 - `POST /mcp` method `resources/read` reads:
-  - `soulstarter://docs/manifest`
-  - `soulstarter://docs/webmcp`
-  - `soulstarter://souls`
-  - `soulstarter://souls/{id}`
+  - `pullmd://docs/manifest`
+  - `pullmd://docs/webmcp`
+  - `pullmd://assets`
+  - `pullmd://assets/{id}`
+- Legacy aliases (`soulstarter://...`) are accepted for backward compatibility.
 - Response streaming: currently non-streaming responses over Streamable HTTP.
 - Sampling: not supported in this deployment.
 
@@ -211,19 +212,19 @@ Important:
 Read `accepted.extra.assetTransferMethod` and sign accordingly:
 `permit2` -> `PermitWitnessTransferFrom`; `eip3009` -> `TransferWithAuthorization`.
 - CDP/Base production default:
-If no wallet hint is provided, SoulStarter defaults to `eip3009`.
-In strict headless agent mode (`X-CLIENT-MODE: agent`), SoulStarter defaults to `eip3009`.
+If no wallet hint is provided, PULL.md defaults to `eip3009`.
+In strict headless agent mode (`X-CLIENT-MODE: agent`), PULL.md defaults to `eip3009`.
 Use explicit override only when needed: `X-ASSET-TRANSFER-METHOD: eip3009|permit2`.
 Always follow the latest `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`.
 - Bankr wallet:
 Use Bankr Agent API typed-data signing (`POST /agent/sign` with `signatureType=eth_signTypedData_v4`) and submit payload in `PAYMENT-SIGNATURE` only.
 Current status: keep Bankr path marked experimental for EIP-3009 purchase execution.
 - Bankr API capability mapping:
-`/agent/me` for wallet discovery, `/agent/sign` for EIP-712 signature generation, and **do not** use `/agent/submit` for SoulStarter settlement.
+`/agent/me` for wallet discovery, `/agent/sign` for EIP-712 signature generation, and **do not** use `/agent/submit` for PULL.md settlement.
 - Bankr key boundary:
-Bankr API keys remain in the agent runtime only. Never send Bankr keys/tokens to SoulStarter endpoints.
+Bankr API keys remain in the agent runtime only. Never send Bankr keys/tokens to PULL.md endpoints.
 - Buyers do **not** need CDP credentials.
-Only the SoulStarter server needs facilitator credentials.
+Only the PULL.md server needs facilitator credentials.
 
 #### Bankr Self-Orchestrated Flow
 
@@ -283,7 +284,7 @@ Sign SIWE message content equivalent to:
 <domain> wants you to sign in with your Ethereum account:
 <wallet_lowercase>
 
-Authenticate wallet ownership for SoulStarter. No token transfer or approval.
+Authenticate wallet ownership for PULL.md. No token transfer or approval.
 
 URI: <origin_uri>
 Version: 1
@@ -354,7 +355,7 @@ Sign SIWE message content equivalent to:
 <domain> wants you to sign in with your Ethereum account:
 <wallet_lowercase>
 
-Authenticate wallet ownership for SoulStarter. No token transfer or approval.
+Authenticate wallet ownership for PULL.md. No token transfer or approval.
 
 URI: <origin_uri>
 Version: 1
@@ -423,7 +424,7 @@ re-fetch latest paywall and use `eip3009` (`TransferWithAuthorization`) flow.
 top-level payload `network` must be `eip155:8453`.
 - CDP facilitator enum note:
 agent-signed payload remains CAIP-2 (`eip155:8453`).
-SoulStarter remaps facilitator-bound network fields to CDP enum (`base`) internally.
+PULL.md remaps facilitator-bound network fields to CDP enum (`base`) internally.
 
 ## Re-download Auth Message (SIWE / EIP-4361)
 
@@ -440,7 +441,7 @@ Clients sign SIWE message content equivalent to:
 <domain> wants you to sign in with your Ethereum account:
 <wallet_lowercase>
 
-Authenticate wallet ownership for SoulStarter. No token transfer or approval.
+Authenticate wallet ownership for PULL.md. No token transfer or approval.
 
 URI: <origin_uri>
 Version: 1
@@ -467,7 +468,7 @@ Signing format: SIWE (EIP-4361) message.
 <domain> wants you to sign in with your Ethereum account:
 <wallet_lowercase>
 
-Authenticate wallet ownership for SoulStarter. No token transfer or approval.
+Authenticate wallet ownership for PULL.md. No token transfer or approval.
 
 URI: <origin_uri>
 Version: 1
@@ -498,7 +499,7 @@ Signing format: SIWE (EIP-4361) message.
 <domain> wants you to sign in with your Ethereum account:
 <wallet_lowercase>
 
-Authenticate wallet ownership for SoulStarter. No token transfer or approval.
+Authenticate wallet ownership for PULL.md. No token transfer or approval.
 
 URI: <origin_uri>
 Version: 1

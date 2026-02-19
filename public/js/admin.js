@@ -2,11 +2,16 @@ const MCP_ENDPOINT = '/mcp';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
+const MODERATOR_SESSION_KEY = 'pullmd_moderator_session_v1';
+const MODERATOR_SESSION_REFRESH_GRACE_MS = 60 * 1000;
 const state = {
   provider: null,
   signer: null,
   wallet: null,
   walletType: null,
+  moderatorSession: null,
+  moderatorSessionPromise: null,
+  moderatorConnectPromise: null,
   moderators: [],
   connecting: false,
   visibleListings: [],
@@ -146,7 +151,7 @@ function setConnectButton() {
   for (const btn of walletButtons) {
     if (state.wallet) {
       const suffix = btn.id === 'connectWalletBtn' ? ' (disconnect)' : '';
-      btn.textContent = `${state.wallet.slice(0, 6)}...${state.wallet.slice(-4)}${suffix}`;
+      btn.textContent = `${shortWallet(state.wallet)}${suffix}`;
       btn.classList.add('connected');
     } else {
       btn.textContent = 'Connect Wallet';
@@ -166,6 +171,12 @@ function formatDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleString();
+}
+
+function shortWallet(value) {
+  const normalized = normalizeAddress(value);
+  if (!normalized) return '-';
+  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
 }
 
 function formatCount(value) {
@@ -230,6 +241,45 @@ function readWalletSession() {
   return getWalletCommon().readWalletSession({ key: WALLET_SESSION_KEY });
 }
 
+function saveModeratorSession() {
+  try {
+    if (!state.moderatorSession || !state.wallet) {
+      localStorage.removeItem(MODERATOR_SESSION_KEY);
+      return;
+    }
+    localStorage.setItem(
+      MODERATOR_SESSION_KEY,
+      JSON.stringify({
+        wallet: state.wallet,
+        token: state.moderatorSession.token,
+        expiresAtMs: state.moderatorSession.expiresAtMs
+      })
+    );
+  } catch (_) {}
+}
+
+function clearModeratorSession() {
+  state.moderatorSession = null;
+  state.moderatorSessionPromise = null;
+  try {
+    localStorage.removeItem(MODERATOR_SESSION_KEY);
+  } catch (_) {}
+}
+
+function restoreModeratorSession() {
+  try {
+    const raw = localStorage.getItem(MODERATOR_SESSION_KEY);
+    if (!raw || !state.wallet) return;
+    const parsed = JSON.parse(raw);
+    const wallet = normalizeAddress(parsed?.wallet);
+    const token = String(parsed?.token || '').trim();
+    const expiresAtMs = Number(parsed?.expiresAtMs);
+    if (!wallet || wallet !== state.wallet || !token || !Number.isFinite(expiresAtMs)) return;
+    if (expiresAtMs <= Date.now()) return;
+    state.moderatorSession = { wallet, token, expiresAtMs };
+  } catch (_) {}
+}
+
 async function connectWithProviderInternal(rawProvider, walletType, silent) {
   return getWalletConnector().connectWithProviderInternal({
     rawProvider,
@@ -289,27 +339,70 @@ async function connectBankrProvider() {
   });
 }
 
-async function signModeratorHeaders(action) {
+async function bootstrapModeratorSession(force = false) {
   if (!state.wallet || !state.signer) throw new Error('Connect your wallet first');
   if (!isAllowedModerator(state.wallet)) throw new Error('Connected wallet is not allowlisted for moderation');
-  const challenge = await mcpToolCall('get_auth_challenge', {
-    flow: 'moderator',
-    wallet_address: state.wallet,
-    action
-  });
-  const message = String(challenge?.auth_message_template || '').trim();
-  const issuedAt = String(challenge?.issued_at || '').trim();
-  const timestamp = Number.isFinite(Number(challenge?.auth_timestamp_ms))
-    ? Number(challenge.auth_timestamp_ms)
-    : Date.parse(issuedAt);
-  if (!message || !Number.isFinite(timestamp)) {
-    throw new Error('Failed to build moderator SIWE challenge');
+  if (
+    !force &&
+    state.moderatorSession?.token &&
+    Number(state.moderatorSession.expiresAtMs) > Date.now() + MODERATOR_SESSION_REFRESH_GRACE_MS
+  ) {
+    return state.moderatorSession.token;
   }
-  const signature = await state.signer.signMessage(message);
+  if (state.moderatorSessionPromise) {
+    return state.moderatorSessionPromise;
+  }
+  state.moderatorSessionPromise = (async () => {
+    const challenge = await mcpToolCall('get_auth_challenge', {
+      flow: 'session',
+      wallet_address: state.wallet,
+      action: 'session'
+    });
+    const message = String(challenge?.auth_message_template || '').trim();
+    const issuedAt = String(challenge?.issued_at || '').trim();
+    const timestamp = Number.isFinite(Number(challenge?.auth_timestamp_ms))
+      ? Number(challenge.auth_timestamp_ms)
+      : Date.parse(issuedAt);
+    if (!message || !Number.isFinite(timestamp)) {
+      throw new Error('Failed to build moderator session challenge');
+    }
+    const signature = await state.signer.signMessage(message);
+    const response = await fetch('/api/auth/session', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'X-WALLET-ADDRESS': state.wallet,
+        'X-AUTH-SIGNATURE': signature,
+        'X-AUTH-TIMESTAMP': String(timestamp)
+      }
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(String(payload?.error || payload?.message || `Moderator session bootstrap failed (${response.status})`));
+    }
+    const token = String(response.headers.get('x-redownload-session') || payload?.token || '').trim();
+    const expiresAtMs = Number(payload?.expires_at_ms || Date.now() + 5 * 60 * 1000);
+    if (!token) throw new Error('Moderator session token missing');
+    state.moderatorSession = {
+      wallet: state.wallet,
+      token,
+      expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : Date.now() + 5 * 60 * 1000
+    };
+    saveModeratorSession();
+    return token;
+  });
+  try {
+    return await state.moderatorSessionPromise;
+  } finally {
+    state.moderatorSessionPromise = null;
+  }
+}
+
+async function moderatorAuthHeaders() {
+  const token = await bootstrapModeratorSession(false);
   return {
     'X-MODERATOR-ADDRESS': state.wallet,
-    'X-MODERATOR-SIGNATURE': signature,
-    'X-MODERATOR-TIMESTAMP': String(timestamp)
+    'X-REDOWNLOAD-SESSION': token
   };
 }
 
@@ -342,13 +435,34 @@ async function moderationRequest(action, { method = 'GET', headers = {}, body, q
 
 async function apiCall(action, { method = 'GET', body, query, moderatorAuth = false } = {}) {
   const normalizedAction = String(action || '').trim();
-  const headers = moderatorAuth ? await signModeratorHeaders(normalizedAction) : {};
-  return moderationRequest(normalizedAction, {
-    method,
-    headers,
-    body,
-    query
-  });
+  let attempt = 0;
+  while (attempt < 2) {
+    try {
+      const headers = moderatorAuth ? await moderatorAuthHeaders() : {};
+      return await moderationRequest(normalizedAction, {
+        method,
+        headers,
+        body,
+        query
+      });
+    } catch (error) {
+      const message = String(error?.error || error?.message || '').toLowerCase();
+      const code = String(error?.code || '').toLowerCase();
+      const canRefresh =
+        moderatorAuth &&
+        attempt === 0 &&
+        (code.includes('session') ||
+          message.includes('moderator session invalid') ||
+          message.includes('re-download session') ||
+          message.includes('authentication message expired') ||
+          message.includes('authentication timed out'));
+      if (!canRefresh) throw error;
+      clearModeratorSession();
+      await bootstrapModeratorSession(true);
+      attempt += 1;
+    }
+  }
+  throw new Error('Moderator authentication failed');
 }
 
 function renderModeratorList() {
@@ -358,7 +472,9 @@ function renderModeratorList() {
     container.innerHTML = '<p class="admin-empty">No moderator wallets configured.</p>';
     return;
   }
-  container.innerHTML = state.moderators.map((wallet) => `<p class="admin-line"><code>${wallet}</code></p>`).join('');
+  container.innerHTML = `<div class="admin-pill-list">${state.moderators
+    .map((wallet) => `<span class="admin-pill" title="${escapeHtml(wallet)}">${escapeHtml(shortWallet(wallet))}</span>`)
+    .join('')}</div>`;
 }
 
 function renderVisible(items) {
@@ -631,6 +747,7 @@ function disconnectWallet() {
   state.visibleListings = [];
   state.hiddenListings = [];
   state.telemetry = null;
+  clearModeratorSession();
   clearWalletSession();
   setConnectButton();
   setStatus('Connect wallet to continue.');
@@ -769,23 +886,36 @@ function renderListings() {
 }
 
 async function connectWallet() {
-  if (!state.signer || !state.wallet) throw new Error('No wallet session found');
-  if (isAllowedModerator(state.wallet)) {
-    setStatus(`Connected moderator: ${state.wallet}`);
-    showToast('Moderator wallet connected', 'success');
-    await loadModerationListings();
-    try {
-      await loadTelemetryDashboard();
-    } catch (error) {
-      renderTelemetryEmpty(`Telemetry unavailable: ${error.message}`);
-      showToast(`Telemetry unavailable: ${error.message}`, 'warning');
+  if (state.moderatorConnectPromise) {
+    await state.moderatorConnectPromise;
+    return;
+  }
+  state.moderatorConnectPromise = (async () => {
+    if (!state.signer || !state.wallet) throw new Error('No wallet session found');
+    if (isAllowedModerator(state.wallet)) {
+      restoreModeratorSession();
+      await bootstrapModeratorSession(false);
+      setStatus(`Connected moderator: ${shortWallet(state.wallet)}`);
+      showToast('Moderator wallet connected', 'success');
+      await loadModerationListings();
+      try {
+        await loadTelemetryDashboard();
+      } catch (error) {
+        renderTelemetryEmpty(`Telemetry unavailable: ${error.message}`);
+        showToast(`Telemetry unavailable: ${error.message}`, 'warning');
+      }
+    } else {
+      setStatus(`Connected wallet is not allowlisted: ${state.wallet}`);
+      renderEmpty('visibleContainer', 'Access denied. Use an allowlisted moderator wallet.');
+      renderEmpty('hiddenContainer', 'Access denied. Use an allowlisted moderator wallet.');
+      renderTelemetryEmpty('Access denied. Use an allowlisted moderator wallet.');
+      showToast('Wallet is not in moderator allowlist', 'warning');
     }
-  } else {
-    setStatus(`Connected wallet is not allowlisted: ${state.wallet}`);
-    renderEmpty('visibleContainer', 'Access denied. Use an allowlisted moderator wallet.');
-    renderEmpty('hiddenContainer', 'Access denied. Use an allowlisted moderator wallet.');
-    renderTelemetryEmpty('Access denied. Use an allowlisted moderator wallet.');
-    showToast('Wallet is not in moderator allowlist', 'warning');
+  })();
+  try {
+    await state.moderatorConnectPromise;
+  } finally {
+    state.moderatorConnectPromise = null;
   }
 }
 
@@ -803,7 +933,33 @@ async function restoreWalletSession() {
       clearWalletSession();
       return;
     }
-    await connectWallet();
+    if (!isAllowedModerator(state.wallet)) {
+      setStatus(`Connected wallet is not allowlisted: ${state.wallet}`);
+      renderEmpty('visibleContainer', 'Access denied. Use an allowlisted moderator wallet.');
+      renderEmpty('hiddenContainer', 'Access denied. Use an allowlisted moderator wallet.');
+      renderTelemetryEmpty('Access denied. Use an allowlisted moderator wallet.');
+      return;
+    }
+
+    restoreModeratorSession();
+    if (
+      state.moderatorSession?.token &&
+      Number(state.moderatorSession.expiresAtMs) > Date.now() + MODERATOR_SESSION_REFRESH_GRACE_MS
+    ) {
+      setStatus(`Connected moderator: ${shortWallet(state.wallet)}`);
+      await loadModerationListings();
+      try {
+        await loadTelemetryDashboard();
+      } catch (error) {
+        renderTelemetryEmpty(`Telemetry unavailable: ${error.message}`);
+      }
+      return;
+    }
+
+    setStatus(`Wallet restored: ${shortWallet(state.wallet)}. Click Connect Wallet to authorize moderation access.`);
+    renderEmpty('visibleContainer', 'Wallet connected. Click Connect Wallet once to sign and load public assets.');
+    renderEmpty('hiddenContainer', 'Wallet connected. Click Connect Wallet once to sign and load removed assets.');
+    renderTelemetryEmpty('Wallet connected. Click Connect Wallet once to sign and load telemetry.');
   } catch (_) {
     clearWalletSession();
   }

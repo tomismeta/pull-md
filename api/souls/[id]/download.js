@@ -9,6 +9,7 @@ import {
   getSellerAddress,
   parseCookieHeader,
   purchaseReceiptCookieName,
+  resolveSiweIdentity,
   setCors,
   verifyPurchaseReceipt,
   verifyRedownloadSessionToken,
@@ -193,6 +194,12 @@ export function classifyClientMode({ headers = {}, query = {} } = {}) {
   return { rawMode, strictAgentMode };
 }
 
+function resolveSiweIdentityFromRequest(req) {
+  const host = String(req?.headers?.['x-forwarded-host'] || req?.headers?.host || '').trim();
+  const proto = String(req?.headers?.['x-forwarded-proto'] || 'https').trim();
+  return resolveSiweIdentity({ host, proto });
+}
+
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
 
@@ -207,6 +214,7 @@ export default async function handler(req, res) {
   const isAssetRoute = String(req.url || '').startsWith('/api/assets/');
   const telemetryRoute = isAssetRoute ? '/api/assets/{id}/download' : '/api/souls/{id}/download';
   const startMs = Date.now();
+  const siweIdentity = resolveSiweIdentityFromRequest(req);
   const soulId = req.query.id;
   const soul = await getSoulResolved(soulId);
   if (!soul) {
@@ -331,7 +339,9 @@ export default async function handler(req, res) {
           wallet: wallet || '0x<your-wallet>',
           soulId,
           action: 'redownload',
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          domain: siweIdentity.domain,
+          uri: siweIdentity.uri
         })
       });
     }
@@ -341,7 +351,9 @@ export default async function handler(req, res) {
         soulId,
         action: 'redownload',
         timestamp: redownloadTimestamp,
-        signature: redownloadSignature
+        signature: redownloadSignature,
+        domain: siweIdentity.domain,
+        uri: siweIdentity.uri
       });
       if (!verify.ok) {
         recordDownloadTelemetry({
@@ -364,7 +376,9 @@ export default async function handler(req, res) {
             wallet: wallet || '0x<your-wallet>',
             soulId,
             action: 'redownload',
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            domain: siweIdentity.domain,
+            uri: siweIdentity.uri
           }),
           ...(verify.auth_debug ? { auth_debug: verify.auth_debug } : {})
         });
@@ -433,14 +447,18 @@ export default async function handler(req, res) {
           wallet: walletForTemplate,
           soulId: '*',
           action: 'session',
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          domain: siweIdentity.domain,
+          uri: siweIdentity.uri
         })
       },
       auth_message_template: buildSiweAuthMessage({
         wallet: walletForTemplate,
         soulId,
         action: 'redownload',
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        domain: siweIdentity.domain,
+        uri: siweIdentity.uri
       })
     });
   }
@@ -548,7 +566,9 @@ export default async function handler(req, res) {
           soulId,
           action: 'redownload',
           timestamp: authTimestamp,
-          signature: authSignature
+          signature: authSignature,
+          domain: siweIdentity.domain,
+          uri: siweIdentity.uri
         });
 
         if (!authCheck.ok) {
@@ -849,7 +869,9 @@ export default async function handler(req, res) {
               wallet: '0x<your-wallet>',
               soulId,
               action: 'redownload',
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              domain: siweIdentity.domain,
+              uri: siweIdentity.uri
             });
             result.response.body.flow_hint =
               'No payment header was detected. Send PAYMENT-SIGNATURE with base64-encoded x402 payload for purchase.';

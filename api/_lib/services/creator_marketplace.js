@@ -14,6 +14,9 @@ import {
 } from '../marketplace.js';
 import { AppError } from '../errors.js';
 import { getTelemetryDashboard, normalizeTelemetryWindowHours, recordTelemetryEvent } from '../telemetry.js';
+import { resolveSiweIdentity, verifyRedownloadSessionToken } from '../payments.js';
+
+const ETH_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
 const DEPRECATED_ACTIONS = new Set([
   'validate_listing_draft',
@@ -26,9 +29,15 @@ const DEPRECATED_ACTIONS = new Set([
 ]);
 
 function resolveBaseUrl(headers = {}) {
-  const host = String(headers['x-forwarded-host'] || headers.host || 'soulstarter.vercel.app').trim();
+  const host = String(headers['x-forwarded-host'] || headers.host || 'www.pull.md').trim();
   const proto = String(headers['x-forwarded-proto'] || 'https').trim();
   return `${proto}://${host}`;
+}
+
+function resolveSiweContext(headers = {}) {
+  const host = String(headers['x-forwarded-host'] || headers.host || '').trim();
+  const proto = String(headers['x-forwarded-proto'] || 'https').trim();
+  return resolveSiweIdentity({ host, proto });
 }
 
 function marketplaceStorageWarning() {
@@ -52,7 +61,8 @@ function withShareUrl(baseUrl, listing) {
   };
 }
 
-function creatorAuthError(action, auth) {
+function creatorAuthError(action, auth, headers = {}) {
+  const siwe = resolveSiweContext(headers);
   return {
     error: auth.error,
     ...(auth?.hint ? { hint: auth.hint } : {}),
@@ -61,12 +71,15 @@ function creatorAuthError(action, auth) {
       buildCreatorAuthMessage({
         wallet: '0x<your-wallet>',
         action,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        domain: siwe.domain,
+        uri: siwe.uri
       })
   };
 }
 
-function moderatorAuthError(action, auth) {
+function moderatorAuthError(action, auth, headers = {}) {
+  const siwe = resolveSiweContext(headers);
   return {
     error: auth.error,
     ...(auth?.hint ? { hint: auth.hint } : {}),
@@ -75,24 +88,57 @@ function moderatorAuthError(action, auth) {
       buildModeratorAuthMessage({
         wallet: '0x<your-wallet>',
         action,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        domain: siwe.domain,
+        uri: siwe.uri
       }),
     allowed_moderators: listModeratorWallets()
   };
 }
 
 function moderatorAuthFromRequest({ headers, body, action }) {
-  const wallet = String(headers['x-moderator-address'] || body?.moderator_address || '').trim();
+  const siwe = resolveSiweContext(headers);
+  const wallet = String(headers['x-moderator-address'] || body?.moderator_address || '').trim().toLowerCase();
+  const sessionToken = String(headers['x-redownload-session'] || body?.moderator_session_token || '').trim();
+  if (sessionToken) {
+    const allowlist = listModeratorWallets();
+    if (allowlist.length === 0) {
+      return { ok: false, error: 'Server configuration error: moderator allowlist is empty' };
+    }
+    if (!wallet) {
+      return {
+        ok: false,
+        error: 'Missing moderator wallet for session authentication',
+        hint: 'Include X-MODERATOR-ADDRESS with X-REDOWNLOAD-SESSION.'
+      };
+    }
+    if (!ETH_ADDRESS_RE.test(wallet)) {
+      return { ok: false, error: 'Invalid wallet address' };
+    }
+    if (!allowlist.includes(wallet)) {
+      return { ok: false, error: 'Wallet is not an allowed moderator' };
+    }
+    const checked = verifyRedownloadSessionToken({ token: sessionToken, wallet });
+    if (!checked.ok) {
+      return {
+        ok: false,
+        error: `Moderator session invalid: ${checked.error || 'unknown error'}`,
+        hint: 'Refresh moderator session by reconnecting wallet.'
+      };
+    }
+    return { ok: true, wallet, auth_format: 'moderator_session' };
+  }
   const signature = String(headers['x-moderator-signature'] || body?.moderator_signature || '').trim();
   const timestamp = headers['x-moderator-timestamp'] || body?.moderator_timestamp;
-  return verifyModeratorAuth({ wallet, signature, timestamp, action });
+  return verifyModeratorAuth({ wallet, signature, timestamp, action, domain: siwe.domain, uri: siwe.uri });
 }
 
 function creatorAuthFromHeaders({ headers, body, action }) {
+  const siwe = resolveSiweContext(headers);
   const wallet = String(headers['x-wallet-address'] || body?.wallet_address || '').trim();
   const signature = String(headers['x-auth-signature'] || body?.auth_signature || '').trim();
   const timestamp = headers['x-auth-timestamp'] || body?.auth_timestamp;
-  return verifyCreatorAuth({ wallet, signature, timestamp, action });
+  return verifyCreatorAuth({ wallet, signature, timestamp, action, domain: siwe.domain, uri: siwe.uri });
 }
 
 function ensureAction(action) {
@@ -187,7 +233,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
   if (normalizedAction === 'publish_listing' && normalizedMethod === 'POST') {
     const auth = creatorAuthFromHeaders({ headers, body: requestBody, action: normalizedAction });
     if (!auth.ok) {
-      throw new AppError(401, creatorAuthError(normalizedAction, auth));
+      throw new AppError(401, creatorAuthError(normalizedAction, auth, headers));
     }
 
     const listingPayload =
@@ -294,7 +340,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
   if (normalizedAction === 'list_my_published_listings' && normalizedMethod === 'GET') {
     const auth = creatorAuthFromHeaders({ headers, body: requestBody, action: normalizedAction });
     if (!auth.ok) {
-      throw new AppError(401, creatorAuthError(normalizedAction, auth));
+      throw new AppError(401, creatorAuthError(normalizedAction, auth, headers));
     }
     const listings = await listPublishedListingSummaries({ includeHidden: true, publishedBy: auth.wallet });
     recordMarketplaceTelemetry({
@@ -332,7 +378,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
   if (normalizedAction === 'get_telemetry_dashboard' && normalizedMethod === 'GET') {
     const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
     if (!moderator.ok) {
-      throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
     }
     const windowHours = normalizeTelemetryWindowHours(requestBody.window_hours || requestBody.hours || DEFAULT_WINDOW_HOURS);
     const rowLimit = requestBody.row_limit || requestBody.limit || DEFAULT_ROW_LIMIT;
@@ -361,7 +407,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
   if (normalizedAction === 'list_moderation_listings' && normalizedMethod === 'GET') {
     const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
     if (!moderator.ok) {
-      throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
     }
     const listings = await listModerationListingDetails();
     const visible = listings
@@ -394,7 +440,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
   if (normalizedAction === 'remove_listing_visibility' && normalizedMethod === 'POST') {
     const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
     if (!moderator.ok) {
-      throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
     }
     const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
     const reason = typeof requestBody.reason === 'string' ? requestBody.reason : '';
@@ -428,7 +474,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
   if (normalizedAction === 'restore_listing_visibility' && normalizedMethod === 'POST') {
     const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
     if (!moderator.ok) {
-      throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
     }
     const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
     const reason = typeof requestBody.reason === 'string' ? requestBody.reason : '';
@@ -462,7 +508,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
   if (normalizedAction === 'update_listing' && normalizedMethod === 'POST') {
     const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
     if (!moderator.ok) {
-      throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
     }
     const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
     const listingPayload =
@@ -509,7 +555,7 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
   if (normalizedAction === 'delete_listing' && normalizedMethod === 'POST') {
     const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
     if (!moderator.ok) {
-      throw new AppError(401, moderatorAuthError(normalizedAction, moderator));
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
     }
     const soulId = String(requestBody.asset_id || requestBody.soul_id || '').trim();
     const reason = typeof requestBody.reason === 'string' ? requestBody.reason : '';

@@ -66,7 +66,7 @@ async function withMcpSdkClient(run) {
   }
 }
 
-test('official MCP SDK client can connect and execute SoulStarter tools/resources', async () => {
+test('official MCP SDK client can connect and execute PULL.md tools/resources', async () => {
   await withMcpSdkClient(async ({ client }) => {
     const tools = await client.listTools();
     const toolNames = (tools?.tools || []).map((tool) => String(tool?.name || ''));
@@ -83,12 +83,14 @@ test('official MCP SDK client can connect and execute SoulStarter tools/resource
 
     const resources = await client.listResources();
     const resourceUris = (resources?.resources || []).map((item) => String(item?.uri || ''));
-    assert.ok(resourceUris.includes('soulstarter://docs/manifest'));
-    assert.ok(resourceUris.includes('soulstarter://assets'));
+    assert.ok(resourceUris.includes('pullmd://docs/manifest'));
+    assert.ok(resourceUris.includes('pullmd://assets'));
 
     const read = await client.readResource({ uri: 'soulstarter://docs/manifest' });
     assert.equal(Array.isArray(read?.contents), true);
-    assert.equal(String(read?.contents?.[0]?.uri || ''), 'soulstarter://docs/manifest');
+    assert.ok(
+      ['pullmd://docs/manifest', 'soulstarter://docs/manifest'].includes(String(read?.contents?.[0]?.uri || ''))
+    );
   });
 });
 

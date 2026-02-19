@@ -209,13 +209,17 @@ export function buildMcpAssetDetailsResponse({ assetId, soulId, asset, soul, sum
           wallet: '0x<your-wallet>',
           soulId: id,
           action: 'redownload',
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          domain: 'www.pull.md',
+          uri: 'https://www.pull.md'
         }),
         session: buildSiweAuthMessage({
           wallet: '0x<your-wallet>',
           soulId: '*',
           action: 'session',
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          domain: 'www.pull.md',
+          uri: 'https://www.pull.md'
         })
       },
       auth_timestamp_note:

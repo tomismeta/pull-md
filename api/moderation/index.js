@@ -33,7 +33,10 @@ function setCors(res, origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-MODERATOR-ADDRESS, X-MODERATOR-SIGNATURE, X-MODERATOR-TIMESTAMP');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, X-MODERATOR-ADDRESS, X-MODERATOR-SIGNATURE, X-MODERATOR-TIMESTAMP, X-REDOWNLOAD-SESSION'
+  );
   res.setHeader('Content-Type', 'application/json');
 }
 

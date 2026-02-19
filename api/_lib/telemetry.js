@@ -49,7 +49,7 @@ function telemetryHashSecret() {
   if (direct) return direct;
   const fallback = String(process.env.PURCHASE_RECEIPT_SECRET || '').trim();
   if (fallback) return fallback;
-  return 'soulstarter-telemetry-default';
+  return 'pullmd-telemetry-default';
 }
 
 function hashWallet(wallet) {
@@ -106,17 +106,30 @@ function telemetryConfigured() {
   return Boolean(getTelemetryDatabaseUrl());
 }
 
+function sanitizeDbConnectionString(connectionString) {
+  const raw = String(connectionString || '').trim();
+  if (!raw) return raw;
+  try {
+    const parsed = new URL(raw);
+    parsed.searchParams.delete('sslmode');
+    return parsed.toString();
+  } catch (_) {
+    return raw;
+  }
+}
+
 function getTelemetryDbPool() {
-  const connectionString = getTelemetryDatabaseUrl();
-  if (!connectionString) return null;
+  const rawConnectionString = getTelemetryDatabaseUrl();
+  if (!rawConnectionString) return null;
   if (dbPool) return dbPool;
+  const connectionString = sanitizeDbConnectionString(rawConnectionString);
 
   const sslHint = String(process.env.TELEMETRY_DB_SSL || '').trim().toLowerCase();
   const needsSsl =
     sslHint === '1' ||
     sslHint === 'true' ||
-    /sslmode=require/i.test(connectionString) ||
-    /render\.com|neon\.tech|supabase\.co|railway\.app/i.test(connectionString);
+    /sslmode=require/i.test(rawConnectionString) ||
+    /render\.com|neon\.tech|supabase\.co|railway\.app/i.test(rawConnectionString);
 
   dbPool = new Pool({
     connectionString,

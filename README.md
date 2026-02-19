@@ -1,6 +1,6 @@
-# SoulStarter
+# PULL.md
 
-SoulStarter is an agent-focused marketplace for purchasing and re-downloading AI "soul starter" files.
+PULL.md is an agent-focused marketplace for purchasing and re-downloading AI "soul starter" files.
 
 ## Current Implementation
 
@@ -162,9 +162,9 @@ read `PAYMENT-REQUIRED.accepts[0].extra.assetTransferMethod`:
 use Bankr Agent API `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then submit the resulting base64 payload.
 Current status: Bankr EIP-3009 signing is marked experimental due to known signature incompatibility (see Wallet Compatibility Status above).
 - Bankr capability mapping:
-`/agent/me` for wallet discovery, `/agent/sign` for typed-data signing, and no `/agent/submit` call for SoulStarter purchase settlement.
+`/agent/me` for wallet discovery, `/agent/sign` for typed-data signing, and no `/agent/submit` call for PULL.md purchase settlement.
 - Security boundary:
-Bankr API keys and signer secrets stay in the agent/Bankr runtime only and must never be sent to SoulStarter.
+Bankr API keys and signer secrets stay in the agent/Bankr runtime only and must never be sent to PULL.md.
 - Common permit2 pitfalls to avoid:
 top-level `network` must be `eip155:8453` (not `base`), use `payload.permit2Authorization` (not `payload.permit2`), do not include `payload.authorization` in permit2 mode, send permit2 numeric fields as strings, and set non-empty approve calldata in `payload.transaction.data`.
 - CDP/Base production default:
@@ -276,7 +276,7 @@ Do not send `payload.permit2`. Do not send `payload.authorization` in permit2 mo
 top-level `network` must be `eip155:8453` exactly.
 - CDP facilitator network enum behavior:
 agents must still submit CAIP-2 `eip155:8453` in x402 payloads.
-SoulStarter normalizes facilitator-bound requests to CDP enum `base` server-side.
+PULL.md normalizes facilitator-bound requests to CDP enum `base` server-side.
 - CDP error `permit2 payments are disabled`:
 set `X402_ASSET_TRANSFER_METHOD=eip3009` (or leave unset; default is `eip3009`).
 - permit2 settle policy errors:

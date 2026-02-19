@@ -10,7 +10,7 @@ import {
 import { executeCreatorMarketplaceAction } from './services/creator_marketplace.js';
 import { AppError } from './errors.js';
 import { buildCreatorAuthMessage, buildModeratorAuthMessage, getMarketplaceDraftTemplate } from './marketplace.js';
-import { buildSiweAuthMessage } from './payments.js';
+import { buildSiweAuthMessage, resolveSiweIdentity } from './payments.js';
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
 
@@ -59,8 +59,13 @@ function normalizeModeratorAction(action) {
   return 'list_moderation_listings';
 }
 
-function buildAuthChallengePayload(args = {}) {
+function buildAuthChallengePayload(args = {}, context = {}) {
   const parsed = ensureObject(args);
+  const host = String(context?.headers?.['x-forwarded-host'] || context?.headers?.host || 'www.pull.md').trim();
+  const proto = String(context?.headers?.['x-forwarded-proto'] || 'https').trim();
+  const siweIdentity = resolveSiweIdentity({ host, proto });
+  const siweDomain = siweIdentity.domain;
+  const siweUri = siweIdentity.uri;
   const flow = String(parsed.flow || '').trim().toLowerCase();
   if (!flow) {
     throw new AppError(400, {
@@ -82,7 +87,7 @@ function buildAuthChallengePayload(args = {}) {
 
   if (flow === 'creator') {
     action = String(parsed.action || 'list_my_published_listings').trim() || 'list_my_published_listings';
-    authMessage = buildCreatorAuthMessage({ wallet, action, timestamp: timestampMs });
+    authMessage = buildCreatorAuthMessage({ wallet, action, timestamp: timestampMs, domain: siweDomain, uri: siweUri });
     const toolName = mapCreatorActionToTool(action);
     submitVia = {
       endpoint: '/mcp',
@@ -112,7 +117,7 @@ function buildAuthChallengePayload(args = {}) {
     }
   } else if (flow === 'moderator') {
     action = normalizeModeratorAction(String(parsed.action || 'list_moderation_listings').trim() || 'list_moderation_listings');
-    authMessage = buildModeratorAuthMessage({ wallet, action, timestamp: timestampMs });
+    authMessage = buildModeratorAuthMessage({ wallet, action, timestamp: timestampMs, domain: siweDomain, uri: siweUri });
     const commonHeaders = {
       moderator_address: wallet,
       moderator_signature: '0x<signature_hex>',
@@ -158,7 +163,7 @@ function buildAuthChallengePayload(args = {}) {
     };
   } else if (flow === 'session') {
     action = 'session';
-    authMessage = buildSiweAuthMessage({ wallet, soulId: '*', action, timestamp: timestampMs });
+    authMessage = buildSiweAuthMessage({ wallet, soulId: '*', action, timestamp: timestampMs, domain: siweDomain, uri: siweUri });
     submitVia = {
       endpoint: '/api/auth/session',
       method: 'GET',
@@ -178,7 +183,7 @@ function buildAuthChallengePayload(args = {}) {
         flow_hint: 'flow=redownload requires asset_id (soul_id accepted as legacy alias).'
       });
     }
-    authMessage = buildSiweAuthMessage({ wallet, soulId: assetId, action, timestamp: timestampMs });
+    authMessage = buildSiweAuthMessage({ wallet, soulId: assetId, action, timestamp: timestampMs, domain: siweDomain, uri: siweUri });
     submitVia = {
       endpoint: `/api/assets/${encodeURIComponent(assetId)}/download`,
       legacy_endpoint: `/api/souls/${encodeURIComponent(assetId)}/download`,
@@ -241,8 +246,8 @@ function buildAuthChallengePayload(args = {}) {
 
 function toolCallHeadersFromArgs(context, args, authShape = 'none') {
   const baseHeaders = {
-    host: context?.headers?.host || 'soulstarter.vercel.app',
-    'x-forwarded-host': context?.headers?.['x-forwarded-host'] || context?.headers?.host || 'soulstarter.vercel.app',
+    host: context?.headers?.host || 'www.pull.md',
+    'x-forwarded-host': context?.headers?.['x-forwarded-host'] || context?.headers?.host || 'www.pull.md',
     'x-forwarded-proto': context?.headers?.['x-forwarded-proto'] || 'https'
   };
   const parsedArgs = ensureObject(args);
@@ -437,8 +442,8 @@ const MCP_TOOL_REGISTRY = [
       },
       returns: { type: 'object', description: 'SIWE challenge template + exact timestamp/signing guidance' }
     },
-    async run(args) {
-      return buildAuthChallengePayload(args);
+    async run(args, context) {
+      return buildAuthChallengePayload(args, context);
     }
   },
   {

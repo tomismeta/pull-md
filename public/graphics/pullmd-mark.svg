@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="PULL.md mark">
+  <rect width="128" height="128" rx="24" fill="#081123"/>
+  <g fill="#3b82ff">
+    <rect x="40" y="22" width="10" height="84" rx="5"/>
+    <rect x="78" y="22" width="10" height="84" rx="5"/>
+    <rect x="24" y="46" width="80" height="10" rx="5"/>
+    <rect x="24" y="72" width="80" height="10" rx="5"/>
+  </g>
+</svg>

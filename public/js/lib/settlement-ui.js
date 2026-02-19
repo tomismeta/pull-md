@@ -49,7 +49,7 @@
         <strong>Verified settlement</strong>
         <span class="verification-pill verification-pill-ok">Verified</span>
       </div>
-      <p>This transaction matches SoulStarter payment expectations.</p>
+      <p>This transaction matches PULL.md payment expectations.</p>
       <dl class="verification-grid">
         <dt>Payer</dt><dd>${safeEscape(safeShort(actual.from || view.expected?.payer || '-'))}</dd>
         <dt>Pay To</dt><dd>${safeEscape(safeShort(actual.to || view.expected?.payTo || '-'))}</dd>

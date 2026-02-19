@@ -26,7 +26,7 @@ import {
 import { recordTelemetryEvent } from './telemetry.js';
 
 const SERVER_INFO = {
-  name: 'SoulStarter',
+  name: 'PULL.md',
   version: '1.0.0'
 };
 

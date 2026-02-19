@@ -184,6 +184,43 @@ main {
   font-size: 1rem;
 }
 
+.hero-agent-signal {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f8fbff;
+  padding: 8px 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.74rem;
+}
+
+.hero-agent-label {
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.hero-agent-signal code {
+  border: 1px solid #cbdcf4;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #35527a;
+  background: #ffffff;
+}
+
+.hero-agent-signal a {
+  color: var(--brand);
+  text-decoration: none;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+}
+
+.hero-agent-signal a:hover {
+  text-decoration: underline;
+}
+
 .hero-actions {
   margin-top: 24px;
   display: flex;
@@ -697,6 +734,74 @@ main {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.admin-access-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-access-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-access-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-access-copy h3 {
+  margin: 0;
+}
+
+.admin-access-head .btn {
+  min-width: 172px;
+}
+
+.admin-access-meta {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.admin-access-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: rgba(9, 20, 37, 0.24);
+}
+
+.admin-status-strong {
+  margin-top: 6px;
+  color: var(--text-soft);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.admin-access-allowlist {
+  background: rgba(9, 20, 37, 0.32);
+}
+
+.admin-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.admin-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--text-soft);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  background: rgba(88, 166, 255, 0.08);
 }
 
 .admin-filter-row {
@@ -1567,6 +1672,13 @@ main {
     width: 100%;
   }
 
+  .hero-agent-signal {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    border-radius: 12px;
+  }
+
   .hero-inventory {
     flex-direction: column;
     align-items: flex-start;
@@ -1589,6 +1701,11 @@ main {
 
   .admin-actions,
   .creator-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-access-head {
     flex-direction: column;
     align-items: flex-start;
   }

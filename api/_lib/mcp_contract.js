@@ -6,7 +6,7 @@ import {
 } from './services/souls.js';
 
 function baseUrlFromHeaders(headers = {}) {
-  const host = String(headers['x-forwarded-host'] || headers.host || 'soulstarter.vercel.app').trim();
+  const host = String(headers['x-forwarded-host'] || headers.host || 'www.pull.md').trim();
   const proto = String(headers['x-forwarded-proto'] || 'https').trim();
   return `${proto}://${host}`;
 }
@@ -16,38 +16,54 @@ function asJson(value) {
 }
 
 function assetResourceUri(id) {
-  return `soulstarter://assets/${encodeURIComponent(String(id || ''))}`;
+  return `pullmd://assets/${encodeURIComponent(String(id || ''))}`;
 }
 
 function soulResourceUri(id) {
-  return `soulstarter://souls/${encodeURIComponent(String(id || ''))}`;
+  return `pullmd://souls/${encodeURIComponent(String(id || ''))}`;
+}
+
+function isLegacySoulstarterScheme(uri) {
+  return String(uri || '').startsWith('soulstarter://');
+}
+
+function normalizeResourceUri(uri) {
+  const raw = String(uri || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('pullmd://')) return raw;
+  if (!isLegacySoulstarterScheme(raw)) return raw;
+  return `pullmd://${raw.slice('soulstarter://'.length)}`;
 }
 
 export async function getMcpResourcesList() {
   const assets = await listAssetsCatalog({});
   const docs = [
     {
-      uri: 'soulstarter://docs/manifest',
+      uri: 'pullmd://docs/manifest',
+      aliases: ['soulstarter://docs/manifest'],
       name: 'MCP Manifest',
       description: 'Machine-readable capability contract',
       mimeType: 'application/json'
     },
     {
-      uri: 'soulstarter://docs/webmcp',
+      uri: 'pullmd://docs/webmcp',
+      aliases: ['soulstarter://docs/webmcp'],
       name: 'WebMCP Markdown',
       description: 'Human-readable MCP + x402 contract',
       mimeType: 'text/markdown'
     },
     {
-      uri: 'soulstarter://assets',
+      uri: 'pullmd://assets',
+      aliases: ['soulstarter://assets'],
       name: 'Public Asset Catalog',
       description: 'Publicly listed markdown asset summaries',
       mimeType: 'application/json'
     },
     {
-      uri: 'soulstarter://souls',
+      uri: 'pullmd://souls',
+      aliases: ['soulstarter://souls'],
       name: 'Public Soul Catalog',
-      description: 'Legacy alias for soulstarter://assets',
+      description: 'Legacy alias for pullmd://assets',
       mimeType: 'application/json'
     }
   ];
@@ -55,14 +71,16 @@ export async function getMcpResourcesList() {
   const assetResources = assets.flatMap((asset) => [
     {
       uri: assetResourceUri(asset.id),
+      aliases: [`soulstarter://assets/${encodeURIComponent(String(asset.id || ''))}`],
       name: String(asset.name || asset.id || ''),
       description: `${String(asset.description || 'Asset listing')}`,
       mimeType: 'application/json'
     },
     {
       uri: soulResourceUri(asset.id),
+      aliases: [`soulstarter://souls/${encodeURIComponent(String(asset.id || ''))}`],
       name: `${String(asset.name || asset.id || '')} (Legacy Soul URI)`,
-      description: 'Legacy alias for soulstarter://assets/{id}',
+      description: 'Legacy alias for pullmd://assets/{id}',
       mimeType: 'application/json'
     }
   ]);
@@ -71,16 +89,17 @@ export async function getMcpResourcesList() {
 }
 
 export async function readMcpResource(uri, context = {}) {
-  const normalizedUri = String(uri || '').trim();
+  const requestedUri = String(uri || '').trim();
+  const normalizedUri = normalizeResourceUri(uri);
   if (!normalizedUri) {
     throw new AppError(400, { error: 'Missing required field: uri', code: 'missing_resource_uri' });
   }
 
   const baseUrl = baseUrlFromHeaders(context.headers || {});
 
-  if (normalizedUri === 'soulstarter://docs/manifest') {
+  if (normalizedUri === 'pullmd://docs/manifest') {
     return {
-      uri: normalizedUri,
+      uri: requestedUri || normalizedUri,
       mimeType: 'application/json',
       text: asJson({
         endpoint: '/mcp',
@@ -90,32 +109,30 @@ export async function readMcpResource(uri, context = {}) {
     };
   }
 
-  if (normalizedUri === 'soulstarter://docs/webmcp') {
+  if (normalizedUri === 'pullmd://docs/webmcp') {
     return {
-      uri: normalizedUri,
+      uri: requestedUri || normalizedUri,
       mimeType: 'text/markdown',
       text: `Read the full contract at ${baseUrl}/WEBMCP.md`
     };
   }
 
-  if (normalizedUri === 'soulstarter://assets' || normalizedUri === 'soulstarter://souls') {
+  if (normalizedUri === 'pullmd://assets' || normalizedUri === 'pullmd://souls') {
     const assets = await listAssetsCatalog({});
     return {
-      uri: normalizedUri,
+      uri: requestedUri || normalizedUri,
       mimeType: 'application/json',
       text: asJson({ count: assets.length, assets, souls: assets })
     };
   }
 
-  if (normalizedUri.startsWith('soulstarter://assets/') || normalizedUri.startsWith('soulstarter://souls/')) {
-    const prefix = normalizedUri.startsWith('soulstarter://assets/')
-      ? 'soulstarter://assets/'
-      : 'soulstarter://souls/';
+  if (normalizedUri.startsWith('pullmd://assets/') || normalizedUri.startsWith('pullmd://souls/')) {
+    const prefix = normalizedUri.startsWith('pullmd://assets/') ? 'pullmd://assets/' : 'pullmd://souls/';
     const id = decodeURIComponent(normalizedUri.slice(prefix.length));
     const details = await resolveAssetDetails(id);
     const body = buildMcpAssetDetailsResponse(details);
     return {
-      uri: normalizedUri,
+      uri: requestedUri || normalizedUri,
       mimeType: 'application/json',
       text: asJson(body)
     };

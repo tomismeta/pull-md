@@ -10,9 +10,21 @@ const MAX_SOUL_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 const MODERATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
-const SIWE_STATEMENT = 'Authenticate wallet ownership for SoulStarter. No token transfer or approval.';
-const SIWE_DOMAIN = String(process.env.SIWE_DOMAIN || 'soulstarter.vercel.app').trim();
-const SIWE_URI = String(process.env.SIWE_URI || `https://${SIWE_DOMAIN}`).trim();
+const SIWE_STATEMENT = 'Authenticate wallet ownership for PULL.md. No token transfer or approval.';
+function resolveSiweDomain() {
+  const configured = String(process.env.SIWE_DOMAIN || '').trim();
+  if (!configured) return 'www.pull.md';
+  if (configured.toLowerCase().includes('soulstarter')) return 'www.pull.md';
+  return configured;
+}
+function resolveSiweUri(domain) {
+  const configured = String(process.env.SIWE_URI || '').trim();
+  if (!configured) return `https://${domain}`;
+  if (configured.toLowerCase().includes('soulstarter')) return `https://${domain}`;
+  return configured;
+}
+const SIWE_DOMAIN = resolveSiweDomain();
+const SIWE_URI = resolveSiweUri(SIWE_DOMAIN);
 const SIWE_CHAIN_ID = Number(process.env.SIWE_CHAIN_ID || '8453');
 const REVIEW_AUDIT_FILE = 'review-audit.jsonl';
 const PUBLISHED_CATALOG_FILE = 'published-catalog.json';
@@ -223,17 +235,30 @@ function markDbFailure() {
   dbDisabledUntilMs = Date.now() + cooldown;
 }
 
+function sanitizeDbConnectionString(connectionString) {
+  const raw = String(connectionString || '').trim();
+  if (!raw) return raw;
+  try {
+    const parsed = new URL(raw);
+    parsed.searchParams.delete('sslmode');
+    return parsed.toString();
+  } catch (_) {
+    return raw;
+  }
+}
+
 function getMarketplaceDbPool() {
-  const connectionString = getMarketplaceDatabaseUrl();
-  if (!connectionString) return null;
+  const rawConnectionString = getMarketplaceDatabaseUrl();
+  if (!rawConnectionString) return null;
   if (dbPool) return dbPool;
+  const connectionString = sanitizeDbConnectionString(rawConnectionString);
 
   const sslHint = String(process.env.MARKETPLACE_DB_SSL || '').trim().toLowerCase();
   const needsSsl =
     sslHint === '1' ||
     sslHint === 'true' ||
-    /sslmode=require/i.test(connectionString) ||
-    /render\.com|neon\.tech|supabase\.co|railway\.app/i.test(connectionString);
+    /sslmode=require/i.test(rawConnectionString) ||
+    /render\.com|neon\.tech|supabase\.co|railway\.app/i.test(rawConnectionString);
 
   dbPool = new Pool({
     connectionString,
@@ -733,20 +758,22 @@ function buildTimestampCandidates(timestamp) {
   return [...new Set([base, sec])];
 }
 
-function buildSiweAuthMessage({ wallet, action, timestamp, scope }) {
+function buildSiweAuthMessage({ wallet, action, timestamp, scope, domain, uri }) {
   const ts = Number(timestamp);
   const address = String(wallet || '').trim().toLowerCase();
   const issuedAt = new Date(ts).toISOString();
   const expiresAt = new Date(ts + 5 * 60 * 1000).toISOString();
   const nonce = buildSiweNonce({ scope, action, timestamp: ts });
   const requestId = `${String(action || '').trim()}:${String(scope || '*').trim()}`;
+  const normalizedDomain = String(domain || SIWE_DOMAIN).trim() || SIWE_DOMAIN;
+  const normalizedUri = String(uri || `https://${normalizedDomain}`).trim() || `https://${normalizedDomain}`;
   return [
-    `${SIWE_DOMAIN} wants you to sign in with your Ethereum account:`,
+    `${normalizedDomain} wants you to sign in with your Ethereum account:`,
     address,
     '',
     SIWE_STATEMENT,
     '',
-    `URI: ${SIWE_URI}`,
+    `URI: ${normalizedUri}`,
     'Version: 1',
     `Chain ID: ${Number.isFinite(SIWE_CHAIN_ID) ? SIWE_CHAIN_ID : 8453}`,
     `Nonce: ${nonce}`,
@@ -754,12 +781,12 @@ function buildSiweAuthMessage({ wallet, action, timestamp, scope }) {
     `Expiration Time: ${expiresAt}`,
     `Request ID: ${requestId}`,
     'Resources:',
-    `- urn:soulstarter:action:${String(action || '').trim()}`,
-    `- urn:soulstarter:scope:${String(scope || '*').trim()}`
+    `- urn:pullmd:action:${String(action || '').trim()}`,
+    `- urn:pullmd:scope:${String(scope || '*').trim()}`
   ].join('\n');
 }
 
-function buildCreatorSiweMessageCandidates({ wallet, action, timestamp }) {
+function buildCreatorSiweMessageCandidates({ wallet, action, timestamp, domain, uri }) {
   const raw = asString(wallet);
   const lower = raw.toLowerCase();
   const checksummed = safeChecksumAddress(raw);
@@ -775,7 +802,9 @@ function buildCreatorSiweMessageCandidates({ wallet, action, timestamp }) {
         wallet: walletVariant,
         action,
         timestamp: ts,
-        scope: 'creator'
+        scope: 'creator',
+        domain,
+        uri
       });
       candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
       candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
@@ -787,7 +816,7 @@ function buildCreatorSiweMessageCandidates({ wallet, action, timestamp }) {
   return candidates;
 }
 
-function buildModeratorSiweMessageCandidates({ wallet, action, timestamp }) {
+function buildModeratorSiweMessageCandidates({ wallet, action, timestamp, domain, uri }) {
   const raw = asString(wallet);
   const lower = raw.toLowerCase();
   const checksummed = safeChecksumAddress(raw);
@@ -803,7 +832,9 @@ function buildModeratorSiweMessageCandidates({ wallet, action, timestamp }) {
         wallet: walletVariant,
         action,
         timestamp: ts,
-        scope: 'moderator'
+        scope: 'moderator',
+        domain,
+        uri
       });
       candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
       candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
@@ -903,16 +934,18 @@ export function getMarketplaceDraftTemplate() {
   };
 }
 
-export function buildCreatorAuthMessage({ wallet, action, timestamp }) {
+export function buildCreatorAuthMessage({ wallet, action, timestamp, domain, uri }) {
   return buildSiweAuthMessage({
     wallet: String(wallet || '').toLowerCase(),
     action,
     timestamp,
-    scope: 'creator'
+    scope: 'creator',
+    domain,
+    uri
   });
 }
 
-export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
+export function verifyCreatorAuth({ wallet, timestamp, signature, action, domain, uri }) {
   if (!wallet || !timestamp || !signature || !action) {
     return {
       ok: false,
@@ -940,7 +973,7 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
     };
   }
 
-  const siweCandidates = buildCreatorSiweMessageCandidates({ wallet, action, timestamp: ts });
+  const siweCandidates = buildCreatorSiweMessageCandidates({ wallet, action, timestamp: ts, domain, uri });
   for (const candidate of siweCandidates) {
     try {
       const recovered = ethers.verifyMessage(candidate.message, signature);
@@ -957,7 +990,9 @@ export function verifyCreatorAuth({ wallet, timestamp, signature, action }) {
     auth_message_template: buildCreatorAuthMessage({
       wallet: '0x<your-wallet>',
       action,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      domain,
+      uri
     })
   };
 }
@@ -1338,16 +1373,18 @@ export function listModeratorWallets() {
   return parseModeratorWalletEnv();
 }
 
-export function buildModeratorAuthMessage({ wallet, action, timestamp }) {
+export function buildModeratorAuthMessage({ wallet, action, timestamp, domain, uri }) {
   return buildSiweAuthMessage({
     wallet: String(wallet || '').toLowerCase(),
     action: String(action || '').trim(),
     timestamp,
-    scope: 'moderator'
+    scope: 'moderator',
+    domain,
+    uri
   });
 }
 
-export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
+export function verifyModeratorAuth({ wallet, timestamp, signature, action, domain, uri }) {
   const allowlist = listModeratorWallets();
   if (allowlist.length === 0) {
     return { ok: false, error: 'Server configuration error: moderator allowlist is empty' };
@@ -1385,7 +1422,7 @@ export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
     };
   }
 
-  const siweCandidates = buildModeratorSiweMessageCandidates({ wallet, action, timestamp: ts });
+  const siweCandidates = buildModeratorSiweMessageCandidates({ wallet, action, timestamp: ts, domain, uri });
   for (const candidate of siweCandidates) {
     try {
       const recovered = ethers.verifyMessage(candidate.message, signature);
@@ -1402,7 +1439,9 @@ export function verifyModeratorAuth({ wallet, timestamp, signature, action }) {
     auth_message_template: buildModeratorAuthMessage({
       wallet: '0x<your-wallet>',
       action,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      domain,
+      uri
     })
   };
 }

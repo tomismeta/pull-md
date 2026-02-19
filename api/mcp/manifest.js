@@ -31,7 +31,7 @@ export default function handler(req, res) {
     return res.status(200).end();
   }
 
-  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'soulstarter.vercel.app').trim();
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'www.pull.md').trim();
   const proto = String(req.headers['x-forwarded-proto'] || 'https').trim();
   const baseUrl = `${proto}://${host}`;
 
@@ -94,7 +94,7 @@ export default function handler(req, res) {
         'Wallet casing mismatch between signed message and submitted fields'
       ],
       agent_key_boundary:
-        'Never send Bankr API keys or signer secrets to SoulStarter. SoulStarter accepts only signed x402 payment headers.'
+        'Never send Bankr API keys or signer secrets to PULL.md. PULL.md accepts only signed x402 payment headers.'
     },
     facilitator_capabilities: {
       runtime_source: 'server-configured facilitator URLs',
@@ -140,15 +140,17 @@ export default function handler(req, res) {
         'Use get_auth_challenge to receive SIWE text + timestamp before signing creator/moderator/session/redownload auth requests.'
     },
     resources: {
-      scheme: 'soulstarter://',
+      scheme: 'pullmd://',
       examples: [
-        'soulstarter://docs/manifest',
-        'soulstarter://docs/webmcp',
-        'soulstarter://assets',
-        'soulstarter://assets/<id>',
-        'soulstarter://souls',
-        'soulstarter://souls/<id>'
-      ]
+        'pullmd://docs/manifest',
+        'pullmd://docs/webmcp',
+        'pullmd://assets',
+        'pullmd://assets/<id>',
+        'pullmd://souls',
+        'pullmd://souls/<id>',
+        'soulstarter://assets/<id> (legacy alias)'
+      ],
+      legacy_alias_scheme: 'soulstarter://'
     },
     tools,
     download_contract: {
@@ -193,7 +195,7 @@ export default function handler(req, res) {
       redownload_session_bootstrap:
         'Bootstrap session at GET /api/auth/session with X-WALLET-ADDRESS + X-AUTH-SIGNATURE + X-AUTH-TIMESTAMP to obtain X-REDOWNLOAD-SESSION.',
       anti_poisoning_rule:
-        'Always verify the full PAYMENT-REQUIRED.accepts[0].payTo address against the canonical seller address from trusted SoulStarter metadata before signing.',
+        'Always verify the full PAYMENT-REQUIRED.accepts[0].payTo address against the canonical seller address from trusted PULL.md metadata before signing.',
       redownload_priority:
         'If wallet+receipt headers are present, entitlement path is processed first (prevents accidental repay even when payment headers are also sent).',
       note: 'auth_message_template may appear in a 402 response as helper text; purchase still requires payment header submission.',

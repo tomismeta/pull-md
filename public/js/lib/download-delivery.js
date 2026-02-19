@@ -41,7 +41,7 @@
         if (!navigator.canShare || navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: filename,
-            text: 'SoulStarter file',
+            text: 'PULL.md file',
             files: [file]
           });
           return;

@@ -32,7 +32,7 @@
       `${String(domain || '')} wants you to sign in with your Ethereum account:`,
       String(wallet || '').toLowerCase(),
       '',
-      'Authenticate wallet ownership for SoulStarter. No token transfer or approval.',
+      'Authenticate wallet ownership for PULL.md. No token transfer or approval.',
       '',
       `URI: ${String(uri || '')}`,
       'Version: 1',
@@ -42,8 +42,8 @@
       `Expiration Time: ${new Date(ts + 5 * 60 * 1000).toISOString()}`,
       `Request ID: ${String(action || 'auth')}:${normalizedSoulId}`,
       'Resources:',
-      `- urn:soulstarter:action:${normalizedAction}`,
-      `- urn:soulstarter:soul:${normalizedSoulId}`
+      `- urn:pullmd:action:${normalizedAction}`,
+      `- urn:pullmd:asset:${normalizedSoulId}`
     ].join('\n');
   }
 
@@ -65,7 +65,7 @@
       `${String(domain || '')} wants you to sign in with your Ethereum account:`,
       String(wallet || '').toLowerCase(),
       '',
-      'Authenticate wallet ownership for SoulStarter. No token transfer or approval.',
+      'Authenticate wallet ownership for PULL.md. No token transfer or approval.',
       '',
       `URI: ${String(uri || '')}`,
       'Version: 1',
@@ -75,8 +75,8 @@
       `Expiration Time: ${new Date(ts + 5 * 60 * 1000).toISOString()}`,
       `Request ID: ${String(action || normalizedScope)}:${normalizedScope}`,
       'Resources:',
-      `- urn:soulstarter:action:${normalizedAction}`,
-      `- urn:soulstarter:scope:${normalizedScope}`
+      `- urn:pullmd:action:${normalizedAction}`,
+      `- urn:pullmd:scope:${normalizedScope}`
     ].join('\n');
   }
 

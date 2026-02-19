@@ -1,6 +1,7 @@
 import {
   buildRedownloadSessionSetCookie,
   createRedownloadSessionToken,
+  resolveSiweIdentity,
   verifyRedownloadSessionToken,
   verifyWalletAuth
 } from '../payments.js';
@@ -21,7 +22,8 @@ export async function createBrowserRedownloadSession({
   signature,
   timestamp,
   clientMode,
-  reqHost
+  reqHost,
+  reqProto
 }) {
   if (isStrictAgentMode(clientMode)) {
     throw new AppError(410, {
@@ -33,12 +35,16 @@ export async function createBrowserRedownloadSession({
     });
   }
 
+  const siweIdentity = resolveSiweIdentity({ host: reqHost, proto: reqProto });
+
   const auth = await verifyWalletAuth({
     wallet,
     soulId: '*',
     action: 'session',
     timestamp,
-    signature
+    signature,
+    domain: siweIdentity.domain,
+    uri: siweIdentity.uri
   });
 
   if (!auth.ok) {
@@ -70,4 +76,3 @@ export async function createBrowserRedownloadSession({
     }
   };
 }
-

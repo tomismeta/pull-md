@@ -1,9 +1,21 @@
 import crypto from 'crypto';
 import { ethers } from 'ethers';
 
-const SIWE_STATEMENT = 'Authenticate wallet ownership for SoulStarter. No token transfer or approval.';
-const SIWE_DOMAIN = String(process.env.SIWE_DOMAIN || 'soulstarter.vercel.app').trim();
-const SIWE_URI = String(process.env.SIWE_URI || `https://${SIWE_DOMAIN}`).trim();
+const SIWE_STATEMENT = 'Authenticate wallet ownership for PULL.md. No token transfer or approval.';
+function resolveSiweDomain() {
+  const configured = String(process.env.SIWE_DOMAIN || '').trim();
+  if (!configured) return 'www.pull.md';
+  if (configured.toLowerCase().includes('soulstarter')) return 'www.pull.md';
+  return configured;
+}
+function resolveSiweUri(domain) {
+  const configured = String(process.env.SIWE_URI || '').trim();
+  if (!configured) return `https://${domain}`;
+  if (configured.toLowerCase().includes('soulstarter')) return `https://${domain}`;
+  return configured;
+}
+const SIWE_DOMAIN = resolveSiweDomain();
+const SIWE_URI = resolveSiweUri(SIWE_DOMAIN);
 const SIWE_CHAIN_ID = Number(process.env.SIWE_CHAIN_ID || '8453');
 const EIP1271_MAGIC_VALUE = '0x1626ba7e';
 const EIP1271_MAGIC_VALUE_BYTES = '0x20c13b0b';
@@ -12,6 +24,28 @@ const EIP1271_IFACE_BYTES = new ethers.Interface(['function isValidSignature(byt
 let authProvider = null;
 const walletTypeCache = new Map();
 const WALLET_TYPE_CACHE_TTL_MS = Number(process.env.WALLET_TYPE_CACHE_TTL_MS || '300000');
+
+export function resolveSiweIdentity({ host, proto } = {}) {
+  const rawHost = String(host || '').trim().toLowerCase();
+  const rawProto = String(proto || '').trim().toLowerCase();
+  const isLocalHost =
+    rawHost.includes('localhost') ||
+    rawHost.startsWith('127.0.0.1') ||
+    rawHost.startsWith('0.0.0.0') ||
+    rawHost.endsWith('.local');
+
+  const configuredDomain = resolveSiweDomain();
+  const domain = isLocalHost && rawHost ? rawHost : configuredDomain;
+
+  const configuredUri = resolveSiweUri(domain);
+  const configuredLooksLegacy = String(configuredUri || '').toLowerCase().includes('soulstarter');
+  if (!configuredLooksLegacy) {
+    return { domain, uri: configuredUri };
+  }
+
+  const protocol = isLocalHost && rawProto === 'http' ? 'http' : 'https';
+  return { domain, uri: `${protocol}://${domain}` };
+}
 
 function authRpcUrl() {
   return (
@@ -49,6 +83,8 @@ export function setCors(res, origin) {
   const allowedOrigins = [
     'https://soulstarter.vercel.app',
     'https://soulstarter.io',
+    'https://pull.md',
+    'https://www.pull.md',
     'http://localhost:3000',
     'http://localhost:8080'
   ];
@@ -73,7 +109,7 @@ export function getSellerAddress() {
   return sellerAddress || null;
 }
 
-export async function verifyWalletAuth({ wallet, soulId, action, timestamp, signature }) {
+export async function verifyWalletAuth({ wallet, soulId, action, timestamp, signature, domain, uri }) {
   if (!wallet || !signature || !timestamp) {
     return { ok: false, error: 'Missing wallet authentication headers' };
   }
@@ -93,7 +129,7 @@ export async function verifyWalletAuth({ wallet, soulId, action, timestamp, sign
     return { ok: false, error: 'Authentication message expired' };
   }
 
-  const siweCandidates = buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp: ts });
+  const siweCandidates = buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp: ts, domain, uri });
   const authDebug = {
     mode: 'siwe-only',
     tried_variants: siweCandidates.map((candidate) => candidate.variant),
@@ -183,7 +219,7 @@ async function call1271({ provider, to, iface, fn, args }) {
   }
 }
 
-function buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp }) {
+function buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp, domain, uri }) {
   const normalizedTimestamps = buildTimestampCandidates(timestamp);
   const rawWallet = String(wallet || '').trim();
   const walletLower = rawWallet.toLowerCase();
@@ -196,7 +232,7 @@ function buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp }) {
       const walletVariantLabel = walletVariant === walletLower ? 'siwe-lowercase' : 'siwe-checksummed';
       const tsLabel = ts === Number(timestamp) ? 'ts-ms' : 'ts-sec';
       const baseVariant = `${walletVariantLabel}-${tsLabel}`;
-      const baseMessage = buildSiweAuthMessage({ wallet: walletVariant, soulId, action, timestamp: ts });
+      const baseMessage = buildSiweAuthMessage({ wallet: walletVariant, soulId, action, timestamp: ts, domain, uri });
       candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
       candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
       const crlf = baseMessage.replace(/\n/g, '\r\n');
@@ -230,20 +266,22 @@ function buildSiweNonce({ soulId, action, timestamp }) {
   return crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
 }
 
-export function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
+export function buildSiweAuthMessage({ wallet, soulId, action, timestamp, domain, uri }) {
   const address = String(wallet || '').trim().toLowerCase();
   const ts = Number(timestamp);
   const issuedAt = new Date(ts).toISOString();
   const expiresAt = new Date(ts + 5 * 60 * 1000).toISOString();
   const nonce = buildSiweNonce({ soulId, action, timestamp: ts });
   const requestId = `${String(action || 'auth').trim()}:${String(soulId || '*').trim()}`;
+  const normalizedDomain = String(domain || SIWE_DOMAIN).trim() || SIWE_DOMAIN;
+  const normalizedUri = String(uri || `https://${normalizedDomain}`).trim() || `https://${normalizedDomain}`;
   return [
-    `${SIWE_DOMAIN} wants you to sign in with your Ethereum account:`,
+    `${normalizedDomain} wants you to sign in with your Ethereum account:`,
     address,
     '',
     SIWE_STATEMENT,
     '',
-    `URI: ${SIWE_URI}`,
+    `URI: ${normalizedUri}`,
     'Version: 1',
     `Chain ID: ${Number.isFinite(SIWE_CHAIN_ID) ? SIWE_CHAIN_ID : 8453}`,
     `Nonce: ${nonce}`,
@@ -251,8 +289,8 @@ export function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
     `Expiration Time: ${expiresAt}`,
     `Request ID: ${requestId}`,
     'Resources:',
-    `- urn:soulstarter:action:${String(action || '').trim()}`,
-    `- urn:soulstarter:soul:${String(soulId || '*').trim()}`
+    `- urn:pullmd:action:${String(action || '').trim()}`,
+    `- urn:pullmd:asset:${String(soulId || '*').trim()}`
   ].join('\n');
 }
 

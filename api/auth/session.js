@@ -28,7 +28,8 @@ export default async function handler(req, res) {
       signature,
       timestamp,
       clientMode,
-      reqHost: req.headers.host
+      reqHost: req.headers['x-forwarded-host'] || req.headers.host,
+      reqProto: req.headers['x-forwarded-proto'] || 'https'
     });
     res.setHeader('Set-Cookie', session.setCookie);
     res.setHeader('X-REDOWNLOAD-SESSION', session.token);
