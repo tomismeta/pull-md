@@ -430,6 +430,34 @@ async function moderatorAuthHeaders() {
   };
 }
 
+async function moderatorSignatureHeaders(action) {
+  const normalizedAction = String(action || '').trim();
+  if (!normalizedAction) throw new Error('Missing moderation action');
+  await requireAllowedModerator();
+  const challenge = await mcpToolCall('get_auth_challenge', {
+    flow: 'moderator',
+    wallet_address: state.wallet,
+    action: normalizedAction
+  });
+  const message = String(challenge?.auth_message_template || '').trim();
+  const issuedAt = String(challenge?.issued_at || '').trim();
+  const timestamp = Number.isFinite(Number(challenge?.auth_timestamp_ms))
+    ? Number(challenge.auth_timestamp_ms)
+    : Date.parse(issuedAt);
+  if (!message || !Number.isFinite(timestamp)) {
+    throw new Error('Failed to build moderator signature challenge');
+  }
+  const signature = String(await state.signer.signMessage(message) || '').trim();
+  if (!/^0x[0-9a-fA-F]+$/.test(signature)) {
+    throw new Error('Wallet returned an invalid signature format for moderator authentication');
+  }
+  return {
+    'X-MODERATOR-ADDRESS': state.wallet,
+    'X-MODERATOR-SIGNATURE': signature,
+    'X-MODERATOR-TIMESTAMP': String(timestamp)
+  };
+}
+
 async function moderationRequest(action, { method = 'GET', headers = {}, body, query = {} } = {}) {
   const normalizedAction = String(action || '').trim();
   const normalizedMethod = String(method || '').toUpperCase();
@@ -461,9 +489,12 @@ async function moderationRequest(action, { method = 'GET', headers = {}, body, q
 async function apiCall(action, { method = 'GET', body, query, moderatorAuth = false } = {}) {
   const normalizedAction = String(action || '').trim();
   let attempt = 0;
-  while (attempt < 2) {
+  let useSignatureFallback = false;
+  while (attempt < 3) {
     try {
-      const headers = moderatorAuth ? await moderatorAuthHeaders() : {};
+      const headers = moderatorAuth
+        ? (useSignatureFallback ? await moderatorSignatureHeaders(normalizedAction) : await moderatorAuthHeaders())
+        : {};
       return await moderationRequest(normalizedAction, {
         method,
         headers,
@@ -475,7 +506,7 @@ async function apiCall(action, { method = 'GET', body, query, moderatorAuth = fa
       const code = String(error?.code || '').toLowerCase();
       const canRefresh =
         moderatorAuth &&
-        attempt === 0 &&
+        attempt <= 1 &&
         (code.includes('session') ||
           message.includes('moderator session invalid') ||
           message.includes('re-download session') ||
@@ -483,7 +514,18 @@ async function apiCall(action, { method = 'GET', body, query, moderatorAuth = fa
           message.includes('authentication timed out'));
       if (!canRefresh) throw error;
       clearModeratorSession();
-      await bootstrapModeratorSession(true);
+      if (!useSignatureFallback) {
+        try {
+          await bootstrapModeratorSession(true);
+        } catch (_) {
+          useSignatureFallback = true;
+        }
+      } else {
+        useSignatureFallback = true;
+      }
+      if (message.includes('moderator session invalid') || message.includes('re-download session')) {
+        useSignatureFallback = true;
+      }
       attempt += 1;
     }
   }

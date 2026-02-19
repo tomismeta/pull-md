@@ -424,10 +424,19 @@ export function createRedownloadSessionToken({ wallet }) {
 export function verifyRedownloadSessionToken({ token, wallet }) {
   const secrets = receiptSecrets();
   if (secrets.length === 0) return { ok: false, error: 'Server configuration error: PURCHASE_RECEIPT_SECRET is required' };
-  if (!token || typeof token !== 'string' || !token.includes('.')) {
+  let normalizedToken = token;
+  if (typeof normalizedToken === 'string') {
+    normalizedToken = normalizedToken.trim().replace(/^"+|"+$/g, '');
+    if (normalizedToken.includes('%')) {
+      try {
+        normalizedToken = decodeURIComponent(normalizedToken);
+      } catch (_) {}
+    }
+  }
+  if (!normalizedToken || typeof normalizedToken !== 'string' || !normalizedToken.includes('.')) {
     return { ok: false, error: 'Missing re-download session token' };
   }
-  const [payloadB64, sigB64] = token.split('.');
+  const [payloadB64, sigB64] = normalizedToken.split('.');
   const signatureMatches = secrets.some((secret) => {
     const expected = crypto
       .createHmac('sha256', secret)
