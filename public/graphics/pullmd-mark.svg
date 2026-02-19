@@ -1,9 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="PULL.md mark">
-  <rect width="128" height="128" rx="24" fill="#081123"/>
-  <g fill="#3b82ff">
-    <rect x="40" y="22" width="10" height="84" rx="5"/>
-    <rect x="78" y="22" width="10" height="84" rx="5"/>
-    <rect x="24" y="46" width="80" height="10" rx="5"/>
-    <rect x="24" y="72" width="80" height="10" rx="5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="512" height="512">
+  <rect width="200" height="200" rx="45" fill="#0D1116" />
+  
+  <g transform="translate(45, 35) scale(0.9)">
+    <g transform="skewX(-14)" fill="#548DFF">
+      <rect x="30" y="0" width="34" height="145" rx="4" ry="4"/>
+      <rect x="94" y="0" width="34" height="145" rx="4" ry="4"/>
+      <rect x="-5" y="32" width="168" height="34" rx="4" ry="4"/>
+      <rect x="-5" y="86" width="168" height="34" rx="4" ry="4"/>
+    </g>
   </g>
 </svg>
