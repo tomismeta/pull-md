@@ -37,4 +37,4 @@ Persist useful context in memory files and keep notes concise, factual, and acti
 
 ---
 
-*Starter soul delivered by SoulStarter.*
+*Starter soul delivered by PullMd.*

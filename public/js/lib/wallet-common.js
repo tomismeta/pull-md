@@ -1,7 +1,7 @@
-(function attachSoulStarterWalletCommon(globalScope) {
+(function attachPullMdWalletCommon(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
-  const DEFAULT_SESSION_KEY = 'soulstarter_wallet_session_v1';
+  const DEFAULT_SESSION_KEY = 'pullmd_wallet_session_v1';
 
   async function ensureBaseNetwork(provider, config = {}) {
     if (!provider) return;
@@ -71,7 +71,7 @@
     return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
   }
 
-  globalScope.SoulStarterWalletCommon = {
+  globalScope.PullMdWalletCommon = {
     ensureBaseNetwork,
     saveWalletSession,
     clearWalletSession,

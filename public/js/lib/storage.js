@@ -1,8 +1,8 @@
-(function attachSoulStarterStorage(globalScope) {
+(function attachPullMdStorage(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
-  const DEFAULT_RECEIPT_PREFIX = 'soulstarter.receipt.';
-  const DEFAULT_REDOWNLOAD_SESSION_PREFIX = 'soulstarter.redownload.session.';
+  const DEFAULT_RECEIPT_PREFIX = 'pullmd.receipt.';
+  const DEFAULT_REDOWNLOAD_SESSION_PREFIX = 'pullmd.redownload.session.';
 
   function receiptStorageKey(wallet, soulId, { receiptPrefix = DEFAULT_RECEIPT_PREFIX } = {}) {
     const normalizedWallet = String(wallet || '').toLowerCase().trim();
@@ -103,7 +103,7 @@
     }
   }
 
-  globalScope.SoulStarterStorage = {
+  globalScope.PullMdStorage = {
     receiptStorageKey,
     parseSoulIdFromReceiptKey,
     collectStoredProofs,

@@ -37,4 +37,4 @@ Maintain concise run notes so future sessions can resume with full operational c
 
 ---
 
-*Starter soul delivered by SoulStarter.*
+*Starter soul delivered by PullMd.*

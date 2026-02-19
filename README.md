@@ -305,14 +305,14 @@ and points to `/api/mcp/manifest`.
 
 An OpenClaw-ready skill is included at:
 
-- `/Users/tom/dev/soulstarter/skills/openclaw-soulstarter/SKILL.md`
-- `/Users/tom/dev/soulstarter/skills/openclaw-soulstarter/agents/openai.yaml`
+- `/Users/tom/dev/pull-md/skills/openclaw-pullmd/SKILL.md`
+- `/Users/tom/dev/pull-md/skills/openclaw-pullmd/agents/openai.yaml`
 
 ### Quick Use
 
 1. Point your agent/runner at this repository.
 2. Load the skill from:
-`/Users/tom/dev/soulstarter/skills/openclaw-soulstarter/SKILL.md`
+`/Users/tom/dev/pull-md/skills/openclaw-pullmd/SKILL.md`
 3. Provide:
 `base_url`, `wallet_address`, signing capability, and (optionally) stored receipts.
 Stored receipts should be treated as sensitive proof material and kept out of logs.

@@ -1,4 +1,4 @@
-(function attachSoulStarterWalletState(globalScope) {
+(function attachPullMdWalletState(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function normalizeWallet(wallet) {
@@ -176,7 +176,7 @@
     return allowlist;
   }
 
-  globalScope.SoulStarterWalletState = {
+  globalScope.PullMdWalletState = {
     updateWalletUI,
     updateModeratorNavLinks,
     ownedSoulSetForWallet,

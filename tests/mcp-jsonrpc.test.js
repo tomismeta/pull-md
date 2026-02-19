@@ -262,9 +262,6 @@ test('MCP resources/list and resources/read expose discoverable URIs', async () 
   assert.equal(Array.isArray(resources), true);
   assert.ok(resources.some((item) => String(item?.uri || '') === 'pullmd://docs/manifest'));
   assert.ok(resources.some((item) => String(item?.uri || '') === 'pullmd://assets'));
-  assert.ok(
-    resources.some((item) => Array.isArray(item?.aliases) && item.aliases.includes('soulstarter://docs/manifest'))
-  );
 
   const readRes = await runMcpRequest({
     body: {
@@ -272,14 +269,12 @@ test('MCP resources/list and resources/read expose discoverable URIs', async () 
       id: 8,
       method: 'resources/read',
       params: {
-        uri: 'soulstarter://docs/manifest'
+        uri: 'pullmd://docs/manifest'
       }
     }
   });
   assert.equal(readRes.statusCode, 200);
   const contents = readRes.body?.result?.contents || [];
   assert.equal(Array.isArray(contents), true);
-  assert.ok(
-    ['pullmd://docs/manifest', 'soulstarter://docs/manifest'].includes(String(contents[0]?.uri || ''))
-  );
+  assert.equal(String(contents[0]?.uri || ''), 'pullmd://docs/manifest');
 });

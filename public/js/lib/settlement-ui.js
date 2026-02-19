@@ -1,4 +1,4 @@
-(function attachSoulStarterSettlementUi(globalScope) {
+(function attachPullMdSettlementUi(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function readSettlementResponse(response) {
@@ -75,7 +75,7 @@
   `;
   }
 
-  globalScope.SoulStarterSettlementUi = {
+  globalScope.PullMdSettlementUi = {
     readSettlementResponse,
     readSettlementTx,
     renderSettlementVerification

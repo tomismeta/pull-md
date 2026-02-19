@@ -1,4 +1,4 @@
-(function attachSoulStarterAppBootstrap(globalScope) {
+(function attachPullMdAppBootstrap(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function bindWalletOptionHandlers({
@@ -64,7 +64,7 @@
     globalScope.addEventListener('beforeunload', callback);
   }
 
-  globalScope.SoulStarterAppBootstrap = {
+  globalScope.PullMdAppBootstrap = {
     bindWalletOptionHandlers,
     runStartup,
     bindBeforeUnload

@@ -1,4 +1,4 @@
-(function attachSoulStarterRedownloadFlow(globalScope) {
+(function attachPullMdRedownloadFlow(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   async function ensureRedownloadSession({
@@ -161,7 +161,7 @@
     throw new Error(error || 'Re-download failed');
   }
 
-  globalScope.SoulStarterRedownloadFlow = {
+  globalScope.PullMdRedownloadFlow = {
     ensureRedownloadSession,
     attemptRedownload
   };

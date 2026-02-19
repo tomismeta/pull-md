@@ -15,7 +15,7 @@ test('wallet session auth plain message is rejected (SIWE-only)', async () => {
   const wallet = ethers.Wallet.createRandom();
   const timestamp = Date.now();
   const message = [
-    'SoulStarter Wallet Authentication',
+    'PullMd Wallet Authentication',
     `address:${wallet.address.toLowerCase()}`,
     'soul:*',
     'action:session',
@@ -39,9 +39,9 @@ test('wallet session auth typed-data signature is rejected (SIWE-only)', async (
   const wallet = ethers.Wallet.createRandom();
   const timestamp = Date.now();
   const typed = {
-    domain: { name: 'SoulStarter Authentication', version: '1' },
+    domain: { name: 'PullMd Authentication', version: '1' },
     types: {
-      SoulStarterAuth: [
+      PullMdAuth: [
         { name: 'wallet', type: 'address' },
         { name: 'soul', type: 'string' },
         { name: 'action', type: 'string' },
@@ -99,7 +99,7 @@ test('redownload auth plain message is rejected (SIWE-only)', async () => {
   const wallet = ethers.Wallet.createRandom();
   const timestamp = Date.now();
   const message = [
-    'SoulStarter Wallet Authentication',
+    'PullMd Wallet Authentication',
     `address:${wallet.address.toLowerCase()}`,
     'soul:sassy-starter-v1',
     'action:redownload',

@@ -22,8 +22,8 @@ const WRITE_ACTIONS = new Set([
 
 function setCors(res, origin) {
   const allowedOrigins = [
-    'https://soulstarter.vercel.app',
-    'https://soulstarter.io',
+    'https://pullmd.vercel.app',
+    'https://pullmd.io',
     'https://pull.md',
     'https://www.pull.md',
     'http://localhost:3000',

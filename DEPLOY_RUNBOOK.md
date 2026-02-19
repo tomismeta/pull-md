@@ -1,4 +1,4 @@
-# SoulStarter Deploy Runbook
+# PullMd Deploy Runbook
 
 ## Production Deploy Command
 
@@ -47,20 +47,20 @@ npx vercel --prod --yes --token <VERCEL_TOKEN>
 ## Verify Production Alias
 
 ```bash
-npx vercel inspect soulstarter.vercel.app --token <VERCEL_TOKEN> --scope open-meta-looms-projects
+npx vercel inspect pullmd.vercel.app --token <VERCEL_TOKEN> --scope open-meta-looms-projects
 ```
 
 Look for:
 - `status: Ready`
-- `url: https://soulstarter-<deployment>.vercel.app`
-- alias includes `https://soulstarter.vercel.app`
+- `url: https://pullmd-<deployment>.vercel.app`
+- alias includes `https://pullmd.vercel.app`
 
 ## Rollback (No Rebuild)
 
 Use if needed:
 
 ```bash
-npx vercel ls soulstarter --token <VERCEL_TOKEN> --scope open-meta-looms-projects
+npx vercel ls pullmd --token <VERCEL_TOKEN> --scope open-meta-looms-projects
 npx vercel promote <deployment-url> --token <VERCEL_TOKEN> --scope open-meta-looms-projects
 ```
 

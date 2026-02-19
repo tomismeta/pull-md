@@ -1,4 +1,4 @@
-(function attachSoulStarterX402Browser(globalScope) {
+(function attachPullMdX402Browser(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   const sdkModulePromiseByVersion = new Map();
@@ -188,7 +188,7 @@
     return { payload, selected, engine: activeEngine };
   }
 
-  globalScope.SoulStarterX402Browser = {
+  globalScope.PullMdX402Browser = {
     normalizeAddress,
     loadSdkModules,
     selectPaymentRequirement,

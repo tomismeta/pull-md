@@ -37,4 +37,4 @@ Document templates, pitfalls, and diagnostics so collaborators gain independence
 
 ---
 
-*Starter soul delivered by SoulStarter.*
+*Starter soul delivered by PullMd.*

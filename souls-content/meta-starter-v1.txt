@@ -38,4 +38,4 @@ Use memory files to persist context across sessions. Keep notes factual and comp
 
 ---
 
-*Starter soul delivered by SoulStarter.*
+*Starter soul delivered by PullMd.*

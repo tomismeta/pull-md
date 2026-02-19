@@ -23,16 +23,11 @@ function soulResourceUri(id) {
   return `pullmd://souls/${encodeURIComponent(String(id || ''))}`;
 }
 
-function isLegacySoulstarterScheme(uri) {
-  return String(uri || '').startsWith('soulstarter://');
-}
-
 function normalizeResourceUri(uri) {
   const raw = String(uri || '').trim();
   if (!raw) return '';
   if (raw.startsWith('pullmd://')) return raw;
-  if (!isLegacySoulstarterScheme(raw)) return raw;
-  return `pullmd://${raw.slice('soulstarter://'.length)}`;
+  return raw;
 }
 
 export async function getMcpResourcesList() {
@@ -40,28 +35,25 @@ export async function getMcpResourcesList() {
   const docs = [
     {
       uri: 'pullmd://docs/manifest',
-      aliases: ['soulstarter://docs/manifest'],
       name: 'MCP Manifest',
       description: 'Machine-readable capability contract',
       mimeType: 'application/json'
     },
     {
       uri: 'pullmd://docs/webmcp',
-      aliases: ['soulstarter://docs/webmcp'],
       name: 'WebMCP Markdown',
       description: 'Human-readable MCP + x402 contract',
       mimeType: 'text/markdown'
     },
     {
       uri: 'pullmd://assets',
-      aliases: ['soulstarter://assets'],
       name: 'Public Asset Catalog',
       description: 'Publicly listed markdown asset summaries',
       mimeType: 'application/json'
     },
     {
       uri: 'pullmd://souls',
-      aliases: ['soulstarter://souls'],
+      aliases: ['pullmd://souls'],
       name: 'Public Soul Catalog',
       description: 'Legacy alias for pullmd://assets',
       mimeType: 'application/json'
@@ -71,14 +63,13 @@ export async function getMcpResourcesList() {
   const assetResources = assets.flatMap((asset) => [
     {
       uri: assetResourceUri(asset.id),
-      aliases: [`soulstarter://assets/${encodeURIComponent(String(asset.id || ''))}`],
+      aliases: [`pullmd://assets/${encodeURIComponent(String(asset.id || ''))}`],
       name: String(asset.name || asset.id || ''),
       description: `${String(asset.description || 'Asset listing')}`,
       mimeType: 'application/json'
     },
     {
       uri: soulResourceUri(asset.id),
-      aliases: [`soulstarter://souls/${encodeURIComponent(String(asset.id || ''))}`],
       name: `${String(asset.name || asset.id || '')} (Legacy Soul URI)`,
       description: 'Legacy alias for pullmd://assets/{id}',
       mimeType: 'application/json'

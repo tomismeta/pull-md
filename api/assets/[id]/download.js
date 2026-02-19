@@ -186,7 +186,7 @@ export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', sou
 
 export function classifyClientMode({ headers = {}, query = {} } = {}) {
   const rawMode = String(
-    headers['x-client-mode'] || headers['x-soulstarter-client-mode'] || query.client_mode || ''
+    headers['x-client-mode'] || query.client_mode || ''
   )
     .trim()
     .toLowerCase();

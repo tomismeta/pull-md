@@ -295,7 +295,7 @@ export function getMcpServerMetadata() {
 
 export async function handleMcpRequestWithSdk(req, res) {
   // Backward-compatibility shim:
-  // existing SoulStarter clients send `Accept: application/json`.
+  // existing PullMd clients send `Accept: application/json`.
   // Streamable HTTP expects clients to accept both JSON and SSE.
   const currentAccept = String(req?.headers?.accept || '').toLowerCase();
   if (!currentAccept.includes('text/event-stream')) {

@@ -1,4 +1,4 @@
-(function attachSoulStarterDownloadDelivery(globalScope) {
+(function attachPullMdDownloadDelivery(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function triggerMarkdownDownload(content, soulId, fileName = 'ASSET.md') {
@@ -72,7 +72,7 @@
     }
   }
 
-  globalScope.SoulStarterDownloadDelivery = {
+  globalScope.PullMdDownloadDelivery = {
     triggerMarkdownDownload,
     isLikelyMobileBrowser,
     handleMobileDownloadClick

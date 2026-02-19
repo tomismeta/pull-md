@@ -1,4 +1,4 @@
-(function attachSoulStarterSoulCards(globalScope) {
+(function attachPullMdSoulCards(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function escapeHtml(text) {
@@ -183,7 +183,7 @@
       .join('');
   }
 
-  globalScope.SoulStarterSoulCards = {
+  globalScope.PullMdSoulCards = {
     escapeHtml,
     formatCardDescription,
     formatSoulPriceLabel,

@@ -1,4 +1,4 @@
-(function attachSoulStarterSellerGuard(globalScope) {
+(function attachPullMdSellerGuard(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function normalizeAddress(address) {
@@ -40,7 +40,7 @@
     }
   }
 
-  globalScope.SoulStarterSellerGuard = {
+  globalScope.PullMdSellerGuard = {
     normalizeAddress,
     resolveExpectedSellerAddress
   };

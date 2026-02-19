@@ -28,7 +28,7 @@ test('immediate publish + visibility removal flow', async () => {
   const originalDatabaseUrl = process.env.DATABASE_URL;
   const originalPostgresUrl = process.env.POSTGRES_URL;
 
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'soulstarter-marketplace-test-'));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'pullmd-marketplace-test-'));
   process.chdir(tempDir);
   process.env.MARKETPLACE_DRAFTS_DIR = path.join(tempDir, '.marketplace-drafts');
   process.env.MODERATOR_WALLETS = '0x1111111111111111111111111111111111111111';
@@ -206,7 +206,7 @@ test('publishCreatorListingDirect dry_run returns field-level errors and does no
   const originalDatabaseUrl = process.env.DATABASE_URL;
   const originalPostgresUrl = process.env.POSTGRES_URL;
 
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'soulstarter-marketplace-dryrun-test-'));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'pullmd-marketplace-dryrun-test-'));
   process.chdir(tempDir);
   process.env.MARKETPLACE_DRAFTS_DIR = path.join(tempDir, '.marketplace-drafts');
   delete process.env.MARKETPLACE_DATABASE_URL;
@@ -270,18 +270,18 @@ test('catalog fallback reads Vercel draft directory when MARKETPLACE_DRAFTS_DIR 
   const originalDatabaseUrl = process.env.DATABASE_URL;
   const originalPostgresUrl = process.env.POSTGRES_URL;
 
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'soulstarter-vercel-catalog-test-'));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'pullmd-vercel-catalog-test-'));
   process.chdir(tempDir);
   delete process.env.MARKETPLACE_DRAFTS_DIR;
   process.env.VERCEL = '1';
   delete process.env.MARKETPLACE_DATABASE_URL;
   delete process.env.DATABASE_URL;
   delete process.env.POSTGRES_URL;
-  const vercelCatalogPath = '/tmp/soulstarter-marketplace-drafts/published-catalog.json';
+  const vercelCatalogPath = '/tmp/pullmd-marketplace-drafts/published-catalog.json';
   let existingVercelCatalog = null;
 
   try {
-    await mkdir('/tmp/soulstarter-marketplace-drafts', { recursive: true });
+    await mkdir('/tmp/pullmd-marketplace-drafts', { recursive: true });
     try {
       existingVercelCatalog = await readFile(vercelCatalogPath, 'utf8');
     } catch (_) {}

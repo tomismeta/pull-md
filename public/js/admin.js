@@ -1,6 +1,6 @@
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
-const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
+const WALLET_SESSION_KEY = 'pullmd_wallet_session_v1';
 const MODERATOR_SESSION_KEY = 'pullmd_moderator_session_v1';
 const MODERATOR_SESSION_REFRESH_GRACE_MS = 60 * 1000;
 const state = {
@@ -59,7 +59,7 @@ function applyListingFilters(items) {
 }
 
 function getToastHelper() {
-  const helper = window?.SoulStarterToast;
+  const helper = window?.PullMdToast;
   if (!helper || typeof helper.show !== 'function') {
     throw new Error('Toast helper unavailable');
   }
@@ -118,19 +118,19 @@ function buildRequestHeaders(input = {}) {
 }
 
 function initProviderDiscovery() {
-  window?.SoulStarterWalletProviders?.initDiscovery?.();
+  window?.PullMdWalletProviders?.initDiscovery?.();
 }
 
 function findProviderByKind(kind) {
-  return window?.SoulStarterWalletProviders?.findProviderByKind?.(kind) || null;
+  return window?.PullMdWalletProviders?.findProviderByKind?.(kind) || null;
 }
 
 function fallbackInjectedProvider() {
-  return window?.SoulStarterWalletProviders?.fallbackInjectedProvider?.() || null;
+  return window?.PullMdWalletProviders?.fallbackInjectedProvider?.() || null;
 }
 
 function getWalletCommon() {
-  const helper = window?.SoulStarterWalletCommon;
+  const helper = window?.PullMdWalletCommon;
   if (!helper) {
     throw new Error('Wallet common helper unavailable');
   }
@@ -138,7 +138,7 @@ function getWalletCommon() {
 }
 
 function getWalletConnector() {
-  const helper = window?.SoulStarterWalletConnect;
+  const helper = window?.PullMdWalletConnect;
   if (!helper) {
     throw new Error('Wallet connector helper unavailable');
   }
@@ -146,7 +146,7 @@ function getWalletConnector() {
 }
 
 function getUiShell() {
-  const helper = window?.SoulStarterUiShell;
+  const helper = window?.PullMdUiShell;
   if (!helper) {
     throw new Error('UI shell helper unavailable');
   }

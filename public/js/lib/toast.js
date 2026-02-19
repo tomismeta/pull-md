@@ -1,4 +1,4 @@
-(function attachSoulStarterToast(globalScope) {
+(function attachPullMdToast(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
   const recentKeys = new Map();
   const DEDUPE_WINDOW_MS = 1800;
@@ -36,7 +36,7 @@
     }, durationMs);
   }
 
-  globalScope.SoulStarterToast = {
+  globalScope.PullMdToast = {
     show
   };
 })(typeof window !== 'undefined' ? window : globalThis);

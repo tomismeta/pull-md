@@ -1,4 +1,4 @@
-(function attachSoulStarterUiShell(globalScope) {
+(function attachPullMdUiShell(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function setModalVisible(modalId, visible) {
@@ -25,8 +25,8 @@
     const toggle = document.getElementById(toggleId);
     const nav = document.getElementById(navId);
     if (!toggle || !nav) return;
-    if (toggle.dataset.soulstarterNavBound === '1') return;
-    toggle.dataset.soulstarterNavBound = '1';
+    if (toggle.dataset.pullmdNavBound === '1') return;
+    toggle.dataset.pullmdNavBound = '1';
 
     const closeNav = () => {
       nav.classList.remove('open');
@@ -58,7 +58,7 @@
     });
   }
 
-  globalScope.SoulStarterUiShell = {
+  globalScope.PullMdUiShell = {
     setModalVisible,
     openModal,
     closeModal,

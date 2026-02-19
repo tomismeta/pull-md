@@ -14,13 +14,13 @@ const SIWE_STATEMENT = 'Authenticate wallet ownership for PULL.md. No token tran
 function resolveSiweDomain() {
   const configured = String(process.env.SIWE_DOMAIN || '').trim();
   if (!configured) return 'www.pull.md';
-  if (configured.toLowerCase().includes('soulstarter')) return 'www.pull.md';
+  if (configured.toLowerCase().includes('pullmd')) return 'www.pull.md';
   return configured;
 }
 function resolveSiweUri(domain) {
   const configured = String(process.env.SIWE_URI || '').trim();
   if (!configured) return `https://${domain}`;
-  if (configured.toLowerCase().includes('soulstarter')) return `https://${domain}`;
+  if (configured.toLowerCase().includes('pullmd')) return `https://${domain}`;
   return configured;
 }
 const SIWE_DOMAIN = resolveSiweDomain();
@@ -206,7 +206,7 @@ function getMarketplaceDraftsDir() {
   const configured = String(process.env.MARKETPLACE_DRAFTS_DIR || '').trim();
   if (configured) return configured;
   if (process.env.VERCEL) {
-    return '/tmp/soulstarter-marketplace-drafts';
+    return '/tmp/pullmd-marketplace-drafts';
   }
   return process.env.MARKETPLACE_DRAFTS_DIR || path.join(process.cwd(), '.marketplace-drafts');
 }

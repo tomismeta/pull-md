@@ -1,4 +1,4 @@
-(function attachSoulStarterSoulDetailUi(globalScope) {
+(function attachPullMdSoulDetailUi(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function soulIdFromLocation(locationLike = globalScope.location) {
@@ -136,7 +136,7 @@
     btn.className = accessible ? 'btn btn-ghost btn-lg btn-full' : 'btn btn-primary btn-lg btn-full';
   }
 
-  globalScope.SoulStarterSoulDetailUi = {
+  globalScope.PullMdSoulDetailUi = {
     soulIdFromLocation,
     soulListingHref,
     formatCreatorLabel,

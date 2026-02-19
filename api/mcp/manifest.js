@@ -11,8 +11,8 @@ function enabledAssetTypes() {
 
 export default function handler(req, res) {
   const allowedOrigins = [
-    'https://soulstarter.vercel.app',
-    'https://soulstarter.io',
+    'https://pullmd.vercel.app',
+    'https://pullmd.io',
     'https://pull.md',
     'https://www.pull.md',
     'http://localhost:3000',
@@ -148,9 +148,9 @@ export default function handler(req, res) {
         'pullmd://assets/<id>',
         'pullmd://souls',
         'pullmd://souls/<id>',
-        'soulstarter://assets/<id> (URI compatibility alias)'
+        'pullmd://souls/<id> (legacy compatibility alias)'
       ],
-      legacy_alias_scheme: 'soulstarter://'
+      legacy_alias_scheme: null
     },
     tools,
     download_contract: {

@@ -36,7 +36,7 @@ test('classifyRedownloadHeaders requires explicit receipt header for browser red
       'x-wallet-address': WALLET
     },
     soulId: 'sassy-starter-v1',
-    cookieHeader: 'soulstarter_receipt_sassy-starter-v1=receipt-cookie-token'
+    cookieHeader: 'pullmd_receipt_sassy-starter-v1=receipt-cookie-token'
   });
   assert.equal(result.mode, 'none');
   assert.equal(result.hasAnyValidEntitlementHeaders, false);
@@ -83,7 +83,7 @@ test('classifyRedownloadHeaders rejects incomplete redownload headers', () => {
 test('classifyRedownloadHeaders ignores cookie-only session token without wallet header', () => {
   const result = classifyRedownloadHeaders({
     headers: {},
-    cookieHeader: 'soulstarter_redownload_session=session-token'
+    cookieHeader: 'pullmd_redownload_session=session-token'
   });
   assert.equal(result.mode, 'none');
   assert.equal(result.hasAnyRedownloadHeaders, false);
@@ -93,7 +93,7 @@ test('classifyRedownloadHeaders ignores cookie-only receipt without wallet heade
   const result = classifyRedownloadHeaders({
     headers: {},
     soulId: 'the-rock-v1',
-    cookieHeader: 'soulstarter_receipt_the-rock-v1=receipt-cookie-token'
+    cookieHeader: 'pullmd_receipt_the-rock-v1=receipt-cookie-token'
   });
   assert.equal(result.mode, 'none');
   assert.equal(result.hasAnyRedownloadHeaders, false);

@@ -1,4 +1,4 @@
-(function attachSoulStarterWalletConnect(globalScope) {
+(function attachPullMdWalletConnect(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   async function connectWithProviderInternal({
@@ -95,7 +95,7 @@
     return connectInternal(fallback, walletType || kind, false);
   }
 
-  globalScope.SoulStarterWalletConnect = {
+  globalScope.PullMdWalletConnect = {
     connectWithProviderInternal,
     connectWithPreferredKind
   };

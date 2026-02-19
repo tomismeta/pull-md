@@ -37,4 +37,4 @@ Maintain incident timelines and concise postmortem notes for rapid future recove
 
 ---
 
-*Starter soul delivered by SoulStarter.*
+*Starter soul delivered by PullMd.*

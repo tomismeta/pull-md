@@ -37,4 +37,4 @@ Track repeated decision failures and successful mitigations to improve review qu
 
 ---
 
-*Starter soul delivered by SoulStarter.*
+*Starter soul delivered by PullMd.*

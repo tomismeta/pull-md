@@ -39,7 +39,7 @@ async function withMcpSdkClient(run) {
   const port = typeof address === 'object' && address ? address.port : 0;
   const endpoint = new URL(`http://127.0.0.1:${port}/mcp`);
 
-  const client = new Client({ name: 'soulstarter-sdk-test', version: '1.0.0' });
+  const client = new Client({ name: 'pullmd-sdk-test', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(endpoint, {
     requestInit: {
       headers: {
@@ -86,11 +86,9 @@ test('official MCP SDK client can connect and execute PULL.md tools/resources', 
     assert.ok(resourceUris.includes('pullmd://docs/manifest'));
     assert.ok(resourceUris.includes('pullmd://assets'));
 
-    const read = await client.readResource({ uri: 'soulstarter://docs/manifest' });
+    const read = await client.readResource({ uri: 'pullmd://docs/manifest' });
     assert.equal(Array.isArray(read?.contents), true);
-    assert.ok(
-      ['pullmd://docs/manifest', 'soulstarter://docs/manifest'].includes(String(read?.contents?.[0]?.uri || ''))
-    );
+    assert.equal(String(read?.contents?.[0]?.uri || ''), 'pullmd://docs/manifest');
   });
 });
 

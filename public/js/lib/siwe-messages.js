@@ -1,8 +1,8 @@
-(function attachSoulStarterSiwe(globalScope) {
+(function attachPullMdSiwe(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function getWalletCommon() {
-    const helper = globalScope.SoulStarterWalletCommon;
+    const helper = globalScope.PullMdWalletCommon;
     if (!helper || typeof helper.sha256Hex !== 'function') {
       throw new Error('Wallet common helper unavailable');
     }
@@ -80,7 +80,7 @@
     ].join('\n');
   }
 
-  globalScope.SoulStarterSiwe = {
+  globalScope.PullMdSiwe = {
     buildSoulActionMessage,
     buildScopedMessage
   };

@@ -1,4 +1,4 @@
-(function attachSoulStarterNetwork(globalScope) {
+(function attachPullMdNetwork(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   async function fetchWithTimeout(url, options = {}, timeoutMs = 45000) {
@@ -25,7 +25,7 @@
     }
   }
 
-  globalScope.SoulStarterNetwork = {
+  globalScope.PullMdNetwork = {
     fetchWithTimeout,
     readError
   };

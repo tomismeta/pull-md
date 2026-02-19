@@ -1,0 +1,5 @@
+version: 1
+interface:
+  display_name: PullMd OpenClaw
+  short_description: Discover, purchase, and redownload PullMd souls with strict x402 headers.
+  default_prompt: Discover PullMd tools via WebMCP, attempt receipt-based redownload first, and if needed complete strict x402 purchase with PAYMENT-SIGNATURE.

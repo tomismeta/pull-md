@@ -1,11 +1,11 @@
 ---
-name: openclaw-soulstarter
-description: Use this skill when an agent needs to discover SoulStarter via WebMCP, purchase a soul with strict x402 headers, and re-download previously purchased souls without paying twice.
+name: openclaw-pullmd
+description: Use this skill when an agent needs to discover PullMd via WebMCP, purchase a soul with strict x402 headers, and re-download previously purchased souls without paying twice.
 ---
 
-# OpenClaw SoulStarter Skill
+# OpenClaw PullMd Skill
 
-Use this skill for agent workflows against a deployed SoulStarter instance.
+Use this skill for agent workflows against a deployed PullMd instance.
 
 ## Wallet Compatibility Status (2026-02-14)
 
@@ -15,7 +15,7 @@ Use this skill for agent workflows against a deployed SoulStarter instance.
 
 ## Inputs Required
 
-- `base_url` (canonical: `https://soulstarter.vercel.app`)
+- `base_url` (canonical: `https://pullmd.vercel.app`)
 - `wallet_address`
 - Wallet signing capability for:
 `PAYMENT-SIGNATURE` payload creation and `redownload` auth message signing
@@ -37,7 +37,7 @@ Use this skill for agent workflows against a deployed SoulStarter instance.
 - `POST {base_url}/mcp` with method `tools/call`, params `{ "name": "get_soul_details", "arguments": { "id": "{soul_id}" } }`
 
 Domain rule:
-- Use `https://soulstarter.vercel.app` for production runs.
+- Use `https://pullmd.vercel.app` for production runs.
 - Avoid preview/alias domains when validating the payment contract.
 
 ## 2. Re-download First (No Repay)
@@ -66,7 +66,7 @@ Strict headless agent mode requires a live SIWE proof on every re-download call.
 2. Decode `PAYMENT-REQUIRED` and create x402 payment payload.
    - For v2, include:
    `accepted: PAYMENT_REQUIRED.accepts[0]` (exact object, unchanged)
-   - Verify `accepted.payTo` equals trusted seller address from SoulStarter metadata before signing.
+   - Verify `accepted.payTo` equals trusted seller address from PullMd metadata before signing.
    - Never trust truncated addresses from wallet/explorer transfer history.
 3. Retry same endpoint with header:
 - Preferred:
@@ -86,7 +86,7 @@ assume `eip3009` unless current `PAYMENT-REQUIRED` says `permit2`.
 - Bankr wallet:
 Use Bankr Agent API typed-data signing:
 `POST /agent/sign` with `signatureType=eth_signTypedData_v4`, then pass final base64 JSON payload in `PAYMENT-SIGNATURE` (or `PAYMENT`).
-Never send Bankr API keys/tokens to SoulStarter endpoints.
+Never send Bankr API keys/tokens to PullMd endpoints.
 For production purchase runs, prefer EmblemVault until Bankr EIP-3009 signer compatibility is fixed.
 
 If you get `No matching payment requirements`:
@@ -101,7 +101,7 @@ If you get `flow_hint` about header detected but not verified/settled:
 - Re-sign from latest `PAYMENT-REQUIRED`.
 - Confirm method-specific fields are exact for permit2 vs eip3009.
 - Confirm top-level `network` equals `eip155:8453` exactly.
-- SoulStarter will remap facilitator-bound network fields to CDP enum (`base`) internally; do not sign `base` in the agent payload.
+- PullMd will remap facilitator-bound network fields to CDP enum (`base`) internally; do not sign `base` in the agent payload.
 
 If settlement diagnostics show `FiatTokenV2: invalid signature`:
 - Treat this as signer incompatibility for EIP-3009 in this flow.
@@ -124,7 +124,7 @@ Use these Bankr capabilities explicitly:
 
 2. `POST /agent/sign`:
 - Sign typed data based on `assetTransferMethod` (`PermitWitnessTransferFrom` for permit2, `TransferWithAuthorization` for eip3009).
-- Build final x402 JSON locally and send only `PAYMENT-SIGNATURE` to SoulStarter.
+- Build final x402 JSON locally and send only `PAYMENT-SIGNATURE` to PullMd.
 For permit2 include `payload.from`, `payload.permit2Authorization`, `payload.transaction`, and `payload.signature`.
 Set `payload.transaction.data` to ERC20 `approve(PERMIT2_ADDRESS, MAX_UINT256)` calldata.
 Set top-level `network` to `eip155:8453` (from `accepted.network`), not `base`.
@@ -132,16 +132,16 @@ Do not include `payload.authorization` in permit2 mode.
 Send permit2 numeric fields (`amount`, `nonce`, `deadline`, `validAfter`) as strings.
 
 3. `POST /agent/submit`:
-- Not required for SoulStarter purchase flow.
-- SoulStarter server settles via facilitator after receiving the signed x402 payload header.
+- Not required for PullMd purchase flow.
+- PullMd server settles via facilitator after receiving the signed x402 payload header.
 
 4. LLM gateway / threads:
 - Optional orchestration only; not required for settlement.
 
 Important:
 - Buyer/Banr wallet does **not** need CDP credentials.
-- Only SoulStarter server needs facilitator credentials.
-- Bankr credentials are agent-local only and must never be forwarded to SoulStarter.
+- Only PullMd server needs facilitator credentials.
+- Bankr credentials are agent-local only and must never be forwarded to PullMd.
 
 ## 4. Optional Entitlement Verification Tool
 

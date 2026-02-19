@@ -111,7 +111,7 @@ UI companion:
   - `pullmd://docs/webmcp`
   - `pullmd://assets`
   - `pullmd://assets/{id}`
-- Legacy aliases (`soulstarter://...`) are accepted for backward compatibility.
+- Legacy soul aliases are available via `pullmd://souls` and `pullmd://souls/{id}`.
 - Response streaming: currently non-streaming responses over Streamable HTTP.
 - Sampling: not supported in this deployment.
 
@@ -294,8 +294,8 @@ Issued At: <iso_timestamp>
 Expiration Time: <iso_timestamp_plus_5m>
 Request ID: redownload:<SOUL_ID>
 Resources:
-- urn:soulstarter:action:redownload
-- urn:soulstarter:soul:<SOUL_ID>
+- urn:pullmd:action:redownload
+- urn:pullmd:soul:<SOUL_ID>
 ```
 Then call:
 `GET /api/assets/<SOUL_ID>/download`
@@ -365,8 +365,8 @@ Issued At: <iso_timestamp>
 Expiration Time: <iso_timestamp_plus_5m>
 Request ID: session:*
 Resources:
-- urn:soulstarter:action:session
-- urn:soulstarter:soul:*
+- urn:pullmd:action:session
+- urn:pullmd:soul:*
 ```
 
 Success response includes:
@@ -451,8 +451,8 @@ Issued At: <iso_timestamp>
 Expiration Time: <iso_timestamp_plus_5m>
 Request ID: redownload:<soul_id>
 Resources:
-- urn:soulstarter:action:redownload
-- urn:soulstarter:soul:<soul_id>
+- urn:pullmd:action:redownload
+- urn:pullmd:soul:<soul_id>
 ```
 
 ## Creator Publish Auth Message
@@ -478,8 +478,8 @@ Issued At: <iso_timestamp>
 Expiration Time: <iso_timestamp_plus_5m>
 Request ID: <tool_action>:creator
 Resources:
-- urn:soulstarter:action:<tool_action>
-- urn:soulstarter:scope:creator
+- urn:pullmd:action:<tool_action>
+- urn:pullmd:scope:creator
 ```
 
 Where `<tool_action>` is one of:
@@ -509,8 +509,8 @@ Issued At: <iso_timestamp>
 Expiration Time: <iso_timestamp_plus_5m>
 Request ID: <tool_action>:moderator
 Resources:
-- urn:soulstarter:action:<tool_action>
-- urn:soulstarter:scope:moderator
+- urn:pullmd:action:<tool_action>
+- urn:pullmd:scope:moderator
 ```
 
 Where `<tool_action>` is one of:

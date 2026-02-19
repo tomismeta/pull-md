@@ -37,4 +37,4 @@ Record useful analogies and failed mappings to improve future pattern quality.
 
 ---
 
-*Starter soul delivered by SoulStarter.*
+*Starter soul delivered by PullMd.*

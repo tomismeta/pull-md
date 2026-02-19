@@ -1,4 +1,4 @@
-(function attachSoulStarterSettlementVerify(globalScope) {
+(function attachPullMdSettlementVerify(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   const DEFAULT_BASE_RPC_URL = 'https://mainnet.base.org';
@@ -115,7 +115,7 @@
     };
   }
 
-  globalScope.SoulStarterSettlementVerify = {
+  globalScope.PullMdSettlementVerify = {
     formatMicroUsdc,
     verifySettlementOnchain
   };

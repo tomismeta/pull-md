@@ -1,4 +1,4 @@
-(function attachSoulStarterWalletProviders(globalScope) {
+(function attachPullMdWalletProviders(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   const providerMetadata = new WeakMap();
@@ -81,7 +81,7 @@
     return window?.ethereum && typeof window.ethereum === 'object' ? window.ethereum : null;
   }
 
-  globalScope.SoulStarterWalletProviders = {
+  globalScope.PullMdWalletProviders = {
     initDiscovery,
     findProviderByKind,
     fallbackInjectedProvider

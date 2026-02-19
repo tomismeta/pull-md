@@ -15,9 +15,9 @@ const CONFIG = {
 const X402_FETCH_SDK_VERSION = '2.3.0';
 const X402_EVM_SDK_VERSION = '2.3.1';
 const EXPECTED_SELLER_ADDRESS = null;
-const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
-const RECEIPT_PREFIX = 'soulstarter.receipt.';
-const REDOWNLOAD_SESSION_PREFIX = 'soulstarter.redownload.session.';
+const WALLET_SESSION_KEY = 'pullmd_wallet_session_v1';
+const RECEIPT_PREFIX = 'pullmd.receipt.';
+const REDOWNLOAD_SESSION_PREFIX = 'pullmd.redownload.session.';
 const sellerAddressCache = new Map();
 const entitlementCacheByWallet = new Map();
 const createdSoulCacheByWallet = new Map();
@@ -34,35 +34,35 @@ let currentSoulDetailId = null;
 let purchaseFlowController = null;
 
 function initProviderDiscovery() {
-  window?.SoulStarterWalletProviders?.initDiscovery?.();
+  window?.PullMdWalletProviders?.initDiscovery?.();
 }
 
 function findProviderByKind(kind) {
-  return window?.SoulStarterWalletProviders?.findProviderByKind?.(kind) || null;
+  return window?.PullMdWalletProviders?.findProviderByKind?.(kind) || null;
 }
 
 function fallbackInjectedProvider() {
-  return window?.SoulStarterWalletProviders?.fallbackInjectedProvider?.() || null;
+  return window?.PullMdWalletProviders?.fallbackInjectedProvider?.() || null;
 }
 
 const HELPER_SPECS = Object.freeze({
   walletCommon: {
-    globalName: 'SoulStarterWalletCommon',
+    globalName: 'PullMdWalletCommon',
     methods: [],
     error: 'Wallet common helper unavailable'
   },
   walletConnector: {
-    globalName: 'SoulStarterWalletConnect',
+    globalName: 'PullMdWalletConnect',
     methods: [],
     error: 'Wallet connector helper unavailable'
   },
   storage: {
-    globalName: 'SoulStarterStorage',
+    globalName: 'PullMdStorage',
     methods: [],
     error: 'Storage helper unavailable'
   },
   walletState: {
-    globalName: 'SoulStarterWalletState',
+    globalName: 'PullMdWalletState',
     methods: [
       'updateWalletUI',
       'updateModeratorNavLinks',
@@ -78,32 +78,32 @@ const HELPER_SPECS = Object.freeze({
     error: 'Wallet state helper unavailable'
   },
   toast: {
-    globalName: 'SoulStarterToast',
+    globalName: 'PullMdToast',
     methods: ['show'],
     error: 'Toast helper unavailable'
   },
   settlementVerify: {
-    globalName: 'SoulStarterSettlementVerify',
+    globalName: 'PullMdSettlementVerify',
     methods: ['verifySettlementOnchain', 'formatMicroUsdc'],
     error: 'Settlement verify helper unavailable'
   },
   settlementUi: {
-    globalName: 'SoulStarterSettlementUi',
+    globalName: 'PullMdSettlementUi',
     methods: ['readSettlementResponse', 'readSettlementTx', 'renderSettlementVerification'],
     error: 'Settlement UI helper unavailable'
   },
   x402Browser: {
-    globalName: 'SoulStarterX402Browser',
+    globalName: 'PullMdX402Browser',
     methods: ['normalizeAddress', 'createSdkEngine', 'decodePaymentRequiredWithSdk', 'createPaymentPayload'],
     error: 'x402 browser helper unavailable'
   },
   redownload: {
-    globalName: 'SoulStarterRedownloadFlow',
+    globalName: 'PullMdRedownloadFlow',
     methods: ['ensureRedownloadSession', 'attemptRedownload'],
     error: 'Redownload helper unavailable'
   },
   soulCards: {
-    globalName: 'SoulStarterSoulCards',
+    globalName: 'PullMdSoulCards',
     methods: [
       'escapeHtml',
       'formatCardDescription',
@@ -116,7 +116,7 @@ const HELPER_SPECS = Object.freeze({
     error: 'Soul cards helper unavailable'
   },
   catalogUi: {
-    globalName: 'SoulStarterCatalogUi',
+    globalName: 'PullMdCatalogUi',
     methods: [
       'updateSoulPagePurchaseState',
       'updateSoulDetailMetadata',
@@ -128,42 +128,42 @@ const HELPER_SPECS = Object.freeze({
     error: 'Catalog UI helper unavailable'
   },
   downloadDelivery: {
-    globalName: 'SoulStarterDownloadDelivery',
+    globalName: 'PullMdDownloadDelivery',
     methods: ['triggerMarkdownDownload', 'isLikelyMobileBrowser', 'handleMobileDownloadClick'],
     error: 'Download delivery helper unavailable'
   },
   purchaseFlow: {
-    globalName: 'SoulStarterPurchaseFlow',
+    globalName: 'PullMdPurchaseFlow',
     methods: ['createController'],
     error: 'Purchase flow helper unavailable'
   },
   soulDetailUi: {
-    globalName: 'SoulStarterSoulDetailUi',
+    globalName: 'PullMdSoulDetailUi',
     methods: ['soulIdFromLocation', 'soulListingHref', 'formatCreatorLabel', 'updateSoulDetailMetadata', 'updateSoulPagePurchaseState'],
     error: 'Soul detail UI helper unavailable'
   },
   sellerGuard: {
-    globalName: 'SoulStarterSellerGuard',
+    globalName: 'PullMdSellerGuard',
     methods: ['normalizeAddress', 'resolveExpectedSellerAddress'],
     error: 'Seller guard helper unavailable'
   },
   network: {
-    globalName: 'SoulStarterNetwork',
+    globalName: 'PullMdNetwork',
     methods: ['fetchWithTimeout', 'readError'],
     error: 'Network helper unavailable'
   },
   appBootstrap: {
-    globalName: 'SoulStarterAppBootstrap',
+    globalName: 'PullMdAppBootstrap',
     methods: ['bindWalletOptionHandlers', 'runStartup', 'bindBeforeUnload'],
     error: 'App bootstrap helper unavailable'
   },
   uiShell: {
-    globalName: 'SoulStarterUiShell',
+    globalName: 'PullMdUiShell',
     methods: [],
     error: 'UI shell helper unavailable'
   },
   siwe: {
-    globalName: 'SoulStarterSiwe',
+    globalName: 'PullMdSiwe',
     methods: ['buildSoulActionMessage'],
     error: 'SIWE message helper unavailable'
   }

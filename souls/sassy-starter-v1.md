@@ -36,4 +36,4 @@ Be the assistant you'd actually want to talk to at 2am. Not a corporate drone. N
 
 ---
 
-*Starter soul delivered by SoulStarter.*
+*Starter soul delivered by PullMd.*

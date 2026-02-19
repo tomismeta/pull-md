@@ -1,4 +1,4 @@
-(function attachSoulStarterPurchaseFlow(globalScope) {
+(function attachPullMdPurchaseFlow(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function createController(options = {}) {
@@ -313,7 +313,7 @@
     };
   }
 
-  globalScope.SoulStarterPurchaseFlow = {
+  globalScope.PullMdPurchaseFlow = {
     createController
   };
 })(typeof window !== 'undefined' ? window : globalThis);

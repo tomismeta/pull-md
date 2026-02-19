@@ -5,13 +5,13 @@ const SIWE_STATEMENT = 'Authenticate wallet ownership for PULL.md. No token tran
 function resolveSiweDomain() {
   const configured = String(process.env.SIWE_DOMAIN || '').trim();
   if (!configured) return 'www.pull.md';
-  if (configured.toLowerCase().includes('soulstarter')) return 'www.pull.md';
+  if (configured.toLowerCase().includes('pullmd')) return 'www.pull.md';
   return configured;
 }
 function resolveSiweUri(domain) {
   const configured = String(process.env.SIWE_URI || '').trim();
   if (!configured) return `https://${domain}`;
-  if (configured.toLowerCase().includes('soulstarter')) return `https://${domain}`;
+  if (configured.toLowerCase().includes('pullmd')) return `https://${domain}`;
   return configured;
 }
 const SIWE_DOMAIN = resolveSiweDomain();
@@ -38,7 +38,7 @@ export function resolveSiweIdentity({ host, proto } = {}) {
   const domain = isLocalHost && rawHost ? rawHost : configuredDomain;
 
   const configuredUri = resolveSiweUri(domain);
-  const configuredLooksLegacy = String(configuredUri || '').toLowerCase().includes('soulstarter');
+  const configuredLooksLegacy = String(configuredUri || '').toLowerCase().includes('pullmd');
   if (!configuredLooksLegacy) {
     return { domain, uri: configuredUri };
   }
@@ -81,8 +81,8 @@ export async function detectWalletType(wallet) {
 
 export function setCors(res, origin) {
   const allowedOrigins = [
-    'https://soulstarter.vercel.app',
-    'https://soulstarter.io',
+    'https://pullmd.vercel.app',
+    'https://pullmd.io',
     'https://pull.md',
     'https://www.pull.md',
     'http://localhost:3000',
@@ -480,7 +480,7 @@ export function buildRedownloadSessionSetCookie({ token, reqHost }) {
   const ttl = redownloadSessionTtlSeconds();
   const host = String(reqHost || '').toLowerCase();
   const secure = host.includes('localhost') ? '' : '; Secure';
-  return `soulstarter_redownload_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttl}${secure}`;
+  return `pullmd_redownload_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttl}${secure}`;
 }
 
 export function purchaseReceiptCookieName(soulId) {
@@ -488,7 +488,7 @@ export function purchaseReceiptCookieName(soulId) {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, '');
-  return `soulstarter_receipt_${safeSoulId || 'unknown'}`;
+  return `pullmd_receipt_${safeSoulId || 'unknown'}`;
 }
 
 export function buildPurchaseReceiptSetCookie({ soulId, receipt, reqHost }) {

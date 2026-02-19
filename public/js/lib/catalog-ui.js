@@ -1,4 +1,4 @@
-(function attachSoulStarterCatalogUi(globalScope) {
+(function attachPullMdCatalogUi(globalScope) {
   if (!globalScope || typeof globalScope !== 'object') return;
 
   function normalizeSearchText(value) {
@@ -272,7 +272,7 @@ async function loadSouls({
     }
   }
 
-  globalScope.SoulStarterCatalogUi = {
+  globalScope.PullMdCatalogUi = {
     updateSoulPagePurchaseState,
     updateSoulDetailMetadata,
     hydrateSoulDetailPage,
