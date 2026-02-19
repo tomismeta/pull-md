@@ -156,7 +156,7 @@ const DEFAULT_ROW_LIMIT = 10;
 
 function recordMarketplaceTelemetry(event = {}) {
   void recordTelemetryEvent({
-    source: 'marketplace',
+    source: event.source || 'marketplace',
     route: event.route || '/mcp',
     httpMethod: event.httpMethod || null,
     eventType: event.eventType || 'marketplace.action',
@@ -188,11 +188,21 @@ export function getCreatorMarketplaceSupportedActions() {
   ];
 }
 
-export async function executeCreatorMarketplaceAction({ action, method, headers = {}, body = {} }) {
+export async function executeCreatorMarketplaceAction({
+  action,
+  method,
+  headers = {},
+  body = {},
+  telemetryContext = {}
+}) {
   const normalizedAction = ensureAction(action);
   const normalizedMethod = String(method || '').toUpperCase();
   const requestBody = body && typeof body === 'object' ? body : {};
   const baseUrl = resolveBaseUrl(headers);
+  const telemetrySource = String(telemetryContext.source || '').trim() || 'marketplace';
+  const telemetryRoute = String(telemetryContext.route || '').trim() || '/mcp';
+  const telemetryMethod =
+    String(telemetryContext.httpMethod || normalizedMethod || '').trim().toUpperCase() || null;
 
   if (DEPRECATED_ACTIONS.has(normalizedAction)) {
     throw new AppError(410, {
@@ -251,6 +261,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
         dryRun: true
       });
       recordMarketplaceTelemetry({
+        source: telemetrySource,
+        route: telemetryRoute,
+        httpMethod: telemetryMethod,
         eventType: 'creator.publish_dry_run',
         action: normalizedAction,
         walletAddress: auth.wallet,
@@ -283,6 +296,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     });
     if (!result.ok) {
       recordMarketplaceTelemetry({
+        source: telemetrySource,
+        route: telemetryRoute,
+        httpMethod: telemetryMethod,
         eventType: 'creator.publish_failed',
         action: normalizedAction,
         walletAddress: auth.wallet,
@@ -310,6 +326,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
       creator_provided: CREATOR_PROVIDED_FIELDS
     };
     recordMarketplaceTelemetry({
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
       eventType: 'creator.publish_success',
       action: normalizedAction,
       walletAddress: auth.wallet,
@@ -344,6 +363,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     }
     const listings = await listPublishedListingSummaries({ includeHidden: true, publishedBy: auth.wallet });
     recordMarketplaceTelemetry({
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
       eventType: 'creator.list_my_published',
       action: normalizedAction,
       walletAddress: auth.wallet,
@@ -362,6 +384,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
   if (normalizedAction === 'list_published_listings' && normalizedMethod === 'GET') {
     const listings = await listPublishedListingSummaries({ includeHidden: false });
     recordMarketplaceTelemetry({
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
       eventType: 'marketplace.list_published',
       action: normalizedAction,
       success: true,
@@ -388,7 +413,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     });
     recordMarketplaceTelemetry({
       eventType: 'moderation.telemetry_dashboard',
-      route: '/api/moderation',
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
       action: normalizedAction,
       walletAddress: moderator.wallet,
       success: true,
@@ -418,7 +445,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
       .map((item) => withShareUrl(baseUrl, item));
     recordMarketplaceTelemetry({
       eventType: 'moderation.action_success',
-      route: '/api/moderation',
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
       action: normalizedAction,
       walletAddress: moderator.wallet,
       success: true,
@@ -458,7 +487,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     }
     recordMarketplaceTelemetry({
       eventType: 'moderation.action_success',
-      route: '/api/moderation',
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
       action: normalizedAction,
       walletAddress: moderator.wallet,
       assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
@@ -492,7 +523,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     }
     recordMarketplaceTelemetry({
       eventType: 'moderation.action_success',
-      route: '/api/moderation',
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
       action: normalizedAction,
       walletAddress: moderator.wallet,
       assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
@@ -537,7 +570,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     }
     recordMarketplaceTelemetry({
       eventType: 'moderation.action_success',
-      route: '/api/moderation',
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
       action: normalizedAction,
       walletAddress: moderator.wallet,
       assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,
@@ -572,7 +607,9 @@ export async function executeCreatorMarketplaceAction({ action, method, headers 
     }
     recordMarketplaceTelemetry({
       eventType: 'moderation.action_success',
-      route: '/api/moderation',
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
       action: normalizedAction,
       walletAddress: moderator.wallet,
       assetId: result?.listing?.asset_id || result?.listing?.soul_id || soulId,

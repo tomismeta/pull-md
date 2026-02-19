@@ -1,4 +1,3 @@
-const MCP_ENDPOINT = '/mcp';
 const BASE_CHAIN_HEX = '0x2105';
 const BASE_CHAIN_DEC = 8453;
 const WALLET_SESSION_KEY = 'soulstarter_wallet_session_v1';
@@ -59,14 +58,6 @@ function applyListingFilters(items) {
   });
 }
 
-function getMcpClient() {
-  const client = window?.SoulStarterMcp;
-  if (!client || typeof client.callTool !== 'function') {
-    throw new Error('MCP client unavailable');
-  }
-  return client;
-}
-
 function getToastHelper() {
   const helper = window?.SoulStarterToast;
   if (!helper || typeof helper.show !== 'function') {
@@ -76,10 +67,25 @@ function getToastHelper() {
 }
 
 async function mcpToolCall(name, args = {}) {
-  return getMcpClient().callTool(name, args, {
-    endpoint: MCP_ENDPOINT,
-    idPrefix: 'admin'
+  const response = await fetch('/api/ui/tool', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({
+      name: String(name || '').trim(),
+      arguments: args && typeof args === 'object' ? args : {}
+    })
   });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = String(payload?.error || payload?.message || `UI tool request failed (${response.status})`);
+    const toolError = new Error(message);
+    if (payload && typeof payload === 'object') Object.assign(toolError, payload);
+    throw toolError;
+  }
+  return payload || {};
 }
 
 function showToast(message, type = 'info') {

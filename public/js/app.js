@@ -423,19 +423,40 @@ function collectStoredProofs(wallet) {
   });
 }
 
-function getMcpClient() {
-  const client = window?.SoulStarterMcp;
-  if (!client || typeof client.callTool !== 'function') {
-    throw new Error('MCP client unavailable');
-  }
-  return client;
-}
-
 async function mcpToolCall(name, args = {}) {
-  return getMcpClient().callTool(name, args, {
-    timeoutMs: CONFIG.requestTimeout,
-    idPrefix: 'web'
-  });
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
+  try {
+    const response = await fetch('/api/ui/tool', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({
+        name: String(name || '').trim(),
+        arguments: args && typeof args === 'object' ? args : {}
+      }),
+      signal: controller.signal
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = String(payload?.error || payload?.message || `UI tool request failed (${response.status})`);
+      const toolError = new Error(message);
+      if (payload && typeof payload === 'object') {
+        Object.assign(toolError, payload);
+      }
+      throw toolError;
+    }
+    return payload || {};
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      throw new Error('UI tool request timed out');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 }
 
 async function refreshEntitlementsForWallet(wallet) {

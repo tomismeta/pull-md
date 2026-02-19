@@ -98,6 +98,11 @@ export default async function handler(req, res) {
       body: {
         ...(req.query && typeof req.query === 'object' ? req.query : {}),
         ...body
+      },
+      telemetryContext: {
+        source: 'api',
+        route: '/api/moderation',
+        httpMethod: expectedMethod
       }
     });
     void recordTelemetryEvent({

@@ -265,6 +265,13 @@ function toolCallHeadersFromArgs(context, args, authShape = 'none') {
   return baseHeaders;
 }
 
+function toolTelemetryContext(context = {}) {
+  const route = String(context?.route || '/mcp').trim() || '/mcp';
+  const source = String(context?.source || 'mcp').trim() || 'mcp';
+  const httpMethod = String(context?.httpMethod || 'POST').trim().toUpperCase() || 'POST';
+  return { source, route, httpMethod };
+}
+
 const MCP_TOOL_REGISTRY = [
   {
     name: 'list_assets',
@@ -462,7 +469,8 @@ const MCP_TOOL_REGISTRY = [
       return executeCreatorMarketplaceAction({
         action: 'get_listing_template',
         method: 'GET',
-        headers: toolCallHeadersFromArgs(context, {})
+        headers: toolCallHeadersFromArgs(context, {}),
+        telemetryContext: toolTelemetryContext(context)
       });
     }
   },
@@ -524,6 +532,7 @@ const MCP_TOOL_REGISTRY = [
         action: 'publish_listing',
         method: 'POST',
         headers: toolCallHeadersFromArgs(context, parsed, 'creator'),
+        telemetryContext: toolTelemetryContext(context),
         body: {
           wallet_address: ensureString(parsed.wallet_address, 'wallet_address'),
           auth_signature: ensureString(parsed.auth_signature, 'auth_signature'),
@@ -562,7 +571,8 @@ const MCP_TOOL_REGISTRY = [
       return executeCreatorMarketplaceAction({
         action: 'list_my_published_listings',
         method: 'GET',
-        headers: toolCallHeadersFromArgs(context, parsed, 'creator')
+        headers: toolCallHeadersFromArgs(context, parsed, 'creator'),
+        telemetryContext: toolTelemetryContext(context)
       });
     }
   },
@@ -582,7 +592,8 @@ const MCP_TOOL_REGISTRY = [
       return executeCreatorMarketplaceAction({
         action: 'list_published_listings',
         method: 'GET',
-        headers: toolCallHeadersFromArgs(context, {})
+        headers: toolCallHeadersFromArgs(context, {}),
+        telemetryContext: toolTelemetryContext(context)
       });
     }
   },
