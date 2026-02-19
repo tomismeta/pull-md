@@ -15,7 +15,7 @@ import { isAppError } from './errors.js';
 import {
   MCP_PROTOCOL_VERSION,
   getMcpToolsListResult,
-  invokeMcpTool
+  invokeToolRegistry
 } from './mcp_tools.js';
 import {
   getMcpPromptsList,
@@ -97,7 +97,7 @@ function buildMcpSdkServer({ requestHeaders } = {}) {
     const start = Date.now();
 
     try {
-      const output = await invokeMcpTool(name, args, {
+      const output = await invokeToolRegistry(name, args, {
         headers: getHeadersFromExtra(extra, requestHeaders)
       });
       void recordTelemetryEvent({

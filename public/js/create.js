@@ -18,7 +18,7 @@ function getToastHelper() {
   return helper;
 }
 
-async function mcpToolCall(name, args = {}) {
+async function toolCall(name, args = {}) {
   const response = await fetch('/api/ui/tool', {
     method: 'POST',
     headers: {
@@ -274,7 +274,7 @@ async function loadModeratorAllowlist() {
 
 async function creatorAuth(action) {
   if (!STATE.signer || !STATE.wallet) throw new Error('Connect your wallet first');
-  const challenge = await mcpToolCall('get_auth_challenge', {
+  const challenge = await toolCall('get_auth_challenge', {
     flow: 'creator',
     wallet_address: STATE.wallet,
     action
@@ -382,14 +382,14 @@ async function api(action, { method = 'GET', body, headers = {} } = {}) {
   const normalizedAction = String(action || '').trim();
   const normalizedMethod = String(method || '').toUpperCase();
   if (normalizedAction === 'get_listing_template') {
-    return mcpToolCall('get_listing_template', {});
+    return toolCall('get_listing_template', {});
   }
 
   if (normalizedAction === 'publish_listing') {
     if (normalizedMethod !== 'POST') {
       throw new Error('publish_listing requires POST');
     }
-    return mcpToolCall('publish_listing', body && typeof body === 'object' ? body : {});
+    return toolCall('publish_listing', body && typeof body === 'object' ? body : {});
   }
 
   if (normalizedAction === 'list_my_published_listings') {
@@ -398,7 +398,7 @@ async function api(action, { method = 'GET', body, headers = {} } = {}) {
       auth_signature: String(headers['X-AUTH-SIGNATURE'] || body?.auth_signature || '').trim(),
       auth_timestamp: headers['X-AUTH-TIMESTAMP'] || body?.auth_timestamp
     };
-    return mcpToolCall('list_my_published_listings', args);
+    return toolCall('list_my_published_listings', args);
   }
 
   throw new Error(`Unsupported create action: ${normalizedAction}`);

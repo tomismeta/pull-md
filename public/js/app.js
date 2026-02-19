@@ -423,7 +423,7 @@ function collectStoredProofs(wallet) {
   });
 }
 
-async function mcpToolCall(name, args = {}) {
+async function toolCall(name, args = {}) {
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
   try {
@@ -462,7 +462,7 @@ async function mcpToolCall(name, args = {}) {
 async function refreshEntitlementsForWallet(wallet) {
   await getWalletStateHelper().refreshEntitlementsForWallet({
     wallet,
-    mcpToolCall,
+    toolCall,
     storageHelper: getStorageHelper(),
     receiptPrefix: RECEIPT_PREFIX,
     entitlementCacheByWallet,
@@ -476,7 +476,7 @@ async function refreshEntitlementsForWallet(wallet) {
 async function refreshCreatedSoulsForWallet(wallet) {
   await getWalletStateHelper().refreshCreatedSoulsForWallet({
     wallet,
-    mcpToolCall,
+    toolCall,
     createdSoulCacheByWallet,
     onStateChanged: () => {
       renderOwnedSouls();
@@ -521,7 +521,7 @@ function updateSoulDetailMetadata(soul) {
 async function hydrateSoulDetailPage() {
   const result = await getCatalogUiHelper().hydrateSoulDetailPage({
     soulDetailUiHelper: getSoulDetailUiHelper(),
-    mcpToolCall,
+    toolCall,
     currentSoulDetailId,
     soulCatalogCache,
     setSoulCatalogCache: (next) => {
@@ -576,7 +576,7 @@ async function buildSiweAuthMessage({ wallet, soulId, action, timestamp }) {
   if (flow === 'redownload') {
     challengeArgs.asset_id = String(soulId || '').trim();
   }
-  const challenge = await mcpToolCall('get_auth_challenge', challengeArgs);
+  const challenge = await toolCall('get_auth_challenge', challengeArgs);
   const message = String(challenge?.auth_message_template || '').trim();
   const issuedAt = String(challenge?.issued_at || '').trim();
   const challengeTimestamp = Number(challenge?.auth_timestamp_ms);
@@ -600,9 +600,9 @@ async function getExpectedSellerAddressForSoul(soulId) {
     cache: sellerAddressCache,
     fetchSoulDetails: async (id) => {
       try {
-        return await mcpToolCall('get_asset_details', { id });
+        return await toolCall('get_asset_details', { id });
       } catch (_) {
-        return mcpToolCall('get_soul_details', { id });
+        return toolCall('get_soul_details', { id });
       }
     }
   });
@@ -872,7 +872,7 @@ async function loadSouls() {
 
 async function loadModeratorAllowlist() {
   moderatorAllowlist = await getWalletStateHelper().loadModeratorAllowlist({
-    mcpToolCall,
+    toolCall,
     onAllowlistLoaded: (allowlist) => {
       moderatorAllowlist = allowlist;
       updateModeratorNavLinkVisibility();

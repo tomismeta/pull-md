@@ -81,7 +81,7 @@
 
   async function refreshEntitlementsForWallet({
     wallet,
-    mcpToolCall,
+    toolCall,
     storageHelper,
     receiptPrefix,
     entitlementCacheByWallet,
@@ -105,7 +105,7 @@
 
     let owned;
     try {
-      const payload = await mcpToolCall('check_entitlements', {
+      const payload = await toolCall('check_entitlements', {
         wallet_address: normalizedWallet,
         proofs
       });
@@ -125,7 +125,7 @@
 
   async function refreshCreatedSoulsForWallet({
     wallet,
-    mcpToolCall,
+    toolCall,
     createdSoulCacheByWallet,
     onStateChanged
   } = {}) {
@@ -134,7 +134,7 @@
 
     let created;
     try {
-      const payload = await mcpToolCall('list_published_listings', {});
+      const payload = await toolCall('list_published_listings', {});
       created = new Set(
         (Array.isArray(payload?.listings) ? payload.listings : [])
           .filter((entry) => String(entry?.wallet_address || '').toLowerCase() === normalizedWallet)

@@ -66,7 +66,7 @@ function getToastHelper() {
   return helper;
 }
 
-async function mcpToolCall(name, args = {}) {
+async function toolCall(name, args = {}) {
   const response = await fetch('/api/ui/tool', {
     method: 'POST',
     headers: {
@@ -380,7 +380,7 @@ async function bootstrapModeratorSession(force = false) {
     return state.moderatorSessionPromise;
   }
   state.moderatorSessionPromise = (async () => {
-    const challenge = await mcpToolCall('get_auth_challenge', {
+    const challenge = await toolCall('get_auth_challenge', {
       flow: 'session',
       wallet_address: state.wallet,
       action: 'session'
@@ -455,7 +455,7 @@ async function moderatorSignatureHeaders(action) {
       'X-MODERATOR-TIMESTAMP': String(cached.timestamp)
     };
   }
-  const challenge = await mcpToolCall('get_auth_challenge', {
+  const challenge = await toolCall('get_auth_challenge', {
     flow: 'moderator',
     wallet_address: state.wallet,
     action: normalizedAction

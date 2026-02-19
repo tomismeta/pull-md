@@ -1,4 +1,4 @@
-import { invokeMcpTool } from '../_lib/mcp_tools.js';
+import { invokeToolRegistry } from '../_lib/mcp_tools.js';
 import { isAppError } from '../_lib/errors.js';
 import { setCors } from '../_lib/payments.js';
 
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await invokeMcpTool(name, args, {
+    const result = await invokeToolRegistry(name, args, {
       headers: req.headers || {},
       source: 'ui_rest',
       route: '/api/ui/tool',

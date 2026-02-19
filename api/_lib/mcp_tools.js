@@ -627,7 +627,7 @@ export function getMcpToolsListResult() {
   }));
 }
 
-export async function invokeMcpTool(name, args, context = {}) {
+export async function invokeToolRegistry(name, args, context = {}) {
   const tool = MCP_TOOL_REGISTRY.find((entry) => entry.name === name);
   if (!tool) {
     throw new AppError(404, {
@@ -638,3 +638,5 @@ export async function invokeMcpTool(name, args, context = {}) {
   }
   return tool.run(args || {}, context);
 }
+
+export const invokeMcpTool = invokeToolRegistry;

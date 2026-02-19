@@ -114,7 +114,7 @@
 
 async function hydrateSoulDetailPage({
     soulDetailUiHelper,
-    mcpToolCall,
+    toolCall,
     currentSoulDetailId = null,
     soulCatalogCache = [],
     setSoulCatalogCache,
@@ -147,9 +147,9 @@ async function hydrateSoulDetailPage({
     try {
       let payload = null;
       try {
-        payload = await mcpToolCall('get_asset_details', { id: soulId });
+        payload = await toolCall('get_asset_details', { id: soulId });
       } catch (_) {
-        payload = await mcpToolCall('get_soul_details', { id: soulId });
+        payload = await toolCall('get_soul_details', { id: soulId });
       }
       const soul = payload?.asset || payload?.soul || null;
       if (!soul) throw new Error('Asset metadata unavailable');
