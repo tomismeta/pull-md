@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PULL.md Security Scanning</title>
+  <meta name="description" content="PULL.md markdown security scanning overview and technical scanner details.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/" class="logo">
+          <span class="logo-mark">#</span>
+          <span>PULL.md</span>
+        </a>
+        <nav class="nav">
+          <a href="/#assets" class="nav-link">Discover</a>
+          <a href="/create.html" class="nav-link">Create</a>
+          <a href="/#for-agents" class="nav-link">For Agents</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <div class="hero-shell">
+          <p class="hero-kicker">Trust and Safety</p>
+          <h1 class="hero-title">Security Scanning on PULL.md</h1>
+          <p class="hero-subtitle">
+            Every markdown asset is scanned before publish and on moderator edits. We expose clear scan status on cards
+            and keep technical details available for users who want deeper review.
+          </p>
+          <div class="hero-actions">
+            <a href="#marketing-security" class="btn btn-primary btn-lg">Marketing Version</a>
+            <a href="#technical-security" class="btn btn-ghost btn-lg">Technical Version</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workflow-section" id="marketing-security">
+      <div class="container">
+        <div class="section-head">
+          <h2>Marketing Version</h2>
+          <p>Simple explanation for buyers and creators.</p>
+        </div>
+        <article class="workflow-card security-note">
+          <p>
+            PULL.md is designed for safe, reusable markdown commerce. Each listing is scanned for risky patterns before it
+            can be published, and scanned again when content is edited by moderators.
+          </p>
+          <ul class="security-note-list">
+            <li>Checks run on every publish and moderation edit</li>
+            <li>Clear status on cards: clean, warning, or blocked</li>
+            <li>High-confidence risks can be blocked in enforce mode</li>
+            <li>No scanner can guarantee safety, so review content before use</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="workflow-section" id="technical-security">
+      <div class="container">
+        <div class="section-head">
+          <h2>Technical Version</h2>
+          <p>Scanner modules, checks, and package inventory.</p>
+        </div>
+        <article class="workflow-card security-note">
+          <h3>Scanner Modules</h3>
+          <ul class="security-note-list">
+            <li><code>unicode</code>: hidden Unicode controls (zero-width, bidi override, invisible operators, tag chars)</li>
+            <li><code>confusable</code>: lookalike or homoglyph token detection</li>
+            <li><code>markdown_structure</code>: dangerous HTML tags, inline handlers, hidden structures and comments</li>
+            <li><code>url_safety</code>: dangerous schemes, malformed links, internal targets, domain and IP risk checks</li>
+            <li><code>prompt_injection</code>: high-risk instruction phrase detection</li>
+            <li><code>secret_leak</code>: API key and token pattern detection</li>
+          </ul>
+
+          <h3>Optional Reputation Layer</h3>
+          <ul class="security-note-list">
+            <li><code>url_reputation</code> via URLhaus host lookup (env-gated, cached, timeout-bound)</li>
+          </ul>
+
+          <h3>Outcomes</h3>
+          <ul class="security-note-list">
+            <li><code>clean</code>: no findings</li>
+            <li><code>warn</code>: non-blocking findings</li>
+            <li><code>block</code>: critical findings, blocked when enforce mode is enabled</li>
+          </ul>
+
+          <h3>Open Source Packages in Active Use</h3>
+          <ul class="security-note-list">
+            <li><a href="https://github.com/unifiedjs/unified" target="_blank" rel="noopener noreferrer">unified</a> (MIT)</li>
+            <li><a href="https://github.com/remarkjs/remark/tree/main/packages/remark-parse" target="_blank" rel="noopener noreferrer">remark-parse</a> (MIT)</li>
+            <li><a href="https://github.com/remarkjs/remark-gfm" target="_blank" rel="noopener noreferrer">remark-gfm</a> (MIT)</li>
+            <li><a href="https://github.com/syntax-tree/unist-util-visit" target="_blank" rel="noopener noreferrer">unist-util-visit</a> (MIT)</li>
+            <li><a href="https://github.com/gc/confusables" target="_blank" rel="noopener noreferrer">confusables</a> (MIT)</li>
+            <li><a href="https://github.com/braintree/sanitize-url" target="_blank" rel="noopener noreferrer">@braintree/sanitize-url</a> (MIT)</li>
+            <li><a href="https://github.com/remusao/tldts" target="_blank" rel="noopener noreferrer">tldts</a> (MIT)</li>
+            <li><a href="https://github.com/whitequark/ipaddr.js" target="_blank" rel="noopener noreferrer">ipaddr.js</a> (MIT)</li>
+            <li><a href="https://github.com/sindresorhus/quick-lru" target="_blank" rel="noopener noreferrer">quick-lru</a> (MIT)</li>
+          </ul>
+
+          <p class="soul-format-label">
+            Note: scanning reduces risk but does not guarantee safe behavior. Always apply runtime guardrails in your agent stack.
+          </p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>PULL.md · Markdown Asset Commerce · Security scanning reference</p>
+    </div>
+  </footer>
+</body>
+</html>

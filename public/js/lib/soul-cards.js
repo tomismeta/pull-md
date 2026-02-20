@@ -51,19 +51,37 @@
     return 'ASSET.md';
   }
 
-  function scanBadgeHtml(asset) {
+  function scanIndicatorHtml(asset) {
     const verdict = String(asset?.scan_verdict || asset?.scan?.verdict || '').trim().toLowerCase();
     if (!verdict || verdict === 'disabled') return '';
+    const summary = asset?.scan_summary && typeof asset.scan_summary === 'object'
+      ? asset.scan_summary
+      : asset?.scan?.summary && typeof asset.scan.summary === 'object'
+        ? asset.scan.summary
+        : {};
+    const warnCount = Number(summary?.by_action?.warn || 0);
+    const blockCount = Number(summary?.by_action?.block || 0);
+    const docsHref = '/security.html#technical-security';
     if (verdict === 'clean') {
-      return '<span class="badge badge-scan-clean" title="Markdown scan clean">Scanned</span>';
+      const tooltip =
+        'Scanned on publish/edit for hidden Unicode, confusables, risky markdown or HTML, unsafe links, prompt-injection phrases, and leaked secrets.';
+      return `<a class="scan-indicator scan-indicator-clean" href="${docsHref}" data-scan-tooltip="${escapeHtml(tooltip)}" title="${escapeHtml(
+        tooltip
+      )}" aria-label="Security scan clean. Open technical scan details."><span aria-hidden="true">✓</span></a>`;
     }
     if (verdict === 'warn') {
-      const warnCount = Number(asset?.scan_summary?.by_action?.warn || asset?.scan?.summary?.by_action?.warn || 0);
-      const suffix = Number.isFinite(warnCount) && warnCount > 0 ? ` (${warnCount})` : '';
-      return `<span class="badge badge-scan-warn" title="Scan warnings present">Scan warn${suffix}</span>`;
+      const count = Number.isFinite(warnCount) ? warnCount : 0;
+      const tooltip = `Scan warnings detected (${count}). Open technical scan details.`;
+      return `<a class="scan-indicator scan-indicator-warn" href="${docsHref}" data-scan-tooltip="${escapeHtml(tooltip)}" title="${escapeHtml(
+        tooltip
+      )}" aria-label="Security scan warnings detected. Open technical scan details."><span aria-hidden="true">!</span></a>`;
     }
     if (verdict === 'block') {
-      return '<span class="badge badge-scan-block" title="Critical scan findings">Scan blocked</span>';
+      const count = Number.isFinite(blockCount) ? blockCount : 1;
+      const tooltip = `Critical scan findings detected (${count}). Publication is blocked in enforce mode.`;
+      return `<a class="scan-indicator scan-indicator-block" href="${docsHref}" data-scan-tooltip="${escapeHtml(tooltip)}" title="${escapeHtml(
+        tooltip
+      )}" aria-label="Critical security findings detected. Open technical scan details."><span aria-hidden="true">×</span></a>`;
     }
     return '';
   }
@@ -121,11 +139,12 @@
         const isOwned = ownedSet.has(soulId);
         const isCreated = createdSet.has(soulId);
         const sourceLabel = isOwned && isCreated ? 'Purchased and created' : isCreated ? 'Creator access' : 'Wallet entitlement';
-        const scanBadge = scanBadgeHtml(soul);
+        const scanIndicator = scanIndicatorHtml(soul);
         const listingHref =
           typeof listingHrefBuilder === 'function' ? String(listingHrefBuilder(soul.id || soulId) || '#') : '#';
         return `
       <article class="soul-card" data-owned-soul-id="${escapeHtml(String(soul.id || soulId))}">
+        ${scanIndicator}
         <div class="soul-card-title">
           <span class="title-hash ${hashToneClass(String(soul.id || soulId))}">#</span>
           <h3>${escapeHtml(String(soul.name || soul.id || soulId))}</h3>
@@ -135,7 +154,6 @@
           <div class="soul-lineage">
             ${isOwned ? '<span class="badge badge-organic">Owned</span>' : ''}
             ${isCreated ? '<span class="badge badge-synthetic">Created</span>' : ''}
-            ${scanBadge}
             <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(sourceLabel)}</span>
           </div>
         </div>
@@ -163,7 +181,7 @@
         const cta = owned ? `Download ${fileName}` : `Purchase ${fileName}`;
         const actionBtnClass = owned ? 'btn btn-ghost' : 'btn btn-primary';
         const lineageLabel = typeof lineageLabelForSoul === 'function' ? String(lineageLabelForSoul(soul) || '') : '';
-        const scanBadge = scanBadgeHtml(soul);
+        const scanIndicator = scanIndicatorHtml(soul);
         const type = String(soul?.asset_type || soul?.provenance?.type || 'hybrid').toLowerCase();
         const cardDescription = formatCardDescription(soul?.description, 'Markdown listing available.');
         const priceLabel = formatSoulPriceLabel(soul);
@@ -171,6 +189,7 @@
         const fallbackCreator = String(soul?.creator_address || soul?.wallet_address || soul?.seller_address || '-').trim();
         return `
       <article class="soul-card" data-soul-id="${escapeHtml(soulId)}">
+        ${scanIndicator}
         <div class="soul-card-title">
           <span class="title-hash ${hashToneClass(soulId || String(soul?.name || 'asset'))}">#</span>
           <h3>${escapeHtml(String(soul?.name || soulId))}</h3>
@@ -186,7 +205,6 @@
         <div class="soul-card-meta">
           <div class="soul-lineage">
             <span class="badge badge-${escapeHtml(type)}">${escapeHtml(type)}</span>
-            ${scanBadge}
             <span class="lineage-mini">${escapeHtml(lineageLabel || `Creator ${fallbackCreator}`)}</span>
           </div>
           <div>

@@ -433,10 +433,10 @@ function renderPublishedList(items) {
       const fileName = String(item.file_name || 'ASSET.md').trim() || 'ASSET.md';
       const creator = shortenAddress(item.wallet_address || STATE.wallet || '');
       const description = formatCardDescription(item.description, 'Published markdown listing.');
-      const scanBadge = scanBadgeHtml(item);
-      const scanSummary = scanSummaryText(item);
+      const scanIndicator = scanIndicatorHtml(item);
       return `
         <article class="soul-card">
+          ${scanIndicator}
           <div class="soul-card-title">
             <span class="title-hash ${hashToneClass(assetId || item.name)}">#</span>
             <h3>${escapeHtml(item.name || assetId)}</h3>
@@ -445,9 +445,7 @@ function renderPublishedList(items) {
           <div class="soul-card-meta">
             <div class="soul-lineage">
               <span class="badge badge-${escapeHtml(type)}">${escapeHtml(type)}</span>
-              ${scanBadge}
               <span class="lineage-mini">Creator ${escapeHtml(creator)}</span>
-              ${scanSummary ? `<span class="lineage-mini">${escapeHtml(scanSummary)}</span>` : ''}
             </div>
             <div>
               <span class="price">${escapeHtml(item.price_display || '$0.00')}</span>
@@ -469,24 +467,34 @@ function renderPublishedList(items) {
     .join('');
 }
 
-function scanBadgeHtml(item) {
+function scanIndicatorHtml(item) {
   const verdict = String(item?.scan_verdict || '').trim().toLowerCase();
-  if (!verdict) return '';
-  if (verdict === 'clean') return '<span class="badge badge-scan-clean">Scanned</span>';
-  if (verdict === 'warn') return '<span class="badge badge-scan-warn">Scan warn</span>';
-  if (verdict === 'block') return '<span class="badge badge-scan-block">Scan blocked</span>';
-  return '';
-}
-
-function scanSummaryText(item) {
-  const verdict = String(item?.scan_verdict || '').trim().toLowerCase();
-  if (!verdict) return '';
+  if (!verdict || verdict === 'disabled') return '';
   const summary = item?.scan_summary && typeof item.scan_summary === 'object' ? item.scan_summary : {};
   const warnCount = Number(summary?.by_action?.warn || 0);
   const blockCount = Number(summary?.by_action?.block || 0);
-  if (verdict === 'clean') return 'Scan clean';
-  if (verdict === 'warn') return `Warnings ${Number.isFinite(warnCount) ? warnCount : 0}`;
-  if (verdict === 'block') return `Blocked ${Number.isFinite(blockCount) ? blockCount : 1}`;
+  const docsHref = '/security.html#technical-security';
+  if (verdict === 'clean') {
+    const tooltip =
+      'Scanned on publish/edit for hidden Unicode, confusables, risky markdown or HTML, unsafe links, prompt-injection phrases, and leaked secrets.';
+    return `<a class="scan-indicator scan-indicator-clean" href="${docsHref}" data-scan-tooltip="${escapeHtml(tooltip)}" title="${escapeHtml(
+      tooltip
+    )}" aria-label="Security scan clean. Open technical scan details."><span aria-hidden="true">✓</span></a>`;
+  }
+  if (verdict === 'warn') {
+    const count = Number.isFinite(warnCount) ? warnCount : 0;
+    const tooltip = `Scan warnings detected (${count}). Open technical scan details.`;
+    return `<a class="scan-indicator scan-indicator-warn" href="${docsHref}" data-scan-tooltip="${escapeHtml(tooltip)}" title="${escapeHtml(
+      tooltip
+    )}" aria-label="Security scan warnings detected. Open technical scan details."><span aria-hidden="true">!</span></a>`;
+  }
+  if (verdict === 'block') {
+    const count = Number.isFinite(blockCount) ? blockCount : 1;
+    const tooltip = `Critical scan findings detected (${count}). Publication is blocked in enforce mode.`;
+    return `<a class="scan-indicator scan-indicator-block" href="${docsHref}" data-scan-tooltip="${escapeHtml(tooltip)}" title="${escapeHtml(
+      tooltip
+    )}" aria-label="Critical security findings detected. Open technical scan details."><span aria-hidden="true">×</span></a>`;
+  }
   return '';
 }
 

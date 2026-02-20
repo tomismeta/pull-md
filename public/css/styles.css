@@ -256,6 +256,28 @@ main {
   padding: 24px 0;
 }
 
+.security-section {
+  padding-top: 10px;
+}
+
+.security-note {
+  display: grid;
+  gap: 10px;
+}
+
+.security-note-list {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.security-note-list li {
+  color: var(--text-soft);
+  font-size: 0.89rem;
+}
+
 .section-head {
   margin-bottom: 16px;
 }
@@ -316,6 +338,7 @@ main {
 }
 
 .soul-card {
+  position: relative;
   padding: 16px;
   transition: box-shadow 0.18s ease, border-color 0.18s ease;
 }
@@ -359,6 +382,74 @@ main {
   margin-bottom: 12px;
   font-size: 0.89rem;
   overflow-wrap: anywhere;
+}
+
+.scan-indicator {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  z-index: 2;
+  transition: transform 0.14s ease, filter 0.14s ease;
+}
+
+.scan-indicator:hover,
+.scan-indicator:focus-visible {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.scan-indicator-clean {
+  color: #1d8f59;
+  background: #eaf7f0;
+}
+
+.scan-indicator-warn {
+  color: #995d05;
+  background: #fff5e7;
+}
+
+.scan-indicator-block {
+  color: #b42318;
+  background: #fdeaea;
+}
+
+.scan-indicator::after {
+  content: attr(data-scan-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(300px, 72vw);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-elevated);
+  color: var(--text-soft);
+  box-shadow: var(--shadow-md);
+  padding: 8px 10px;
+  font-size: 0.73rem;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.scan-indicator:hover::after,
+.scan-indicator:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .soul-format-label {
@@ -1930,6 +2021,28 @@ body {
 .badge-scan-block {
   color: #ffb4b0;
   background: rgba(248, 81, 73, 0.15);
+}
+
+.scan-indicator-clean {
+  color: #9ee6aa;
+  background: rgba(63, 185, 80, 0.12);
+}
+
+.scan-indicator-warn {
+  color: #f4c584;
+  background: rgba(210, 153, 34, 0.14);
+}
+
+.scan-indicator-block {
+  color: #ffb4b0;
+  background: rgba(248, 81, 73, 0.15);
+}
+
+.scan-indicator::after {
+  border-color: #2d3b50;
+  background: #0f1722;
+  color: var(--text-soft);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
 .lineage-mini,

@@ -117,6 +117,30 @@
       </div>
     </section>
 
+    <section class="workflow-section security-section">
+      <div class="container">
+        <div class="section-head">
+          <h2>Security Scanning</h2>
+          <p>Every listing is scanned before publish and on moderation edits.</p>
+        </div>
+        <article class="workflow-card security-note">
+          <p>
+            PULL.md runs layered markdown safety checks to reduce hidden instruction risk, unsafe links, and secret leaks.
+            Clean scans show a small check indicator on listing cards.
+          </p>
+          <ul class="security-note-list">
+            <li>Hidden Unicode and lookalike character detection</li>
+            <li>Risky markdown and embedded HTML structure checks</li>
+            <li>URL safety and optional reputation screening</li>
+            <li>Prompt-injection phrase and secret-pattern detection</li>
+          </ul>
+          <div>
+            <a href="/security.html" class="btn btn-ghost">Read Security Details</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <section class="souls-section" id="assets">
       <div class="container">
         <div class="section-head">
