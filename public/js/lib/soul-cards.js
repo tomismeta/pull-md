@@ -51,6 +51,23 @@
     return 'ASSET.md';
   }
 
+  function scanBadgeHtml(asset) {
+    const verdict = String(asset?.scan_verdict || asset?.scan?.verdict || '').trim().toLowerCase();
+    if (!verdict || verdict === 'disabled') return '';
+    if (verdict === 'clean') {
+      return '<span class="badge badge-scan-clean" title="Markdown scan clean">Scanned</span>';
+    }
+    if (verdict === 'warn') {
+      const warnCount = Number(asset?.scan_summary?.by_action?.warn || asset?.scan?.summary?.by_action?.warn || 0);
+      const suffix = Number.isFinite(warnCount) && warnCount > 0 ? ` (${warnCount})` : '';
+      return `<span class="badge badge-scan-warn" title="Scan warnings present">Scan warn${suffix}</span>`;
+    }
+    if (verdict === 'block') {
+      return '<span class="badge badge-scan-block" title="Critical scan findings">Scan blocked</span>';
+    }
+    return '';
+  }
+
   function hashToneClass(seed) {
     const value = String(seed || 'asset');
     const tones = ['hash-tone-blue', 'hash-tone-orange', 'hash-tone-green', 'hash-tone-purple', 'hash-tone-yellow'];
@@ -104,6 +121,7 @@
         const isOwned = ownedSet.has(soulId);
         const isCreated = createdSet.has(soulId);
         const sourceLabel = isOwned && isCreated ? 'Purchased and created' : isCreated ? 'Creator access' : 'Wallet entitlement';
+        const scanBadge = scanBadgeHtml(soul);
         const listingHref =
           typeof listingHrefBuilder === 'function' ? String(listingHrefBuilder(soul.id || soulId) || '#') : '#';
         return `
@@ -117,6 +135,7 @@
           <div class="soul-lineage">
             ${isOwned ? '<span class="badge badge-organic">Owned</span>' : ''}
             ${isCreated ? '<span class="badge badge-synthetic">Created</span>' : ''}
+            ${scanBadge}
             <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(sourceLabel)}</span>
           </div>
         </div>
@@ -144,6 +163,7 @@
         const cta = owned ? `Download ${fileName}` : `Purchase ${fileName}`;
         const actionBtnClass = owned ? 'btn btn-ghost' : 'btn btn-primary';
         const lineageLabel = typeof lineageLabelForSoul === 'function' ? String(lineageLabelForSoul(soul) || '') : '';
+        const scanBadge = scanBadgeHtml(soul);
         const type = String(soul?.asset_type || soul?.provenance?.type || 'hybrid').toLowerCase();
         const cardDescription = formatCardDescription(soul?.description, 'Markdown listing available.');
         const priceLabel = formatSoulPriceLabel(soul);
@@ -166,6 +186,7 @@
         <div class="soul-card-meta">
           <div class="soul-lineage">
             <span class="badge badge-${escapeHtml(type)}">${escapeHtml(type)}</span>
+            ${scanBadge}
             <span class="lineage-mini">${escapeHtml(lineageLabel || `Creator ${fallbackCreator}`)}</span>
           </div>
           <div>

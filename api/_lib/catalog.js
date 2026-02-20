@@ -262,6 +262,14 @@ function toAssetSummary(asset) {
     preview: { available: true, excerpt: previewExcerpt },
     source_label: asset.sourceLabel || null,
     source_url: asset.sourceUrl || null,
+    scan_verdict: String(asset?.scan?.verdict || '').trim().toLowerCase() || null,
+    scan_mode: String(asset?.scan?.mode || '').trim().toLowerCase() || null,
+    scan_blocked: Boolean(asset?.scan?.blocked),
+    scan_scanned_at: String(asset?.scan?.scannedAt || '').trim() || null,
+    scan_summary:
+      asset?.scan?.summary && typeof asset.scan.summary === 'object'
+        ? asset.scan.summary
+        : { total: 0, by_severity: { high: 0, medium: 0, low: 0 }, by_action: { block: 0, warn: 0 } },
     seller_address: sellerAddress ? sellerAddress.toLowerCase() : null,
     wallet_address: creatorWallet ? creatorWallet.toLowerCase() : null,
     creator_address: creatorWallet ? creatorWallet.toLowerCase() : (sellerAddress ? sellerAddress.toLowerCase() : null),

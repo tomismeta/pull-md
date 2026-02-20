@@ -172,6 +172,19 @@ function recordMarketplaceTelemetry(event = {}) {
   });
 }
 
+function scanMetadataForTelemetry(scanReport) {
+  const scan = scanReport && typeof scanReport === 'object' ? scanReport : null;
+  if (!scan) return {};
+  return {
+    scan_verdict: String(scan.verdict || '').trim() || null,
+    scan_mode: String(scan.mode || '').trim() || null,
+    scan_blocked: Boolean(scan.blocked),
+    scan_total_findings: Number(scan?.summary?.total || 0),
+    scan_block_findings: Number(scan?.summary?.by_action?.block || 0),
+    scan_warn_findings: Number(scan?.summary?.by_action?.warn || 0)
+  };
+}
+
 export function getCreatorMarketplaceSupportedActions() {
   return [
     'get_listing_template',
@@ -258,7 +271,12 @@ export async function executeCreatorMarketplaceAction({
       const result = await publishCreatorListingDirect({
         walletAddress: auth.wallet,
         payload: listingPayload,
-        dryRun: true
+        dryRun: true,
+        scanContext: {
+          source: telemetrySource,
+          route: telemetryRoute,
+          action: normalizedAction
+        }
       });
       recordMarketplaceTelemetry({
         source: telemetrySource,
@@ -272,7 +290,8 @@ export async function executeCreatorMarketplaceAction({
         errorCode: result.ok ? null : result.code || 'validation_failed',
         metadata: {
           warning_count: Array.isArray(result.warnings) ? result.warnings.length : 0,
-          field_error_count: Array.isArray(result.field_errors) ? result.field_errors.length : 0
+          field_error_count: Array.isArray(result.field_errors) ? result.field_errors.length : 0,
+          ...scanMetadataForTelemetry(result.scan_report)
         }
       });
       return {
@@ -285,6 +304,7 @@ export async function executeCreatorMarketplaceAction({
         warnings: result.warnings || [],
         draft_id: result.draft_id || null,
         ...(result.normalized ? { normalized: result.normalized } : {}),
+        ...(result.scan_report ? { scan_report: result.scan_report } : {}),
         auto_generated: AUTO_GENERATED_FIELDS,
         creator_provided: CREATOR_PROVIDED_FIELDS
       };
@@ -292,7 +312,12 @@ export async function executeCreatorMarketplaceAction({
 
     const result = await publishCreatorListingDirect({
       walletAddress: auth.wallet,
-      payload: listingPayload
+      payload: listingPayload,
+      scanContext: {
+        source: telemetrySource,
+        route: telemetryRoute,
+        action: normalizedAction
+      }
     });
     if (!result.ok) {
       recordMarketplaceTelemetry({
@@ -305,7 +330,10 @@ export async function executeCreatorMarketplaceAction({
         success: false,
         statusCode: result.code === 'marketplace_persistence_unconfigured' ? 503 : 400,
         errorCode: result.code || 'publish_failed',
-        errorMessage: Array.isArray(result.errors) && result.errors.length ? result.errors[0] : 'publish_failed'
+        errorMessage: Array.isArray(result.errors) && result.errors.length ? result.errors[0] : 'publish_failed',
+        metadata: {
+          ...scanMetadataForTelemetry(result.scan_report)
+        }
       });
       const statusCode = result.code === 'marketplace_persistence_unconfigured' ? 503 : 400;
       throw new AppError(statusCode, {
@@ -314,7 +342,8 @@ export async function executeCreatorMarketplaceAction({
         errors: result.errors,
         field_errors: result.field_errors || [],
         warnings: result.warnings,
-        draft_id: result.draft_id
+        draft_id: result.draft_id,
+        ...(result.scan_report ? { scan_report: result.scan_report } : {})
       });
     }
 
@@ -337,7 +366,8 @@ export async function executeCreatorMarketplaceAction({
       statusCode: 200,
       metadata: {
         price_micro_usdc: listing.price_micro_usdc || null,
-        visibility: listing.visibility || null
+        visibility: listing.visibility || null,
+        ...scanMetadataForTelemetry(result.scan_report)
       }
     });
     return {
@@ -350,6 +380,7 @@ export async function executeCreatorMarketplaceAction({
       share_url: listing.share_url,
       purchase_endpoint: `/api/assets/${listing.asset_id}/download`,
       warnings: result.warnings || [],
+      ...(result.scan_report ? { scan_report: result.scan_report } : {}),
       storage_warning: marketplaceStorageWarning()
     };
   }
@@ -553,9 +584,30 @@ export async function executeCreatorMarketplaceAction({
     const result = await updatePublishedListingByModerator({
       assetId,
       updates: listingPayload,
-      moderator: moderator.wallet
+      moderator: moderator.wallet,
+      scanContext: {
+        source: telemetrySource,
+        route: telemetryRoute,
+        action: normalizedAction
+      }
     });
     if (!result.ok) {
+      recordMarketplaceTelemetry({
+        eventType: 'moderation.action_failed',
+        source: telemetrySource,
+        route: telemetryRoute,
+        httpMethod: telemetryMethod,
+        action: normalizedAction,
+        walletAddress: moderator.wallet,
+        assetId,
+        success: false,
+        statusCode: /not found/i.test(String(result.error || '')) ? 404 : 400,
+        errorCode: result.code || 'update_failed',
+        errorMessage: result.error || 'Update failed',
+        metadata: {
+          ...scanMetadataForTelemetry(result.scan_report)
+        }
+      });
       const statusCode = /not found/i.test(String(result.error || '')) ? 404 : 400;
       throw new AppError(statusCode, {
         ok: false,
@@ -563,7 +615,8 @@ export async function executeCreatorMarketplaceAction({
         error: result.error || 'Update failed',
         errors: result.errors || [],
         field_errors: result.field_errors || [],
-        warnings: result.warnings || []
+        warnings: result.warnings || [],
+        ...(result.scan_report ? { scan_report: result.scan_report } : {})
       });
     }
     recordMarketplaceTelemetry({
@@ -576,12 +629,16 @@ export async function executeCreatorMarketplaceAction({
       assetId: result?.listing?.asset_id || assetId,
       assetType: result?.listing?.asset_type || null,
       success: true,
-      statusCode: 200
+      statusCode: 200,
+      metadata: {
+        ...scanMetadataForTelemetry(result.scan_report)
+      }
     });
     return {
       ok: true,
       listing: withShareUrl(baseUrl, result.listing),
-      warnings: result.warnings || []
+      warnings: result.warnings || [],
+      ...(result.scan_report ? { scan_report: result.scan_report } : {})
     };
   }
 

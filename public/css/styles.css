@@ -464,6 +464,21 @@ main {
   background: #ebf2ff;
 }
 
+.badge-scan-clean {
+  color: #1d8f59;
+  background: #eaf7f0;
+}
+
+.badge-scan-warn {
+  color: #995d05;
+  background: #fff5e7;
+}
+
+.badge-scan-block {
+  color: #b42318;
+  background: #fdeaea;
+}
+
 .price {
   font-size: 1rem;
   font-weight: 800;
@@ -1900,6 +1915,21 @@ body {
 .badge-hybrid {
   color: #f4c584;
   background: rgba(210, 153, 34, 0.14);
+}
+
+.badge-scan-clean {
+  color: #9ee6aa;
+  background: rgba(63, 185, 80, 0.12);
+}
+
+.badge-scan-warn {
+  color: #f4c584;
+  background: rgba(210, 153, 34, 0.14);
+}
+
+.badge-scan-block {
+  color: #ffb4b0;
+  background: rgba(248, 81, 73, 0.15);
 }
 
 .lineage-mini,

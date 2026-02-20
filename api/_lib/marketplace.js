@@ -3,6 +3,8 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { ethers } from 'ethers';
 import { Pool } from 'pg';
+import { scanMarkdownAssetContent } from './services/content_scanner.js';
+import { persistAssetScanReport } from './services/scan_store.js';
 
 const ASSET_PROFILES = new Set(['synthetic', 'organic', 'hybrid']);
 const ASSET_TYPES = new Set(['soul', 'skill']);
@@ -672,6 +674,27 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
     publishedAt: draft?.published_at || new Date().toISOString(),
     draftId: draft?.draft_id,
     sharePath: sharePathForAsset(id),
+    scan: draft?.scan_report && typeof draft.scan_report === 'object'
+      ? {
+          verdict: asString(draft.scan_report.verdict).toLowerCase() || null,
+          mode: asString(draft.scan_report.mode).toLowerCase() || null,
+          blocked: Boolean(draft.scan_report.blocked),
+          scannedAt: asString(draft.scan_report.scanned_at) || null,
+          contentSha256: asString(draft.scan_report.content_sha256) || null,
+          summary: draft.scan_report.summary && typeof draft.scan_report.summary === 'object'
+            ? draft.scan_report.summary
+            : { total: 0, by_severity: {}, by_action: {} },
+          findingsPreview: Array.isArray(draft.scan_report.findings)
+            ? draft.scan_report.findings.slice(0, 5).map((item) => ({
+                scanner: asString(item?.scanner),
+                code: asString(item?.code),
+                severity: asString(item?.severity).toLowerCase(),
+                action: asString(item?.action).toLowerCase(),
+                message: asString(item?.message)
+              }))
+            : []
+        }
+      : existingEntry?.scan || null,
     visibility: normalizeVisibility(existingEntry?.visibility),
     hiddenAt: existingEntry?.hiddenAt || null,
     hiddenBy: existingEntry?.hiddenBy || null,
@@ -1584,7 +1607,15 @@ function summarizePublishedListing(entry) {
     hidden_by: listing.hiddenBy || null,
     hidden_reason: listing.hiddenReason || null,
     published_at: listing.publishedAt || null,
-    share_path: sharePath
+    share_path: sharePath,
+    scan_verdict: asString(listing?.scan?.verdict || null) || null,
+    scan_mode: asString(listing?.scan?.mode || null) || null,
+    scan_blocked: Boolean(listing?.scan?.blocked),
+    scan_scanned_at: asString(listing?.scan?.scannedAt || null) || null,
+    scan_summary:
+      listing?.scan?.summary && typeof listing.scan.summary === 'object'
+        ? listing.scan.summary
+        : { total: 0, by_severity: { high: 0, medium: 0, low: 0 }, by_action: { block: 0, warn: 0 } }
   };
 }
 
@@ -1613,11 +1644,12 @@ function toModerationListing(entry) {
     price_usdc: priceUsdc,
     source_url: sourceUrl || null,
     source_label: sourceLabel || null,
-    content_markdown: markdown
+    content_markdown: markdown,
+    scan_findings_preview: Array.isArray(listing?.scan?.findingsPreview) ? listing.scan.findingsPreview : []
   };
 }
 
-export async function publishCreatorListingDirect({ walletAddress, payload, dryRun = false }) {
+export async function publishCreatorListingDirect({ walletAddress, payload, dryRun = false, scanContext = {} }) {
   if (process.env.VERCEL && !getMarketplaceDatabaseUrl()) {
     return {
       ok: false,
@@ -1632,6 +1664,61 @@ export async function publishCreatorListingDirect({ walletAddress, payload, dryR
 
   const wallet = String(walletAddress || '').toLowerCase();
   const result = validateMarketplaceDraft(payload, { walletAddress: wallet });
+  let scanReport = null;
+  if (result.ok) {
+    scanReport = await scanMarkdownAssetContent({
+      asset_id: result.normalized?.listing?.asset_id,
+      asset_type: result.normalized?.listing?.asset_type,
+      file_name: result.normalized?.listing?.file_name,
+      name: result.normalized?.listing?.name,
+      description: result.normalized?.listing?.description,
+      content_markdown: result.normalized?.assets?.content_markdown
+    }, {
+      stage: dryRun ? 'publish_dry_run' : 'publish'
+    });
+    try {
+      const persisted = await persistAssetScanReport({
+        assetId: result.normalized?.listing?.asset_id,
+        assetType: result.normalized?.listing?.asset_type,
+      scanReport,
+      walletAddress: wallet,
+      source: asString(scanContext.source) || 'marketplace',
+      route: asString(scanContext.route) || '/shared/publish',
+      action: asString(scanContext.action) || (dryRun ? 'publish_dry_run' : 'publish')
+    });
+      scanReport = {
+        ...scanReport,
+        persisted: Boolean(persisted?.persisted),
+        persistence_schema: persisted?.schema || null
+      };
+    } catch (error) {
+      scanReport = {
+        ...scanReport,
+        persisted: false,
+        persistence_error: error instanceof Error ? error.message : String(error || 'unknown_error')
+      };
+    }
+  }
+
+  if (scanReport?.blocked) {
+    const blockingFindings = Array.isArray(scanReport.findings)
+      ? scanReport.findings.filter((item) => String(item?.action || '').toLowerCase() === 'block')
+      : [];
+    return {
+      ok: false,
+      code: 'security_scan_blocked',
+      errors: [
+        'Security scan blocked this markdown asset. Resolve critical findings and retry.',
+        ...blockingFindings.slice(0, 6).map((item) => String(item?.message || 'Critical security finding'))
+      ],
+      field_errors: [],
+      warnings: result.warnings,
+      draft_id: result.draft_id,
+      scan_report: scanReport,
+      normalized: result.normalized
+    };
+  }
+
   if (dryRun) {
     return {
       ok: result.ok,
@@ -1640,7 +1727,8 @@ export async function publishCreatorListingDirect({ walletAddress, payload, dryR
       field_errors: result.field_errors || [],
       warnings: result.warnings,
       draft_id: result.draft_id,
-      normalized: result.normalized
+      normalized: result.normalized,
+      ...(scanReport ? { scan_report: scanReport } : {})
     };
   }
   if (!result.ok) {
@@ -1658,7 +1746,8 @@ export async function publishCreatorListingDirect({ walletAddress, payload, dryR
   const publishedDraft = {
     draft_id: `pub_${result.draft_id.replace(/^draft_/, '')}`,
     normalized: result.normalized,
-    published_at: now
+    published_at: now,
+    scan_report: scanReport
   };
   await upsertPublishedCatalogEntry({ walletAddress: wallet, draft: publishedDraft });
   await appendReviewAudit({
@@ -1681,7 +1770,8 @@ export async function publishCreatorListingDirect({ walletAddress, payload, dryR
     ok: true,
     warnings: result.warnings,
     listing: summarizePublishedListing(entry || {}),
-    normalized: result.normalized
+    normalized: result.normalized,
+    ...(scanReport ? { scan_report: scanReport } : {})
   };
 }
 
@@ -1783,7 +1873,7 @@ function buildModerationUpdateInput(existing, updates) {
   return { ok: true, payload: merged };
 }
 
-export async function updatePublishedListingByModerator({ assetId, updates, moderator }) {
+export async function updatePublishedListingByModerator({ assetId, updates, moderator, scanContext = {} }) {
   const id = asString(assetId);
   if (!id) return { ok: false, error: 'Missing asset_id' };
 
@@ -1834,12 +1924,64 @@ export async function updatePublishedListingByModerator({ assetId, updates, mode
     };
   }
 
+  const scanReport = await scanMarkdownAssetContent({
+    asset_id: validated.normalized?.listing?.asset_id,
+    asset_type: validated.normalized?.listing?.asset_type,
+    file_name: validated.normalized?.listing?.file_name,
+    name: validated.normalized?.listing?.name,
+    description: validated.normalized?.listing?.description,
+    content_markdown: validated.normalized?.assets?.content_markdown
+  }, {
+    stage: 'moderation_update'
+  });
+  let persistedScanReport = scanReport;
+  try {
+    const persisted = await persistAssetScanReport({
+      assetId: validated.normalized?.listing?.asset_id,
+      assetType: validated.normalized?.listing?.asset_type,
+      scanReport,
+      walletAddress: publisherWallet,
+      source: asString(scanContext.source) || 'marketplace',
+      route: asString(scanContext.route) || '/shared/moderation',
+      action: asString(scanContext.action) || 'update_listing'
+    });
+    persistedScanReport = {
+      ...scanReport,
+      persisted: Boolean(persisted?.persisted),
+      persistence_schema: persisted?.schema || null
+    };
+  } catch (error) {
+    persistedScanReport = {
+      ...scanReport,
+      persisted: false,
+      persistence_error: error instanceof Error ? error.message : String(error || 'unknown_error')
+    };
+  }
+  if (persistedScanReport?.blocked) {
+    const blockingFindings = Array.isArray(persistedScanReport.findings)
+      ? persistedScanReport.findings.filter((item) => String(item?.action || '').toLowerCase() === 'block')
+      : [];
+    return {
+      ok: false,
+      code: 'security_scan_blocked',
+      error: 'Security scan blocked this markdown asset update.',
+      errors: [
+        'Security scan blocked this markdown asset update.',
+        ...blockingFindings.slice(0, 6).map((item) => String(item?.message || 'Critical security finding'))
+      ],
+      field_errors: [],
+      warnings: validated.warnings || [],
+      scan_report: persistedScanReport
+    };
+  }
+
   const now = new Date().toISOString();
   const actor = asString(moderator).toLowerCase() || 'moderator';
   const draft = {
     draft_id: asString(current.draftId) || `pub_${id}`,
     normalized: validated.normalized,
-    published_at: current.publishedAt || now
+    published_at: current.publishedAt || now,
+    scan_report: persistedScanReport
   };
   await upsertPublishedCatalogEntry({
     walletAddress: publisherWallet,
@@ -1865,7 +2007,8 @@ export async function updatePublishedListingByModerator({ assetId, updates, mode
   return {
     ok: true,
     listing: toModerationListing(updated),
-    warnings: validated.warnings || []
+    warnings: validated.warnings || [],
+    scan_report: persistedScanReport
   };
 }
 
