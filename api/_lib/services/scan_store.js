@@ -149,7 +149,59 @@ function findingsPreview(findings) {
     severity: asString(item?.severity).toLowerCase() || 'medium',
     action: asString(item?.action).toLowerCase() || 'warn',
     message: asString(item?.message)
-  }));
+    }));
+}
+
+function normalizeSummary(value) {
+  return value && typeof value === 'object'
+    ? value
+    : { total: 0, by_severity: { high: 0, medium: 0, low: 0 }, by_action: { block: 0, warn: 0 } };
+}
+
+function normalizeScanSnapshot(row) {
+  if (!row || typeof row !== 'object') return null;
+  return {
+    verdict: asString(row.scan_verdict).toLowerCase() || null,
+    mode: asString(row.scan_mode).toLowerCase() || null,
+    blocked: Boolean(row.blocked),
+    scanned_at: row.latest_occurred_at ? new Date(row.latest_occurred_at).toISOString() : null,
+    content_sha256: asString(row.content_sha256) || asString(row.revision_sha256) || null,
+    summary: normalizeSummary(row.summary),
+    findings_preview: Array.isArray(row.findings_preview) ? row.findings_preview : []
+  };
+}
+
+export async function getLatestAssetScan(assetId) {
+  const id = asString(assetId);
+  if (!id) {
+    return { ok: false, present: false, code: 'missing_asset_id', scan: null };
+  }
+  const pool = getDbPool();
+  if (!pool) {
+    return { ok: false, present: false, code: 'scan_store_unconfigured', scan: null };
+  }
+  await ensureSecuritySchema();
+  const schema = securitySchemaName();
+  const latestTable = `${quoteIdentifier(schema)}.${quoteIdentifier('asset_scan_latest')}`;
+  const result = await pool.query(
+    `
+      SELECT asset_id, asset_type, latest_occurred_at, revision_sha256, scan_verdict, scan_mode, blocked, summary, findings_preview, content_sha256
+      FROM ${latestTable}
+      WHERE asset_id = $1
+      LIMIT 1
+    `,
+    [id]
+  );
+  const row = result?.rows?.[0] || null;
+  if (!row) {
+    return { ok: true, present: false, code: null, scan: null };
+  }
+  return {
+    ok: true,
+    present: true,
+    code: null,
+    scan: normalizeScanSnapshot(row)
+  };
 }
 
 export async function persistAssetScanReport({

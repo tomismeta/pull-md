@@ -4,7 +4,7 @@ import path from 'path';
 import { ethers } from 'ethers';
 import { Pool } from 'pg';
 import { scanMarkdownAssetContent } from './services/content_scanner.js';
-import { persistAssetScanReport } from './services/scan_store.js';
+import { getLatestAssetScan, persistAssetScanReport } from './services/scan_store.js';
 
 const ASSET_PROFILES = new Set(['synthetic', 'organic', 'hybrid']);
 const ASSET_TYPES = new Set(['soul', 'skill']);
@@ -727,6 +727,106 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
   await savePublishedCatalog(catalog);
 }
 
+function normalizeScanSummary(summary) {
+  return summary && typeof summary === 'object'
+    ? summary
+    : { total: 0, by_severity: { high: 0, medium: 0, low: 0 }, by_action: { block: 0, warn: 0 } };
+}
+
+function hasEntryScan(entry) {
+  return Boolean(entry?.scan && typeof entry.scan === 'object' && asString(entry?.scan?.verdict));
+}
+
+function toCatalogScanFromReport(scanReport) {
+  const report = scanReport && typeof scanReport === 'object' ? scanReport : null;
+  if (!report) return null;
+  return {
+    verdict: asString(report.verdict).toLowerCase() || null,
+    mode: asString(report.mode).toLowerCase() || null,
+    blocked: Boolean(report.blocked),
+    scannedAt: asString(report.scanned_at) || null,
+    contentSha256: asString(report.content_sha256) || null,
+    summary: normalizeScanSummary(report.summary),
+    findingsPreview: Array.isArray(report.findings)
+      ? report.findings.slice(0, 5).map((item) => ({
+          scanner: asString(item?.scanner),
+          code: asString(item?.code),
+          severity: asString(item?.severity).toLowerCase(),
+          action: asString(item?.action).toLowerCase(),
+          message: asString(item?.message)
+        }))
+      : []
+  };
+}
+
+function toCatalogScanFromLatest(latest) {
+  const scan = latest && typeof latest === 'object' ? latest : null;
+  if (!scan) return null;
+  return {
+    verdict: asString(scan.verdict).toLowerCase() || null,
+    mode: asString(scan.mode).toLowerCase() || null,
+    blocked: Boolean(scan.blocked),
+    scannedAt: asString(scan.scanned_at) || null,
+    contentSha256: asString(scan.content_sha256) || null,
+    summary: normalizeScanSummary(scan.summary),
+    findingsPreview: Array.isArray(scan.findings_preview) ? scan.findings_preview : []
+  };
+}
+
+async function enrichEntryWithScan(entry) {
+  if (!entry || typeof entry !== 'object') return entry;
+  if (hasEntryScan(entry)) return entry;
+
+  const assetId = asString(entry.id);
+  if (!assetId) return entry;
+
+  try {
+    const latest = await getLatestAssetScan(assetId);
+    if (latest?.ok && latest.present && latest.scan) {
+      return {
+        ...entry,
+        scan: toCatalogScanFromLatest(latest.scan)
+      };
+    }
+  } catch (_) {
+    // Best-effort enrichment only.
+  }
+
+  const contentMarkdown = typeof entry.contentInline === 'string' ? entry.contentInline : '';
+  if (!contentMarkdown.trim()) return entry;
+
+  try {
+    const scanReport = await scanMarkdownAssetContent(
+      {
+        asset_id: assetId,
+        asset_type: normalizeAssetType(entry.assetType || entry.asset_type),
+        file_name: normalizeMarkdownFileName(entry.fileName || entry.file_name, defaultFileNameForAssetType(entry.assetType)),
+        name: asString(entry.name),
+        description: asString(entry.description),
+        content_markdown: contentMarkdown
+      },
+      { stage: 'catalog_backfill' }
+    );
+
+    await persistAssetScanReport({
+      assetId,
+      assetType: normalizeAssetType(entry.assetType || entry.asset_type),
+      scanReport,
+      walletAddress: asString(entry.publishedBy).toLowerCase() || null,
+      source: 'marketplace',
+      route: '/shared/catalog',
+      action: 'scan_backfill'
+    });
+
+    return {
+      ...entry,
+      scan: toCatalogScanFromReport(scanReport)
+    };
+  } catch (_) {
+    return entry;
+  }
+}
+
 async function loadAllWalletDraftStores() {
   if (isMarketplaceDbEnabled()) {
     try {
@@ -895,7 +995,7 @@ async function listPublishedCatalogEntriesFiltered({ includeHidden = false, publ
   const catalog = await loadPublishedCatalog();
   const rows = Array.isArray(catalog?.entries) ? catalog.entries : [];
   const creator = publishedBy ? String(publishedBy).toLowerCase() : '';
-  return rows.filter((entry) => {
+  const filtered = rows.filter((entry) => {
     if (!entry || typeof entry !== 'object') return false;
     if (typeof entry.id !== 'string' || !entry.id) return false;
     const visibility = normalizeVisibility(entry.visibility);
@@ -903,6 +1003,11 @@ async function listPublishedCatalogEntriesFiltered({ includeHidden = false, publ
     if (creator && String(entry.publishedBy || '').toLowerCase() !== creator) return false;
     return true;
   });
+  const enriched = [];
+  for (const entry of filtered) {
+    enriched.push(await enrichEntryWithScan(entry));
+  }
+  return enriched;
 }
 
 export async function listPublishedCatalogEntriesPublic() {

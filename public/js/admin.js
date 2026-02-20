@@ -573,11 +573,13 @@ function renderVisible(items) {
           <div class="admin-card-row">
             <h4>${escapeHtml(item.name || item.asset_id)}</h4>
             <span class="badge badge-organic">public</span>
+            ${scanBadgeHtml(item)}
           </div>
           <p class="admin-line">asset_id: <code>${escapeHtml(item.asset_id || '-')}</code></p>
           <p class="admin-line">creator: <code>${escapeHtml(item.wallet_address || '-')}</code></p>
           <p class="admin-line">type: <code>${escapeHtml(String(item.asset_type || 'soul').toUpperCase())}</code></p>
           <p class="admin-line">published: <code>${escapeHtml(formatDate(item.published_at))}</code></p>
+          ${scanSummaryLine(item)}
           <div class="admin-card-actions">
             ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
             <button class="btn btn-ghost" data-action="edit-listing" data-asset="${escapeHtml(item.asset_id)}">edit</button>
@@ -604,12 +606,14 @@ function renderHidden(items) {
           <div class="admin-card-row">
             <h4>${escapeHtml(item.name || item.asset_id)}</h4>
             <span class="badge badge-hybrid">hidden</span>
+            ${scanBadgeHtml(item)}
           </div>
           <p class="admin-line">asset_id: <code>${escapeHtml(item.asset_id || '-')}</code></p>
           <p class="admin-line">type: <code>${escapeHtml(String(item.asset_type || 'soul').toUpperCase())}</code></p>
           <p class="admin-line">hidden_by: <code>${escapeHtml(item.hidden_by || '-')}</code></p>
           <p class="admin-line">hidden_at: <code>${escapeHtml(formatDate(item.hidden_at))}</code></p>
           <p class="admin-line">reason: <code>${escapeHtml(item.hidden_reason || '-')}</code></p>
+          ${scanSummaryLine(item)}
           <div class="admin-card-actions">
             ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
             <button class="btn btn-ghost" data-action="edit-listing" data-asset="${escapeHtml(item.asset_id)}">edit</button>
@@ -620,6 +624,30 @@ function renderHidden(items) {
       `
     )
     .join('');
+}
+
+function scanBadgeHtml(item) {
+  const verdict = String(item?.scan_verdict || '').trim().toLowerCase();
+  if (!verdict) return '';
+  if (verdict === 'clean') return '<span class="badge badge-scan-clean">scanned</span>';
+  if (verdict === 'warn') return '<span class="badge badge-scan-warn">scan warn</span>';
+  if (verdict === 'block') return '<span class="badge badge-scan-block">scan blocked</span>';
+  return '';
+}
+
+function scanSummaryLine(item) {
+  const verdict = String(item?.scan_verdict || '').trim().toLowerCase();
+  if (!verdict) return '';
+  const summary = item?.scan_summary && typeof item.scan_summary === 'object' ? item.scan_summary : {};
+  const warns = Number(summary?.by_action?.warn || 0);
+  const blocks = Number(summary?.by_action?.block || 0);
+  const text =
+    verdict === 'clean'
+      ? 'scan: clean'
+      : verdict === 'warn'
+        ? `scan: warnings ${Number.isFinite(warns) ? warns : 0}`
+        : `scan: blocked ${Number.isFinite(blocks) ? blocks : 1}`;
+  return `<p class="admin-line">security: <code>${escapeHtml(text)}</code></p>`;
 }
 
 function renderTelemetryEmpty(message) {
@@ -970,7 +998,7 @@ async function submitEditListing() {
   await requireAllowedModerator();
   const payload = buildListingPayloadFromEditForm();
   if (!payload.asset_id) throw new Error('Missing asset id');
-  await apiCall('update_listing', {
+  return apiCall('update_listing', {
     method: 'POST',
     moderatorAuth: true,
     body: payload
@@ -1126,9 +1154,17 @@ function bindEvents() {
     const submitBtn = event.target?.querySelector('button[type="submit"]');
     if (submitBtn instanceof HTMLButtonElement) submitBtn.disabled = true;
     try {
-      await submitEditListing();
+      const result = await submitEditListing();
       closeEditListingModal();
-      showToast('Listing updated', 'success');
+      const scanVerdict = String(result?.scan_report?.verdict || '').trim().toLowerCase();
+      if (scanVerdict === 'clean') {
+        showToast('Listing updated. Security scan clean.', 'success');
+      } else if (scanVerdict === 'warn') {
+        const warns = Number(result?.scan_report?.summary?.by_action?.warn || 0);
+        showToast(`Listing updated. Security scan warnings: ${Number.isFinite(warns) ? warns : 0}`, 'warning');
+      } else {
+        showToast('Listing updated', 'success');
+      }
       await loadModerationListings();
     } catch (error) {
       const fieldErrors = error?.field_errors;
