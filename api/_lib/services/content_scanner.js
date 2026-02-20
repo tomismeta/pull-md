@@ -1,4 +1,13 @@
 import crypto from 'crypto';
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+import { visit } from 'unist-util-visit';
+import confusables from 'confusables';
+import { sanitizeUrl } from '@braintree/sanitize-url';
+import { parse as parseDomain } from 'tldts';
+import ipaddr from 'ipaddr.js';
+import QuickLRU from 'quick-lru';
 
 const SCAN_MODE_VALUES = new Set(['off', 'advisory', 'enforce']);
 const FAIL_POLICY_VALUES = new Set(['fail_open', 'fail_closed']);
@@ -6,6 +15,11 @@ const DEFAULT_SCAN_MODE = 'advisory';
 const DEFAULT_FAIL_POLICY = 'fail_open';
 const MAX_FINDINGS = 64;
 const MAX_EVIDENCE = 180;
+const MAX_CONFUSABLE_FINDINGS = 8;
+
+const parser = unified().use(remarkParse).use(remarkGfm);
+const normalizedUrlCache = new QuickLRU({ maxSize: 2048 });
+const urlhausCache = new QuickLRU({ maxSize: 4096 });
 
 const HIDDEN_UNICODE_RANGES = [
   { code: 'zero_width', label: 'Zero-width or invisible Unicode', min: 0x200b, max: 0x200f, severity: 'medium' },
@@ -40,6 +54,9 @@ const SECRET_PATTERNS = [
   { code: 'google_api_key', re: /\bAIza[0-9A-Za-z\-_]{35}\b/g, label: 'Possible Google API key' }
 ];
 
+const WORD_TOKEN_RE = /\p{L}[\p{L}\p{N}._:-]{2,}/gu;
+const LOCAL_HOST_SUFFIXES = ['.local', '.internal', '.localhost'];
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -62,6 +79,37 @@ function scanMode() {
 
 function scanFailPolicy() {
   return normalizeFailPolicy(process.env.MARKDOWN_SCAN_FAIL_POLICY || process.env.ASSET_SCAN_FAIL_POLICY);
+}
+
+function isTruthyEnv(raw) {
+  const value = String(raw || '').trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on';
+}
+
+function urlhausEnabled() {
+  return isTruthyEnv(process.env.URLHAUS_REPUTATION_ENABLED);
+}
+
+function urlhausEndpoint() {
+  return String(process.env.URLHAUS_API_URL || 'https://urlhaus-api.abuse.ch/v1/host/').trim();
+}
+
+function urlhausTimeoutMs() {
+  const n = Number(process.env.URLHAUS_TIMEOUT_MS || 1500);
+  if (!Number.isFinite(n) || n < 100) return 1500;
+  return Math.min(Math.floor(n), 10000);
+}
+
+function urlhausCacheTtlMs() {
+  const n = Number(process.env.URLHAUS_CACHE_TTL_MS || 10 * 60 * 1000);
+  if (!Number.isFinite(n) || n < 1000) return 10 * 60 * 1000;
+  return Math.min(Math.floor(n), 60 * 60 * 1000);
+}
+
+function maxExternalUrlChecks() {
+  const n = Number(process.env.SCAN_URL_REPUTATION_MAX_URLS || 12);
+  if (!Number.isFinite(n) || n < 1) return 12;
+  return Math.min(Math.floor(n), 32);
 }
 
 function truncateEvidence(value) {
@@ -109,6 +157,62 @@ function buildSummary(findings = []) {
   return summary;
 }
 
+function parseMarkdownAst(markdown) {
+  try {
+    return parser.parse(String(markdown || ''));
+  } catch (_) {
+    return null;
+  }
+}
+
+function collectAstUrls(ast) {
+  const urls = [];
+  if (!ast || typeof ast !== 'object') return urls;
+  visit(ast, (node) => {
+    if (!node || typeof node !== 'object') return;
+    const type = String(node.type || '');
+    if (type === 'link' || type === 'image' || type === 'definition') {
+      const raw = String(node.url || '').trim();
+      if (raw) urls.push(raw);
+    }
+  });
+  return urls;
+}
+
+function extractRawUrls(markdown) {
+  const urls = [];
+  const text = String(markdown || '');
+  const markdownLinkRe = /\[[^\]]*\]\(([^)\s]+(?:\s+"[^"]*")?)\)/g;
+  let match = markdownLinkRe.exec(text);
+  while (match) {
+    const raw = String(match[1] || '').split(/\s+"/)[0].trim();
+    if (raw) urls.push(raw);
+    match = markdownLinkRe.exec(text);
+  }
+
+  const angleRe = /<((?:https?:\/\/|javascript:|vbscript:|data:|file:)[^>\s]+)>/gi;
+  match = angleRe.exec(text);
+  while (match) {
+    const raw = String(match[1] || '').trim();
+    if (raw) urls.push(raw);
+    match = angleRe.exec(text);
+  }
+
+  const rawRe = /\b(?:https?:\/\/|javascript:|vbscript:|data:|file:)[^\s)]+/gi;
+  match = rawRe.exec(text);
+  while (match) {
+    const raw = String(match[0] || '').trim();
+    if (raw) urls.push(raw);
+    match = rawRe.exec(text);
+  }
+
+  return urls;
+}
+
+function extractUrls(markdown, ast) {
+  return [...new Set([...collectAstUrls(ast), ...extractRawUrls(markdown)].filter(Boolean))];
+}
+
 function scanInvisibleUnicode(markdown) {
   const findings = [];
   const counts = new Map();
@@ -138,151 +242,92 @@ function scanInvisibleUnicode(markdown) {
   return findings;
 }
 
-function scanDangerousHtml(markdown) {
-  const text = String(markdown || '');
+function scanDangerousHtml(markdown, ast) {
   const findings = [];
-  const tagMatch = text.match(DANGEROUS_TAG_RE);
-  if (tagMatch) {
-    findings.push(
-      createFinding({
-        scanner: 'html_structure',
-        code: 'dangerous_tag',
-        severity: 'high',
-        action: 'block',
-        message: `Dangerous HTML tag detected: <${String(tagMatch[1] || '').toLowerCase()}>.`,
-        evidence: tagMatch[0]
-      })
-    );
-  }
-  const handlerMatch = text.match(INLINE_HANDLER_RE);
-  if (handlerMatch) {
-    findings.push(
-      createFinding({
-        scanner: 'html_structure',
-        code: 'inline_event_handler',
-        severity: 'high',
-        action: 'block',
-        message: 'Inline HTML event handler detected.',
-        evidence: handlerMatch[0]
-      })
-    );
-  }
-  if (DETAILS_RE.test(text)) {
-    findings.push(
-      createFinding({
-        scanner: 'html_structure',
-        code: 'details_block',
-        severity: 'low',
-        action: 'warn',
-        message: 'HTML <details> block detected. Hidden markdown structures can obscure instructions.'
-      })
-    );
-  }
-  const comments = text.match(HTML_COMMENT_RE) || [];
-  if (comments.length > 0) {
-    findings.push(
-      createFinding({
-        scanner: 'html_structure',
-        code: 'html_comment',
-        severity: 'medium',
-        action: 'warn',
-        message: `HTML comments detected (${comments.length}). Hidden comments may mask behavior.`,
-        evidence: comments[0]
-      })
-    );
-  }
-  return findings;
-}
-
-function extractUrls(markdown) {
-  const urls = [];
+  const snippets = [];
   const text = String(markdown || '');
-  const markdownLinkRe = /\[[^\]]*\]\(([^)\s]+(?:\s+"[^"]*")?)\)/g;
-  let match = markdownLinkRe.exec(text);
-  while (match) {
-    const raw = String(match[1] || '').split(/\s+"/)[0].trim();
-    if (raw) urls.push(raw);
-    match = markdownLinkRe.exec(text);
-  }
-
-  const angleRe = /<((?:https?:\/\/|javascript:|vbscript:|data:|file:)[^>\s]+)>/gi;
-  match = angleRe.exec(text);
-  while (match) {
-    const raw = String(match[1] || '').trim();
-    if (raw) urls.push(raw);
-    match = angleRe.exec(text);
-  }
-
-  const rawRe = /\b(?:https?:\/\/|javascript:|vbscript:|data:|file:)[^\s)]+/gi;
-  match = rawRe.exec(text);
-  while (match) {
-    const raw = String(match[0] || '').trim();
-    if (raw) urls.push(raw);
-    match = rawRe.exec(text);
-  }
-
-  return [...new Set(urls)];
-}
-
-function scanUrls(markdown) {
-  const findings = [];
-  const urls = extractUrls(markdown);
-  for (const urlText of urls) {
-    const raw = String(urlText || '').trim();
-    const scheme = raw.split(':')[0]?.toLowerCase();
-    if (!scheme) continue;
-    if (DANGEROUS_SCHEMES.has(scheme)) {
-      findings.push(
-        createFinding({
-          scanner: 'url_safety',
-          code: 'dangerous_uri_scheme',
-          severity: 'high',
-          action: 'block',
-          message: `Dangerous URI scheme detected: ${scheme}:`,
-          evidence: raw
-        })
-      );
-      continue;
-    }
-    if (raw.length > 2048) {
-      findings.push(
-        createFinding({
-          scanner: 'url_safety',
-          code: 'oversized_url',
-          severity: 'medium',
-          action: 'warn',
-          message: 'Very long URL detected.',
-          evidence: raw
-        })
-      );
-    }
-    try {
-      const parsed = new URL(raw);
-      if (String(parsed.hostname || '').toLowerCase().startsWith('xn--')) {
+  if (text) snippets.push(text);
+  if (ast && typeof ast === 'object') {
+    visit(ast, 'html', (node) => {
+      const value = String(node?.value || '').trim();
+      if (value) snippets.push(value);
+    });
+    visit(ast, 'definition', (node) => {
+      const title = String(node?.title || '').trim();
+      if (!title) return;
+      const lowered = title.toLowerCase();
+      for (const phrase of INJECTION_PHRASES) {
+        if (!lowered.includes(phrase)) continue;
         findings.push(
           createFinding({
-            scanner: 'url_safety',
-            code: 'punycode_hostname',
-            severity: 'medium',
+            scanner: 'markdown_structure',
+            code: 'definition_title_injection_phrase',
+            severity: 'low',
             action: 'warn',
-            message: 'Punycode hostname detected; verify domain authenticity.',
-            evidence: parsed.hostname
+            message: `Reference link title contains potential prompt-injection phrase: "${phrase}".`,
+            evidence: title
           })
         );
       }
-    } catch (_) {
+    });
+  }
+
+  for (const snippet of snippets) {
+    const tagMatch = snippet.match(DANGEROUS_TAG_RE);
+    if (tagMatch) {
       findings.push(
         createFinding({
-          scanner: 'url_safety',
-          code: 'malformed_url',
+          scanner: 'html_structure',
+          code: 'dangerous_tag',
+          severity: 'high',
+          action: 'block',
+          message: `Dangerous HTML tag detected: <${String(tagMatch[1] || '').toLowerCase()}>.`,
+          evidence: tagMatch[0]
+        })
+      );
+    }
+
+    const handlerMatch = snippet.match(INLINE_HANDLER_RE);
+    if (handlerMatch) {
+      findings.push(
+        createFinding({
+          scanner: 'html_structure',
+          code: 'inline_event_handler',
+          severity: 'high',
+          action: 'block',
+          message: 'Inline HTML event handler detected.',
+          evidence: handlerMatch[0]
+        })
+      );
+    }
+
+    if (DETAILS_RE.test(snippet)) {
+      findings.push(
+        createFinding({
+          scanner: 'html_structure',
+          code: 'details_block',
           severity: 'low',
           action: 'warn',
-          message: 'Malformed URL detected in markdown.',
-          evidence: raw
+          message: 'HTML <details> block detected. Hidden markdown structures can obscure instructions.'
+        })
+      );
+    }
+
+    const comments = snippet.match(HTML_COMMENT_RE) || [];
+    if (comments.length > 0) {
+      findings.push(
+        createFinding({
+          scanner: 'html_structure',
+          code: 'html_comment',
+          severity: 'medium',
+          action: 'warn',
+          message: `HTML comments detected (${comments.length}). Hidden comments may mask behavior.`,
+          evidence: comments[0]
         })
       );
     }
   }
+
   return findings;
 }
 
@@ -326,18 +371,304 @@ function scanSecrets(markdown) {
   return findings;
 }
 
+function scanConfusableContent(markdown) {
+  const text = String(markdown || '');
+  const tokens = text.match(WORD_TOKEN_RE) || [];
+  const findings = [];
+  for (const token of tokens) {
+    if (!/[^\x00-\x7F]/.test(token)) continue;
+    const normalized = String(confusables.remove(token) || '');
+    if (!normalized || normalized === token) continue;
+    if (!/^[\x20-\x7E]+$/.test(normalized)) continue;
+    if (!/[a-z]/i.test(normalized)) continue;
+    findings.push(
+      createFinding({
+        scanner: 'confusable',
+        code: 'confusable_token',
+        severity: 'medium',
+        action: 'warn',
+        message: 'Possible confusable Unicode token detected.',
+        evidence: `${token} => ${normalized}`
+      })
+    );
+    if (findings.length >= MAX_CONFUSABLE_FINDINGS) break;
+  }
+  return findings;
+}
+
+function normalizeUrlCandidate(raw) {
+  const candidate = String(raw || '').trim();
+  if (!candidate) return { raw: candidate, sanitized: '', scheme: '' };
+  const cached = normalizedUrlCache.get(candidate);
+  if (cached) return cached;
+
+  const sanitized = String(sanitizeUrl(candidate) || '').trim();
+  const scheme = candidate.includes(':') ? candidate.split(':')[0].toLowerCase() : '';
+  const value = { raw: candidate, sanitized, scheme };
+  normalizedUrlCache.set(candidate, value);
+  return value;
+}
+
+function isLocalHostname(hostname) {
+  const host = String(hostname || '').toLowerCase();
+  if (!host) return false;
+  if (host === 'localhost') return true;
+  return LOCAL_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
+
+function classifyIpHost(hostname) {
+  const host = String(hostname || '').trim();
+  if (!host || !ipaddr.isValid(host)) return null;
+  try {
+    const parsed = ipaddr.parse(host);
+    const range = parsed.range();
+    return {
+      kind: parsed.kind(),
+      range: String(range || 'unknown')
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function fetchJsonWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function lookupUrlhaus(hostname) {
+  if (!urlhausEnabled()) return null;
+  const host = String(hostname || '').trim().toLowerCase();
+  if (!host) return null;
+
+  const now = Date.now();
+  const cached = urlhausCache.get(host);
+  if (cached && Number(cached.expiresAt || 0) > now) {
+    return cached.value;
+  }
+
+  const formBody = new URLSearchParams({ host });
+  const response = await fetchJsonWithTimeout(
+    urlhausEndpoint(),
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        accept: 'application/json'
+      },
+      body: formBody.toString()
+    },
+    urlhausTimeoutMs()
+  );
+
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch (_) {
+    payload = {};
+  }
+
+  const queryStatus = String(payload?.query_status || '').toLowerCase();
+  const urls = Array.isArray(payload?.urls) ? payload.urls : [];
+  const malicious = queryStatus === 'ok' && urls.length > 0;
+  const sample = malicious ? urls[0] : null;
+  const value = {
+    malicious,
+    source: 'urlhaus',
+    host,
+    sample: sample && typeof sample === 'object'
+      ? {
+          url: String(sample.url || ''),
+          status: String(sample.url_status || ''),
+          threat: String(sample.threat || '')
+        }
+      : null
+  };
+
+  urlhausCache.set(host, {
+    value,
+    expiresAt: now + urlhausCacheTtlMs()
+  });
+  return value;
+}
+
+async function scanUrls(markdown, context) {
+  const findings = [];
+  const urls = Array.isArray(context?.urls) ? context.urls : extractUrls(markdown, context?.ast);
+  let checkedForReputation = 0;
+
+  for (const urlText of urls) {
+    const normalized = normalizeUrlCandidate(urlText);
+    const raw = normalized.raw;
+    const scheme = normalized.scheme;
+
+    if (!raw) continue;
+    if (DANGEROUS_SCHEMES.has(scheme)) {
+      findings.push(
+        createFinding({
+          scanner: 'url_safety',
+          code: 'dangerous_uri_scheme',
+          severity: 'high',
+          action: 'block',
+          message: `Dangerous URI scheme detected: ${scheme}:`,
+          evidence: raw
+        })
+      );
+      continue;
+    }
+
+    if (normalized.sanitized === 'about:blank' && !/^about:blank$/i.test(raw)) {
+      findings.push(
+        createFinding({
+          scanner: 'url_safety',
+          code: 'sanitized_to_blank',
+          severity: 'high',
+          action: 'block',
+          message: 'URL was sanitized as unsafe.',
+          evidence: raw
+        })
+      );
+      continue;
+    }
+
+    if (raw.length > 2048) {
+      findings.push(
+        createFinding({
+          scanner: 'url_safety',
+          code: 'oversized_url',
+          severity: 'medium',
+          action: 'warn',
+          message: 'Very long URL detected.',
+          evidence: raw
+        })
+      );
+    }
+
+    let parsed = null;
+    try {
+      parsed = new URL(normalized.sanitized || raw);
+    } catch (_) {
+      findings.push(
+        createFinding({
+          scanner: 'url_safety',
+          code: 'malformed_url',
+          severity: 'low',
+          action: 'warn',
+          message: 'Malformed URL detected in markdown.',
+          evidence: raw
+        })
+      );
+      continue;
+    }
+
+    const hostname = String(parsed.hostname || '').toLowerCase();
+    if (!hostname) continue;
+
+    if (hostname.startsWith('xn--')) {
+      findings.push(
+        createFinding({
+          scanner: 'url_safety',
+          code: 'punycode_hostname',
+          severity: 'medium',
+          action: 'warn',
+          message: 'Punycode hostname detected; verify domain authenticity.',
+          evidence: hostname
+        })
+      );
+    }
+
+    if (isLocalHostname(hostname)) {
+      findings.push(
+        createFinding({
+          scanner: 'url_safety',
+          code: 'local_hostname',
+          severity: 'medium',
+          action: 'warn',
+          message: 'Local/internal hostname reference detected.',
+          evidence: hostname
+        })
+      );
+    }
+
+    const ipInfo = classifyIpHost(hostname);
+    if (ipInfo) {
+      const range = String(ipInfo.range || '').toLowerCase();
+      const suspiciousRange = range && range !== 'unicast';
+      if (suspiciousRange) {
+        findings.push(
+          createFinding({
+            scanner: 'url_safety',
+            code: 'non_public_ip_target',
+            severity: 'medium',
+            action: 'warn',
+            message: `URL points to non-public IP range (${range}).`,
+            evidence: hostname
+          })
+        );
+      }
+    }
+
+    const domainInfo = parseDomain(parsed.href);
+    if (!domainInfo?.publicSuffix) {
+      findings.push(
+        createFinding({
+          scanner: 'url_safety',
+          code: 'missing_public_suffix',
+          severity: 'low',
+          action: 'warn',
+          message: 'URL host has no recognized public suffix.',
+          evidence: hostname
+        })
+      );
+    }
+
+    const protocol = String(parsed.protocol || '').toLowerCase();
+    if ((protocol === 'http:' || protocol === 'https:') && checkedForReputation < maxExternalUrlChecks()) {
+      checkedForReputation += 1;
+      const intel = await lookupUrlhaus(hostname);
+      if (intel?.malicious) {
+        findings.push(
+          createFinding({
+            scanner: 'url_reputation',
+            code: 'urlhaus_match',
+            severity: 'high',
+            action: 'block',
+            message: 'URL host matched known malicious infrastructure.',
+            evidence: intel.sample?.url || hostname
+          })
+        );
+      }
+    }
+  }
+
+  return findings;
+}
+
 const DEFAULT_SCANNERS = [
   {
     id: 'unicode',
     run: ({ content_markdown }) => scanInvisibleUnicode(content_markdown)
   },
   {
-    id: 'html_structure',
-    run: ({ content_markdown }) => scanDangerousHtml(content_markdown)
+    id: 'confusable',
+    run: ({ content_markdown }) => scanConfusableContent(content_markdown)
+  },
+  {
+    id: 'markdown_structure',
+    run: ({ content_markdown, ast }) => scanDangerousHtml(content_markdown, ast)
   },
   {
     id: 'url_safety',
-    run: ({ content_markdown }) => scanUrls(content_markdown)
+    run: ({ content_markdown, ast, urls }) => scanUrls(content_markdown, { ast, urls })
   },
   {
     id: 'prompt_injection',
@@ -362,7 +693,10 @@ function createScannerErrorFinding(scannerId, error, failPolicy) {
 export function getContentScannerConfig() {
   return {
     mode: scanMode(),
-    fail_policy: scanFailPolicy()
+    fail_policy: scanFailPolicy(),
+    url_reputation_enabled: urlhausEnabled(),
+    url_reputation_source: urlhausEnabled() ? 'urlhaus' : null,
+    scanners: DEFAULT_SCANNERS.map((scanner) => scanner.id)
   };
 }
 
@@ -372,6 +706,8 @@ export async function scanMarkdownAssetContent(input = {}, options = {}) {
   const failPolicy = normalizeFailPolicy(options.failPolicy || scanFailPolicy());
   const scanners = Array.isArray(options.scanners) && options.scanners.length > 0 ? options.scanners : DEFAULT_SCANNERS;
   const contentMarkdown = String(input?.content_markdown || '');
+  const ast = parseMarkdownAst(contentMarkdown);
+  const urls = extractUrls(contentMarkdown, ast);
   const context = {
     asset_id: String(input?.asset_id || '').trim() || null,
     asset_type: String(input?.asset_type || '').trim().toLowerCase() || null,
@@ -379,7 +715,9 @@ export async function scanMarkdownAssetContent(input = {}, options = {}) {
     name: String(input?.name || '').trim() || null,
     description: String(input?.description || '').trim() || null,
     content_markdown: contentMarkdown,
-    stage: String(options.stage || input?.stage || '').trim() || 'unknown'
+    stage: String(options.stage || input?.stage || '').trim() || 'unknown',
+    ast,
+    urls
   };
   const contentHash = crypto.createHash('sha256').update(contentMarkdown, 'utf8').digest('hex');
 
@@ -393,7 +731,8 @@ export async function scanMarkdownAssetContent(input = {}, options = {}) {
       fail_policy: failPolicy,
       content_sha256: contentHash,
       findings: [],
-      summary: buildSummary([])
+      summary: buildSummary([]),
+      scanners: scanners.map((scanner) => String(scanner?.id || 'scanner'))
     };
   }
 
@@ -425,6 +764,7 @@ export async function scanMarkdownAssetContent(input = {}, options = {}) {
     fail_policy: failPolicy,
     content_sha256: contentHash,
     findings,
-    summary: buildSummary(findings)
+    summary: buildSummary(findings),
+    scanners: scanners.map((scanner) => String(scanner?.id || 'scanner'))
   };
 }

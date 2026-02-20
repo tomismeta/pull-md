@@ -11,14 +11,23 @@
     "db:cutover-neon": "node scripts/cutover-neon.js"
   },
   "dependencies": {
+    "@braintree/sanitize-url": "^7.1.2",
     "@coinbase/cdp-sdk": "^1.44.1",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@x402/core": "^2.3.1",
     "@x402/evm": "^2.3.1",
     "@x402/fetch": "^2.3.0",
     "@x402/next": "^2.3.0",
+    "confusables": "^1.1.1",
     "ethers": "^6.16.0",
-    "pg": "^8.16.3"
+    "ipaddr.js": "^2.3.0",
+    "pg": "^8.16.3",
+    "quick-lru": "^7.3.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "tldts": "^7.0.23",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
     "vercel": "^50.17.1"

@@ -185,6 +185,37 @@ function scanMetadataForTelemetry(scanReport) {
   };
 }
 
+function summarizeScanReasons(scanReport) {
+  const scan = scanReport && typeof scanReport === 'object' ? scanReport : null;
+  if (!scan) return [];
+  const findings = Array.isArray(scan.findings) ? scan.findings : [];
+  const keys = new Set();
+  for (const finding of findings) {
+    const scanner = String(finding?.scanner || '').trim();
+    const code = String(finding?.code || '').trim();
+    if (!scanner || !code) continue;
+    keys.add(`${scanner}.${code}`);
+    if (keys.size >= 6) break;
+  }
+  return [...keys];
+}
+
+function sanitizeScanReportForClient(scanReport) {
+  const scan = scanReport && typeof scanReport === 'object' ? scanReport : null;
+  if (!scan) return null;
+  return {
+    verdict: String(scan.verdict || '').trim().toLowerCase() || null,
+    mode: String(scan.mode || '').trim().toLowerCase() || null,
+    blocked: Boolean(scan.blocked),
+    scanned_at: String(scan.scanned_at || '').trim() || null,
+    summary:
+      scan.summary && typeof scan.summary === 'object'
+        ? scan.summary
+        : { total: 0, by_severity: { high: 0, medium: 0, low: 0 }, by_action: { block: 0, warn: 0 } },
+    reasons: summarizeScanReasons(scan)
+  };
+}
+
 export function getCreatorMarketplaceSupportedActions() {
   return [
     'get_listing_template',
@@ -304,7 +335,7 @@ export async function executeCreatorMarketplaceAction({
         warnings: result.warnings || [],
         draft_id: result.draft_id || null,
         ...(result.normalized ? { normalized: result.normalized } : {}),
-        ...(result.scan_report ? { scan_report: result.scan_report } : {}),
+        ...(result.scan_report ? { scan_report: sanitizeScanReportForClient(result.scan_report) } : {}),
         auto_generated: AUTO_GENERATED_FIELDS,
         creator_provided: CREATOR_PROVIDED_FIELDS
       };
@@ -343,7 +374,7 @@ export async function executeCreatorMarketplaceAction({
         field_errors: result.field_errors || [],
         warnings: result.warnings,
         draft_id: result.draft_id,
-        ...(result.scan_report ? { scan_report: result.scan_report } : {})
+        ...(result.scan_report ? { scan_report: sanitizeScanReportForClient(result.scan_report) } : {})
       });
     }
 
@@ -380,7 +411,7 @@ export async function executeCreatorMarketplaceAction({
       share_url: listing.share_url,
       purchase_endpoint: `/api/assets/${listing.asset_id}/download`,
       warnings: result.warnings || [],
-      ...(result.scan_report ? { scan_report: result.scan_report } : {}),
+      ...(result.scan_report ? { scan_report: sanitizeScanReportForClient(result.scan_report) } : {}),
       storage_warning: marketplaceStorageWarning()
     };
   }
@@ -616,7 +647,7 @@ export async function executeCreatorMarketplaceAction({
         errors: result.errors || [],
         field_errors: result.field_errors || [],
         warnings: result.warnings || [],
-        ...(result.scan_report ? { scan_report: result.scan_report } : {})
+        ...(result.scan_report ? { scan_report: sanitizeScanReportForClient(result.scan_report) } : {})
       });
     }
     recordMarketplaceTelemetry({
@@ -638,7 +669,7 @@ export async function executeCreatorMarketplaceAction({
       ok: true,
       listing: withShareUrl(baseUrl, result.listing),
       warnings: result.warnings || [],
-      ...(result.scan_report ? { scan_report: result.scan_report } : {})
+      ...(result.scan_report ? { scan_report: sanitizeScanReportForClient(result.scan_report) } : {})
     };
   }
 
