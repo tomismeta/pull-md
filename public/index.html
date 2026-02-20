@@ -70,6 +70,7 @@
           <p class="hero-subtitle">
             PULL.md is built on markdown principles: readable source, portable files, and clean diffs.
             Agents and humans use the same catalog, the same x402 payment path, and the same wallet-proof re-download model.
+            Listings are scanned on publish and moderation edits, with a visible scan indicator on each card.
           </p>
           <div class="hero-actions">
             <a href="#assets" class="btn btn-primary btn-lg">Explore Listings</a>
@@ -86,7 +87,7 @@
             <div><strong>x402</strong><span>verifiable payment handshake</span></div>
             <div><strong>base + usdc</strong><span>mainnet settlement</span></div>
             <div><strong>mcp-first</strong><span>native JSON-RPC path</span></div>
-            <div><strong>re-download</strong><span>wallet-proof, no repay</span></div>
+            <div><strong>security-scanned</strong><span>layered markdown checks</span></div>
             <div><strong>instant publish</strong><span>create and share in one step</span></div>
           </div>
         </div>
@@ -98,7 +99,7 @@
         <div class="section-head">
           <h2>How It Works</h2>
           <p>Three steps for buyers and creators. Same contract for browser and API clients.</p>
-          <p>SIWE (EIP-4361) handles wallet auth. x402 handles payment and settlement.</p>
+          <p>SIWE (EIP-4361) handles wallet auth. x402 handles payment and settlement. Security scans run on publish and moderation edits.</p>
         </div>
         <div class="workflow-grid">
           <article class="workflow-card">
@@ -114,30 +115,6 @@
             <p>Receive markdown instantly, then re-download later with wallet-proof entitlement.</p>
           </article>
         </div>
-      </div>
-    </section>
-
-    <section class="workflow-section security-section">
-      <div class="container">
-        <div class="section-head">
-          <h2>Security Scanning</h2>
-          <p>Every listing is scanned before publish and on moderation edits.</p>
-        </div>
-        <article class="workflow-card security-note">
-          <p>
-            PULL.md runs layered markdown safety checks to reduce hidden instruction risk, unsafe links, and secret leaks.
-            Clean scans show a small check indicator on listing cards.
-          </p>
-          <ul class="security-note-list">
-            <li>Hidden Unicode and lookalike character detection</li>
-            <li>Risky markdown and embedded HTML structure checks</li>
-            <li>URL safety and optional reputation screening</li>
-            <li>Prompt-injection phrase and secret-pattern detection</li>
-          </ul>
-          <div>
-            <a href="/security.html" class="btn btn-ghost">Read Security Details</a>
-          </div>
-        </article>
       </div>
     </section>
 

@@ -41,8 +41,8 @@
             and keep technical details available for users who want deeper review.
           </p>
           <div class="hero-actions">
-            <a href="#marketing-security" class="btn btn-primary btn-lg">Marketing Version</a>
-            <a href="#technical-security" class="btn btn-ghost btn-lg">Technical Version</a>
+            <a href="#marketing-security" class="btn btn-primary btn-lg">Security Overview</a>
+            <a href="#technical-security" class="btn btn-ghost btn-lg">Security Details</a>
           </div>
         </div>
       </div>
@@ -51,20 +51,21 @@
     <section class="workflow-section" id="marketing-security">
       <div class="container">
         <div class="section-head">
-          <h2>Marketing Version</h2>
-          <p>Simple explanation for buyers and creators.</p>
+          <h2>Security Overview</h2>
+          <p>A clear trust summary for buyers, creators, and operators.</p>
         </div>
         <article class="workflow-card security-note">
           <p>
-            PULL.md is designed for safe, reusable markdown commerce. Each listing is scanned for risky patterns before it
-            can be published, and scanned again when content is edited by moderators.
+            PULL.md is built for markdown assets that are actually portable and readable, and that same principle applies
+            to trust. Every listing is scanned before publish and scanned again when moderator edits are applied. That keeps
+            safety checks close to the content lifecycle, not as an afterthought.
           </p>
-          <ul class="security-note-list">
-            <li>Checks run on every publish and moderation edit</li>
-            <li>Clear status on cards: clean, warning, or blocked</li>
-            <li>High-confidence risks can be blocked in enforce mode</li>
-            <li>No scanner can guarantee safety, so review content before use</li>
-          </ul>
+          <p>
+            Buyers see a compact scan status directly on cards, and creators get structured feedback during publish.
+            Scanning reduces risk from hidden instructions, unsafe links, and accidental secret leakage. It does not
+            guarantee safety in every runtime, so the recommended model is layered defense: scanner checks plus runtime
+            guardrails in your own agent stack.
+          </p>
         </article>
       </div>
     </section>
@@ -72,34 +73,34 @@
     <section class="workflow-section" id="technical-security">
       <div class="container">
         <div class="section-head">
-          <h2>Technical Version</h2>
-          <p>Scanner modules, checks, and package inventory.</p>
+          <h2>Security Details</h2>
+          <p>Scanner modules, verdict model, and open-source package inventory.</p>
         </div>
         <article class="workflow-card security-note">
           <h3>Scanner Modules</h3>
           <ul class="security-note-list">
-            <li><code>unicode</code>: hidden Unicode controls (zero-width, bidi override, invisible operators, tag chars)</li>
-            <li><code>confusable</code>: lookalike or homoglyph token detection</li>
-            <li><code>markdown_structure</code>: dangerous HTML tags, inline handlers, hidden structures and comments</li>
-            <li><code>url_safety</code>: dangerous schemes, malformed links, internal targets, domain and IP risk checks</li>
-            <li><code>prompt_injection</code>: high-risk instruction phrase detection</li>
-            <li><code>secret_leak</code>: API key and token pattern detection</li>
+            <li><strong>Unicode checks:</strong> hidden control characters, zero-width characters, bidirectional overrides, and invisible operators.</li>
+            <li><strong>Confusable checks:</strong> lookalike or homoglyph token detection.</li>
+            <li><strong>Markdown structure checks:</strong> dangerous HTML tags, inline handlers, hidden structures, and comments.</li>
+            <li><strong>URL safety checks:</strong> dangerous schemes, malformed links, internal targets, domain risk, and IP risk patterns.</li>
+            <li><strong>Prompt-injection checks:</strong> high-risk instruction phrase detection.</li>
+            <li><strong>Secret-leak checks:</strong> common API key and token pattern detection.</li>
           </ul>
 
           <h3>Optional Reputation Layer</h3>
           <ul class="security-note-list">
-            <li><code>url_reputation</code> via URLhaus host lookup (env-gated, cached, timeout-bound)</li>
+            <li><strong>URL reputation:</strong> URLhaus host lookup (environment-gated, cached, and timeout-bound).</li>
           </ul>
 
           <h3>Outcomes</h3>
           <ul class="security-note-list">
-            <li><code>clean</code>: no findings</li>
-            <li><code>warn</code>: non-blocking findings</li>
-            <li><code>block</code>: critical findings, blocked when enforce mode is enabled</li>
+            <li><strong>Clean:</strong> no findings detected.</li>
+            <li><strong>Warn:</strong> non-blocking findings detected.</li>
+            <li><strong>Block:</strong> critical findings detected; publish/edit blocked when enforce mode is enabled.</li>
           </ul>
 
           <h3>Open Source Packages in Active Use</h3>
-          <ul class="security-note-list">
+          <ul class="security-note-list security-link-list">
             <li><a href="https://github.com/unifiedjs/unified" target="_blank" rel="noopener noreferrer">unified</a> (MIT)</li>
             <li><a href="https://github.com/remarkjs/remark/tree/main/packages/remark-parse" target="_blank" rel="noopener noreferrer">remark-parse</a> (MIT)</li>
             <li><a href="https://github.com/remarkjs/remark-gfm" target="_blank" rel="noopener noreferrer">remark-gfm</a> (MIT)</li>
@@ -111,8 +112,9 @@
             <li><a href="https://github.com/sindresorhus/quick-lru" target="_blank" rel="noopener noreferrer">quick-lru</a> (MIT)</li>
           </ul>
 
-          <p class="soul-format-label">
-            Note: scanning reduces risk but does not guarantee safe behavior. Always apply runtime guardrails in your agent stack.
+          <p class="security-footnote">
+            Scanning reduces risk but does not guarantee safe behavior in every runtime. For production usage, pair scanner
+            results with runtime guardrails and policy enforcement in your agent environment.
           </p>
         </article>
       </div>
