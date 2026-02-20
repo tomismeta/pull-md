@@ -30,7 +30,7 @@ let provider = null;
 let signer = null;
 let walletAddress = null;
 let walletType = null;
-let currentSoulDetailId = null;
+let currentAssetDetailId = null;
 let purchaseFlowController = null;
 
 function initProviderDiscovery() {
@@ -118,9 +118,9 @@ const HELPER_SPECS = Object.freeze({
   catalogUi: {
     globalName: 'PullMdCatalogUi',
     methods: [
-      'updateSoulPagePurchaseState',
-      'updateSoulDetailMetadata',
-      'hydrateSoulDetailPage',
+      'updateAssetPagePurchaseState',
+      'updateAssetDetailMetadata',
+      'hydrateAssetDetailPage',
       'renderOwnedSouls',
       'loadSouls',
       'renderCatalogGrid'
@@ -137,10 +137,10 @@ const HELPER_SPECS = Object.freeze({
     methods: ['createController'],
     error: 'Purchase flow helper unavailable'
   },
-  soulDetailUi: {
-    globalName: 'PullMdSoulDetailUi',
-    methods: ['soulIdFromLocation', 'soulListingHref', 'formatCreatorLabel', 'updateSoulDetailMetadata', 'updateSoulPagePurchaseState'],
-    error: 'Soul detail UI helper unavailable'
+  assetDetailUi: {
+    globalName: 'PullMdAssetDetailUi',
+    methods: ['assetIdFromLocation', 'assetListingHref', 'formatCreatorLabel', 'updateAssetDetailMetadata', 'updateAssetPagePurchaseState'],
+    error: 'Asset detail UI helper unavailable'
   },
   sellerGuard: {
     globalName: 'PullMdSellerGuard',
@@ -193,7 +193,7 @@ function getSoulCardsHelper() { return requireHelper('soulCards'); }
 function getCatalogUiHelper() { return requireHelper('catalogUi'); }
 function getDownloadDeliveryHelper() { return requireHelper('downloadDelivery'); }
 function getPurchaseFlowHelper() { return requireHelper('purchaseFlow'); }
-function getSoulDetailUiHelper() { return requireHelper('soulDetailUi'); }
+function getAssetDetailUiHelper() { return requireHelper('assetDetailUi'); }
 function getSellerGuardHelper() { return requireHelper('sellerGuard'); }
 function getNetworkHelper() { return requireHelper('network'); }
 function getAppBootstrapHelper() { return requireHelper('appBootstrap'); }
@@ -225,7 +225,7 @@ function getPurchaseFlowController() {
       entitlementCacheByWallet.set(normalized, owned);
     },
     loadSouls,
-    updateSoulPagePurchaseState,
+    updateAssetPagePurchaseState,
     renderSettlementVerification,
     verifySettlementOnchain,
     triggerMarkdownDownload,
@@ -267,7 +267,7 @@ function disconnectWallet() {
   updateWalletUI();
   updateModeratorNavLinkVisibility();
   loadSouls();
-  updateSoulPagePurchaseState();
+  updateAssetPagePurchaseState();
   showToast('Wallet disconnected', 'info');
 }
 
@@ -310,7 +310,7 @@ async function connectWithProviderInternal(rawProvider, type, silent) {
       updateWalletUI();
       updateModeratorNavLinkVisibility();
       loadSouls();
-      updateSoulPagePurchaseState();
+      updateAssetPagePurchaseState();
       if (!wasSilent) showToast('Wallet connected', 'success');
     }
   });
@@ -468,7 +468,7 @@ async function refreshEntitlementsForWallet(wallet) {
     entitlementCacheByWallet,
     onStateChanged: () => {
       renderOwnedSouls();
-      updateSoulPagePurchaseState();
+      updateAssetPagePurchaseState();
     }
   });
 }
@@ -480,16 +480,16 @@ async function refreshCreatedSoulsForWallet(wallet) {
     createdSoulCacheByWallet,
     onStateChanged: () => {
       renderOwnedSouls();
-      updateSoulPagePurchaseState();
+      updateAssetPagePurchaseState();
     }
   });
 }
 
-function updateSoulPagePurchaseState() {
-  getCatalogUiHelper().updateSoulPagePurchaseState({
-    soulDetailUiHelper: getSoulDetailUiHelper(),
+function updateAssetPagePurchaseState() {
+  getCatalogUiHelper().updateAssetPagePurchaseState({
+    assetDetailUiHelper: getAssetDetailUiHelper(),
     walletAddress,
-    currentSoulDetailId,
+    currentAssetDetailId,
     soulCatalogCache,
     isSoulAccessible,
     buyButtonId: 'buyBtn',
@@ -498,43 +498,43 @@ function updateSoulPagePurchaseState() {
 }
 
 function formatCreatorLabel(raw) {
-  return getSoulDetailUiHelper().formatCreatorLabel(raw, shortenAddress);
+  return getAssetDetailUiHelper().formatCreatorLabel(raw, shortenAddress);
 }
 
-function soulListingHref(soulId) {
-  return getSoulDetailUiHelper().soulListingHref(soulId);
+function assetListingHref(soulId) {
+  return getAssetDetailUiHelper().assetListingHref(soulId);
 }
 
-function updateSoulDetailMetadata(soul) {
-  const nextSoulDetailId = getCatalogUiHelper().updateSoulDetailMetadata({
+function updateAssetDetailMetadata(soul) {
+  const nextAssetDetailId = getCatalogUiHelper().updateAssetDetailMetadata({
     soul,
-    soulDetailUiHelper: getSoulDetailUiHelper(),
+    assetDetailUiHelper: getAssetDetailUiHelper(),
     escapeHtml,
     getSoulGlyph,
     shortenAddress,
     formatCreatorLabelFn: formatCreatorLabel,
     buyButtonId: 'buyBtn'
   });
-  if (nextSoulDetailId) currentSoulDetailId = nextSoulDetailId;
+  if (nextAssetDetailId) currentAssetDetailId = nextAssetDetailId;
 }
 
-async function hydrateSoulDetailPage() {
-  const result = await getCatalogUiHelper().hydrateSoulDetailPage({
-    soulDetailUiHelper: getSoulDetailUiHelper(),
+async function hydrateAssetDetailPage() {
+  const result = await getCatalogUiHelper().hydrateAssetDetailPage({
+    assetDetailUiHelper: getAssetDetailUiHelper(),
     toolCall,
-    currentSoulDetailId,
+    currentAssetDetailId,
     soulCatalogCache,
     setSoulCatalogCache: (next) => {
       soulCatalogCache = next;
     },
-    updateSoulDetailMetadata,
-    updateSoulPagePurchaseState,
+    updateAssetDetailMetadata,
+    updateAssetPagePurchaseState,
     showToast,
-    pageRootId: 'soulDetailPage',
+    pageRootId: 'assetDetailPage',
     buyButtonId: 'buyBtn'
   });
-  if (result?.currentSoulDetailId) {
-    currentSoulDetailId = result.currentSoulDetailId;
+  if (result?.currentAssetDetailId) {
+    currentAssetDetailId = result.currentAssetDetailId;
   }
 }
 
@@ -545,7 +545,7 @@ function renderOwnedSouls() {
     ownedSoulSetForCurrentWallet,
     createdSoulSetForCurrentWallet,
     soulCardsHelper: getSoulCardsHelper(),
-    listingHrefBuilder: soulListingHref,
+    listingHrefBuilder: assetListingHref,
     containerId: 'ownedSoulsGrid'
   });
 }
@@ -821,7 +821,7 @@ function bindAssetSearchFilter() {
       searchQuery: currentSearchQuery,
       soulCardsHelper: getSoulCardsHelper(),
       isSoulAccessible,
-      listingHrefBuilder: soulListingHref,
+      listingHrefBuilder: assetListingHref,
       lineageLabelForSoul: (soul) => formatCreatorLabel(
         soul?.provenance?.raised_by ||
         soul?.creator_address ||
@@ -850,7 +850,7 @@ async function loadSouls() {
     renderInventorySummary,
     renderOwnedSouls,
     isSoulAccessible,
-    listingHrefBuilder: soulListingHref,
+    listingHrefBuilder: assetListingHref,
     lineageLabelForSoul: (soul) => formatCreatorLabel(
       soul?.provenance?.raised_by ||
       soul?.creator_address ||
@@ -923,9 +923,9 @@ getAppBootstrapHelper().runStartup({
   restoreWalletSession,
   refreshEntitlements: () => refreshEntitlementsForWallet(walletAddress),
   refreshCreatedSouls: () => refreshCreatedSoulsForWallet(walletAddress),
-  hydrateSoulDetailPage,
+  hydrateAssetDetailPage,
   loadSouls,
-  updateSoulPagePurchaseState
+  updateAssetPagePurchaseState
 });
 bindAssetTypeFilters();
 bindAssetSearchFilter();

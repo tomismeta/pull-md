@@ -172,7 +172,9 @@
         if (prior.ok) {
           markSoulOwned(soulId);
           if (typeof options.loadSouls === 'function') options.loadSouls();
-          if (typeof options.updateSoulPagePurchaseState === 'function') options.updateSoulPagePurchaseState();
+          const updateAssetPurchaseState =
+            options.updateAssetPagePurchaseState || options.updateSoulPagePurchaseState;
+          if (typeof updateAssetPurchaseState === 'function') updateAssetPurchaseState();
           if (typeof options.showToast === 'function') {
             options.showToast('Entitlement verified. Download restored.', 'success');
           }
@@ -259,7 +261,9 @@
         showPaymentSuccess(content, tx, soulId, false, expectedSettlement, deliveredFileName);
         if (typeof options.showToast === 'function') options.showToast('Asset acquired successfully.', 'success');
         if (typeof options.loadSouls === 'function') options.loadSouls();
-        if (typeof options.updateSoulPagePurchaseState === 'function') options.updateSoulPagePurchaseState();
+        const updateAssetPurchaseState =
+          options.updateAssetPagePurchaseState || options.updateSoulPagePurchaseState;
+        if (typeof updateAssetPurchaseState === 'function') updateAssetPurchaseState();
       } catch (error) {
         console.error('Purchase failed:', error);
         if (typeof options.showToast === 'function') {

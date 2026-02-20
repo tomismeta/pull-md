@@ -40,9 +40,9 @@
     restoreWalletSession,
     refreshEntitlements,
     refreshCreatedSouls,
-    hydrateSoulDetailPage,
+    hydrateAssetDetailPage,
     loadSouls,
-    updateSoulPagePurchaseState
+    updateAssetPagePurchaseState
   } = {}) {
     onReady(async () => {
       if (typeof initProviderDiscovery === 'function') initProviderDiscovery();
@@ -53,9 +53,9 @@
       if (typeof restoreWalletSession === 'function') await restoreWalletSession();
       if (typeof refreshEntitlements === 'function') await refreshEntitlements();
       if (typeof refreshCreatedSouls === 'function') await refreshCreatedSouls();
-      if (typeof hydrateSoulDetailPage === 'function') await hydrateSoulDetailPage();
+      if (typeof hydrateAssetDetailPage === 'function') await hydrateAssetDetailPage();
       if (typeof loadSouls === 'function') await loadSouls();
-      if (typeof updateSoulPagePurchaseState === 'function') updateSoulPagePurchaseState();
+      if (typeof updateAssetPagePurchaseState === 'function') updateAssetPagePurchaseState();
     });
   }
 

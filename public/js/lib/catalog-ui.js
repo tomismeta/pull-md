@@ -61,19 +61,19 @@
     return filtered;
   }
 
-  function updateSoulPagePurchaseState({
-    soulDetailUiHelper,
+  function updateAssetPagePurchaseState({
+    assetDetailUiHelper,
     walletAddress,
-    currentSoulDetailId,
+    currentAssetDetailId,
     soulCatalogCache,
     isSoulAccessible,
     onPurchaseClick,
     buyButtonId = 'buyBtn'
   } = {}) {
-    if (!soulDetailUiHelper || typeof soulDetailUiHelper.updateSoulPagePurchaseState !== 'function') return;
-    soulDetailUiHelper.updateSoulPagePurchaseState({
+    if (!assetDetailUiHelper || typeof assetDetailUiHelper.updateAssetPagePurchaseState !== 'function') return;
+    assetDetailUiHelper.updateAssetPagePurchaseState({
       walletAddress,
-      currentSoulDetailId,
+      currentAssetDetailId,
       soulCatalogCache,
       isSoulAccessible,
       buyButtonId,
@@ -81,20 +81,20 @@
     });
   }
 
-  function updateSoulDetailMetadata({
+  function updateAssetDetailMetadata({
     soul,
-    soulDetailUiHelper,
+    assetDetailUiHelper,
     escapeHtml,
     getSoulGlyph,
     shortenAddress,
     formatCreatorLabelFn,
     buyButtonId = 'buyBtn'
   } = {}) {
-    if (!soulDetailUiHelper || typeof soulDetailUiHelper.updateSoulDetailMetadata !== 'function') {
+    if (!assetDetailUiHelper || typeof assetDetailUiHelper.updateAssetDetailMetadata !== 'function') {
       return null;
     }
 
-    soulDetailUiHelper.updateSoulDetailMetadata({
+    assetDetailUiHelper.updateAssetDetailMetadata({
       soul,
       escapeHtml,
       getSoulGlyph,
@@ -103,49 +103,49 @@
     });
 
     if (!soul?.id) return null;
-    const currentSoulDetailId = String(soul.id);
+    const currentAssetDetailId = String(soul.id);
     const btn = document.getElementById(buyButtonId);
-    if (btn) btn.dataset.soulId = currentSoulDetailId;
+    if (btn) btn.dataset.soulId = currentAssetDetailId;
     document.title = `${String(soul.name || soul.id)} — PULL.md`;
     const descMeta = document.querySelector('meta[name="description"]');
     if (descMeta) descMeta.setAttribute('content', String(soul.description || 'PULL.md listing details.'));
-    return currentSoulDetailId;
+    return currentAssetDetailId;
   }
 
-async function hydrateSoulDetailPage({
-    soulDetailUiHelper,
+async function hydrateAssetDetailPage({
+    assetDetailUiHelper,
     toolCall,
-    currentSoulDetailId = null,
+    currentAssetDetailId = null,
     soulCatalogCache = [],
     setSoulCatalogCache,
-    updateSoulDetailMetadata,
-    updateSoulPagePurchaseState,
+    updateAssetDetailMetadata,
+    updateAssetPagePurchaseState,
     showToast,
-    pageRootId = 'soulDetailPage',
+    pageRootId = 'assetDetailPage',
     buyButtonId = 'buyBtn'
   } = {}) {
     const pageRoot = document.getElementById(pageRootId);
     if (!pageRoot) {
-      return { hydrated: false, currentSoulDetailId };
+      return { hydrated: false, currentAssetDetailId };
     }
-    if (!soulDetailUiHelper || typeof soulDetailUiHelper.soulIdFromLocation !== 'function') {
-      return { hydrated: false, currentSoulDetailId };
+    if (!assetDetailUiHelper || typeof assetDetailUiHelper.assetIdFromLocation !== 'function') {
+      return { hydrated: false, currentAssetDetailId };
     }
 
-    const soulId = soulDetailUiHelper.soulIdFromLocation(window.location);
+    const assetId = assetDetailUiHelper.assetIdFromLocation(window.location);
     const btn = document.getElementById(buyButtonId);
     if (btn) {
       btn.textContent = 'Loading...';
       btn.disabled = true;
     }
-    if (!soulId) {
-      if (typeof showToast === 'function') showToast('Missing soul id in URL', 'error');
+    if (!assetId) {
+      if (typeof showToast === 'function') showToast('Missing asset id in URL', 'error');
       if (btn) btn.textContent = 'Unavailable';
-      return { hydrated: true, currentSoulDetailId };
+      return { hydrated: true, currentAssetDetailId };
     }
 
     try {
-      const payload = await toolCall('get_asset_details', { id: soulId });
+      const payload = await toolCall('get_asset_details', { id: assetId });
       const soul = payload?.asset || payload?.soul || null;
       if (!soul) throw new Error('Asset metadata unavailable');
       const mergedCatalog = [
@@ -155,23 +155,23 @@ async function hydrateSoulDetailPage({
       if (typeof setSoulCatalogCache === 'function') {
         setSoulCatalogCache(mergedCatalog);
       }
-      const nextSoulDetailId = typeof updateSoulDetailMetadata === 'function'
-        ? updateSoulDetailMetadata(soul)
-        : currentSoulDetailId;
-      if (typeof updateSoulPagePurchaseState === 'function') updateSoulPagePurchaseState();
+      const nextAssetDetailId = typeof updateAssetDetailMetadata === 'function'
+        ? updateAssetDetailMetadata(soul)
+        : currentAssetDetailId;
+      if (typeof updateAssetPagePurchaseState === 'function') updateAssetPagePurchaseState();
       if (btn) btn.disabled = false;
-      return { hydrated: true, currentSoulDetailId: nextSoulDetailId || currentSoulDetailId };
+      return { hydrated: true, currentAssetDetailId: nextAssetDetailId || currentAssetDetailId };
     } catch (error) {
       if (typeof showToast === 'function') showToast(error?.message || 'Unable to load asset details', 'error');
-      const name = document.getElementById('soulDetailName');
+      const name = document.getElementById('assetDetailName');
       if (name) name.textContent = 'Asset unavailable';
-      const description = document.getElementById('soulDetailDescription');
+      const description = document.getElementById('assetDetailDescription');
       if (description) description.textContent = 'This listing could not be loaded.';
       if (btn) {
         btn.textContent = 'Unavailable';
         btn.disabled = true;
       }
-      return { hydrated: true, currentSoulDetailId };
+      return { hydrated: true, currentAssetDetailId };
     }
   }
 
@@ -268,9 +268,9 @@ async function loadSouls({
   }
 
   globalScope.PullMdCatalogUi = {
-    updateSoulPagePurchaseState,
-    updateSoulDetailMetadata,
-    hydrateSoulDetailPage,
+    updateAssetPagePurchaseState,
+    updateAssetDetailMetadata,
+    hydrateAssetDetailPage,
     renderOwnedSouls,
     loadSouls,
     filterSoulsByQuery,

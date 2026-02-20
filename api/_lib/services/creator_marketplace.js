@@ -2,11 +2,13 @@ import {
   buildModeratorAuthMessage,
   buildCreatorAuthMessage,
   deletePublishedListingByModerator,
+  getModerationListingScanDetails,
   getMarketplaceDraftTemplate,
   listModerationListingDetails,
   listModeratorWallets,
   listPublishedListingSummaries,
   publishCreatorListingDirect,
+  setListingScanReview,
   setListingVisibility,
   updatePublishedListingByModerator,
   verifyCreatorAuth,
@@ -213,6 +215,23 @@ function sanitizeScanReportForClient(scanReport) {
         ? scan.summary
         : { total: 0, by_severity: { high: 0, medium: 0, low: 0 }, by_action: { block: 0, warn: 0 } },
     reasons: summarizeScanReasons(scan)
+  };
+}
+
+function sanitizeDetailedScanReportForClient(scanReport) {
+  const base = sanitizeScanReportForClient(scanReport);
+  if (!base) return null;
+  const scan = scanReport && typeof scanReport === 'object' ? scanReport : null;
+  const findings = Array.isArray(scan?.findings) ? scan.findings : [];
+  return {
+    ...base,
+    findings: findings.slice(0, 100).map((item) => ({
+      scanner: String(item?.scanner || '').trim() || null,
+      code: String(item?.code || '').trim() || null,
+      severity: String(item?.severity || '').trim().toLowerCase() || null,
+      action: String(item?.action || '').trim().toLowerCase() || null,
+      message: String(item?.message || '').trim() || null
+    }))
   };
 }
 
@@ -523,6 +542,73 @@ export async function executeCreatorMarketplaceAction({
       count: listings.length,
       visible,
       hidden
+    };
+  }
+
+  if (normalizedAction === 'get_listing_scan_details' && normalizedMethod === 'GET') {
+    const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
+    if (!moderator.ok) {
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
+    }
+    const assetId = String(requestBody.asset_id || '').trim();
+    if (!assetId) throw new AppError(400, { error: 'Missing required field: asset_id' });
+    const result = await getModerationListingScanDetails({ assetId });
+    if (!result.ok) {
+      const statusCode = /not found/i.test(result.error) ? 404 : 400;
+      throw new AppError(statusCode, { ok: false, error: result.error });
+    }
+    recordMarketplaceTelemetry({
+      eventType: 'moderation.action_success',
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
+      action: normalizedAction,
+      walletAddress: moderator.wallet,
+      assetId,
+      success: true,
+      statusCode: 200
+    });
+    return {
+      ok: true,
+      listing: withShareUrl(baseUrl, result.listing),
+      scan_report: sanitizeDetailedScanReportForClient(result.scan_report),
+      scan_review: result.listing?.scan_review || null
+    };
+  }
+
+  if (normalizedAction === 'approve_listing_scan' && normalizedMethod === 'POST') {
+    const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
+    if (!moderator.ok) {
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
+    }
+    const assetId = String(requestBody.asset_id || '').trim();
+    const note = typeof requestBody.note === 'string' ? requestBody.note : '';
+    if (!assetId) throw new AppError(400, { error: 'Missing required field: asset_id' });
+    const result = await setListingScanReview({
+      assetId,
+      moderator: moderator.wallet,
+      approved: true,
+      note
+    });
+    if (!result.ok) {
+      const statusCode = /not found/i.test(result.error) ? 404 : 400;
+      throw new AppError(statusCode, { ok: false, error: result.error });
+    }
+    recordMarketplaceTelemetry({
+      eventType: 'moderation.action_success',
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
+      action: normalizedAction,
+      walletAddress: moderator.wallet,
+      assetId,
+      success: true,
+      statusCode: 200
+    });
+    return {
+      ok: true,
+      listing: withShareUrl(baseUrl, result.listing),
+      scan_review: result.listing?.scan_review || null
     };
   }
 

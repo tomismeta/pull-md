@@ -204,6 +204,56 @@ export async function getLatestAssetScan(assetId) {
   };
 }
 
+function normalizeScanReportRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  return {
+    asset_id: asString(row.asset_id) || null,
+    asset_type: asString(row.asset_type) || null,
+    verdict: asString(row.scan_verdict).toLowerCase() || null,
+    mode: asString(row.scan_mode).toLowerCase() || null,
+    blocked: Boolean(row.blocked),
+    scanned_at: row.occurred_at ? new Date(row.occurred_at).toISOString() : null,
+    content_sha256: asString(row.revision_sha256) || null,
+    summary: normalizeSummary(row.summary),
+    findings: Array.isArray(row.findings) ? row.findings : [],
+    context: row.context && typeof row.context === 'object' ? row.context : {}
+  };
+}
+
+export async function getLatestAssetScanReport(assetId) {
+  const id = asString(assetId);
+  if (!id) {
+    return { ok: false, present: false, code: 'missing_asset_id', report: null };
+  }
+  const pool = getDbPool();
+  if (!pool) {
+    return { ok: false, present: false, code: 'scan_store_unconfigured', report: null };
+  }
+  await ensureSecuritySchema();
+  const schema = securitySchemaName();
+  const reportsTable = `${quoteIdentifier(schema)}.${quoteIdentifier('asset_scan_reports')}`;
+  const result = await pool.query(
+    `
+      SELECT asset_id, asset_type, revision_sha256, scan_verdict, scan_mode, blocked, summary, findings, context, occurred_at
+      FROM ${reportsTable}
+      WHERE asset_id = $1
+      ORDER BY occurred_at DESC, id DESC
+      LIMIT 1
+    `,
+    [id]
+  );
+  const row = result?.rows?.[0] || null;
+  if (!row) {
+    return { ok: true, present: false, code: null, report: null };
+  }
+  return {
+    ok: true,
+    present: true,
+    code: null,
+    report: normalizeScanReportRow(row)
+  };
+}
+
 export async function persistAssetScanReport({
   assetId,
   assetType,

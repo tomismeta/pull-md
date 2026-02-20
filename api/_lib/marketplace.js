@@ -4,7 +4,7 @@ import path from 'path';
 import { ethers } from 'ethers';
 import { Pool } from 'pg';
 import { scanMarkdownAssetContent } from './services/content_scanner.js';
-import { getLatestAssetScan, persistAssetScanReport } from './services/scan_store.js';
+import { getLatestAssetScan, getLatestAssetScanReport, persistAssetScanReport } from './services/scan_store.js';
 
 const ASSET_PROFILES = new Set(['synthetic', 'organic', 'hybrid']);
 const ASSET_TYPES = new Set(['soul', 'skill']);
@@ -695,6 +695,7 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
             : []
         }
       : existingEntry?.scan || null,
+    scanReview: draft?.scan_report ? null : existingEntry?.scanReview || null,
     visibility: normalizeVisibility(existingEntry?.visibility),
     hiddenAt: existingEntry?.hiddenAt || null,
     hiddenBy: existingEntry?.hiddenBy || null,
@@ -1720,7 +1721,16 @@ function summarizePublishedListing(entry) {
     scan_summary:
       listing?.scan?.summary && typeof listing.scan.summary === 'object'
         ? listing.scan.summary
-        : { total: 0, by_severity: { high: 0, medium: 0, low: 0 }, by_action: { block: 0, warn: 0 } }
+        : { total: 0, by_severity: { high: 0, medium: 0, low: 0 }, by_action: { block: 0, warn: 0 } },
+    scan_review:
+      listing?.scanReview && typeof listing.scanReview === 'object'
+        ? {
+            status: asString(listing.scanReview.status).toLowerCase() || null,
+            reviewed_at: asString(listing.scanReview.reviewedAt) || null,
+            reviewed_by: asString(listing.scanReview.reviewedBy).toLowerCase() || null,
+            note: asString(listing.scanReview.note) || null
+          }
+        : null
   };
 }
 
@@ -1750,7 +1760,16 @@ function toModerationListing(entry) {
     source_url: sourceUrl || null,
     source_label: sourceLabel || null,
     content_markdown: markdown,
-    scan_findings_preview: Array.isArray(listing?.scan?.findingsPreview) ? listing.scan.findingsPreview : []
+    scan_findings_preview: Array.isArray(listing?.scan?.findingsPreview) ? listing.scan.findingsPreview : [],
+    scan_review:
+      listing?.scanReview && typeof listing.scanReview === 'object'
+        ? {
+            status: asString(listing.scanReview.status).toLowerCase() || null,
+            reviewed_at: asString(listing.scanReview.reviewedAt) || null,
+            reviewed_by: asString(listing.scanReview.reviewedBy).toLowerCase() || null,
+            note: asString(listing.scanReview.note) || null
+          }
+        : null
   };
 }
 
@@ -2114,6 +2133,88 @@ export async function updatePublishedListingByModerator({ assetId, updates, mode
     listing: toModerationListing(updated),
     warnings: validated.warnings || [],
     scan_report: persistedScanReport
+  };
+}
+
+export async function getModerationListingScanDetails({ assetId }) {
+  const id = asString(assetId);
+  if (!id) return { ok: false, error: 'Missing asset_id' };
+
+  const catalog = await loadPublishedCatalog();
+  const entry = catalog.entries.find((item) => item?.id === id);
+  if (!entry) return { ok: false, error: 'Listing not found' };
+
+  let latestReport = null;
+  try {
+    const latest = await getLatestAssetScanReport(id);
+    if (latest?.ok && latest.present && latest.report) latestReport = latest.report;
+  } catch (_) {
+    latestReport = null;
+  }
+
+  const fallbackFromEntry =
+    entry?.scan && typeof entry.scan === 'object'
+      ? {
+          asset_id: id,
+          asset_type: asString(entry.assetType || entry.asset_type) || 'soul',
+          verdict: asString(entry.scan.verdict).toLowerCase() || null,
+          mode: asString(entry.scan.mode).toLowerCase() || null,
+          blocked: Boolean(entry.scan.blocked),
+          scanned_at: asString(entry.scan.scannedAt) || null,
+          content_sha256: asString(entry.scan.contentSha256) || null,
+          summary: normalizeScanSummary(entry.scan.summary),
+          findings: Array.isArray(entry.scan.findingsPreview) ? entry.scan.findingsPreview : [],
+          context: { source: 'catalog_fallback' }
+        }
+      : null;
+
+  return {
+    ok: true,
+    listing: toModerationListing(entry),
+    scan_report: latestReport || fallbackFromEntry || null
+  };
+}
+
+export async function setListingScanReview({ assetId, moderator, approved = false, note = '' }) {
+  const id = asString(assetId);
+  if (!id) return { ok: false, error: 'Missing asset_id' };
+
+  const catalog = await loadPublishedCatalog();
+  const idx = catalog.entries.findIndex((entry) => entry?.id === id);
+  if (idx < 0) return { ok: false, error: 'Listing not found' };
+
+  const existing = catalog.entries[idx];
+  const priorStatus = asString(existing?.scanReview?.status).toLowerCase() || '';
+  const now = new Date().toISOString();
+  const actor = asString(moderator).toLowerCase() || 'moderator';
+  const nextStatus = approved ? 'approved' : 'cleared';
+  const updated = {
+    ...existing,
+    scanReview: {
+      status: nextStatus,
+      reviewedAt: now,
+      reviewedBy: actor,
+      note: asString(note) || null
+    }
+  };
+  catalog.entries[idx] = updated;
+  await savePublishedCatalog(catalog);
+
+  await appendReviewAudit({
+    at: now,
+    event: approved ? 'scan_review_approved' : 'scan_review_cleared',
+    wallet: String(updated?.publishedBy || '').toLowerCase(),
+    draft_id: String(updated?.draftId || ''),
+    actor,
+    status_before: priorStatus,
+    status_after: nextStatus,
+    notes: asString(note) || null,
+    asset_id: id
+  });
+
+  return {
+    ok: true,
+    listing: toModerationListing(updated)
   };
 }
 

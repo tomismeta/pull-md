@@ -250,6 +250,24 @@
     </div>
   </div>
 
+  <div class="modal" id="scanDetailsModal" style="display: none;">
+    <div class="modal-content admin-edit-modal-content">
+      <div class="modal-header">
+        <h3>Scan Review</h3>
+        <button class="modal-close" onclick="closeScanDetailsModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="scanDetailsMeta" class="admin-status">Loading scan details…</p>
+        <div id="scanDetailsSummary" class="admin-list"></div>
+        <div id="scanDetailsFindings" class="admin-list"></div>
+        <div class="admin-edit-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeScanDetailsModal()">Close</button>
+          <button type="button" id="approveScanBtn" class="btn btn-primary">Mark Reviewed Clean</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="walletModal" style="display: none;">
     <div class="modal-content">
       <div class="modal-header">

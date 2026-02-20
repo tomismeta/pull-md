@@ -19,7 +19,8 @@ const state = {
   searchQuery: '',
   telemetryWindowHours: 24,
   telemetry: null,
-  moderatorAuthCache: new Map()
+  moderatorAuthCache: new Map(),
+  activeScanAssetId: null
 };
 
 function normalizeSearchText(value) {
@@ -582,6 +583,8 @@ function renderVisible(items) {
           ${scanSummaryLine(item)}
           <div class="admin-card-actions">
             ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
+            <button class="btn btn-ghost" data-action="view-scan" data-asset="${escapeHtml(item.asset_id)}">scan details</button>
+            ${showApproveScanButton(item)}
             <button class="btn btn-ghost" data-action="edit-listing" data-asset="${escapeHtml(item.asset_id)}">edit</button>
             <button class="btn btn-primary" data-action="hide-listing" data-asset="${escapeHtml(item.asset_id)}">remove visibility</button>
             <button class="btn btn-ghost btn-danger" data-action="delete-listing" data-asset="${escapeHtml(item.asset_id)}">delete</button>
@@ -616,6 +619,8 @@ function renderHidden(items) {
           ${scanSummaryLine(item)}
           <div class="admin-card-actions">
             ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
+            <button class="btn btn-ghost" data-action="view-scan" data-asset="${escapeHtml(item.asset_id)}">scan details</button>
+            ${showApproveScanButton(item)}
             <button class="btn btn-ghost" data-action="edit-listing" data-asset="${escapeHtml(item.asset_id)}">edit</button>
             <button class="btn btn-primary" data-action="restore-listing" data-asset="${escapeHtml(item.asset_id)}">restore visibility</button>
             <button class="btn btn-ghost btn-danger" data-action="delete-listing" data-asset="${escapeHtml(item.asset_id)}">delete</button>
@@ -627,6 +632,8 @@ function renderHidden(items) {
 }
 
 function scanBadgeHtml(item) {
+  const review = item?.scan_review && typeof item.scan_review === 'object' ? item.scan_review : null;
+  if (String(review?.status || '').toLowerCase() === 'approved') return '<span class="badge badge-scan-clean">reviewed clean</span>';
   const verdict = String(item?.scan_verdict || '').trim().toLowerCase();
   if (!verdict) return '';
   if (verdict === 'clean') return '<span class="badge badge-scan-clean">scanned</span>';
@@ -636,6 +643,10 @@ function scanBadgeHtml(item) {
 }
 
 function scanSummaryLine(item) {
+  const review = item?.scan_review && typeof item.scan_review === 'object' ? item.scan_review : null;
+  if (String(review?.status || '').toLowerCase() === 'approved') {
+    return `<p class="admin-line">security: <code>moderator reviewed clean · ${escapeHtml(formatDate(review?.reviewed_at || null))}</code></p>`;
+  }
   const verdict = String(item?.scan_verdict || '').trim().toLowerCase();
   if (!verdict) return '';
   const summary = item?.scan_summary && typeof item.scan_summary === 'object' ? item.scan_summary : {};
@@ -648,6 +659,98 @@ function scanSummaryLine(item) {
         ? `scan: warnings ${Number.isFinite(warns) ? warns : 0}`
         : `scan: blocked ${Number.isFinite(blocks) ? blocks : 1}`;
   return `<p class="admin-line">security: <code>${escapeHtml(text)}</code></p>`;
+}
+
+function showApproveScanButton(item) {
+  const verdict = String(item?.scan_verdict || '').trim().toLowerCase();
+  const reviewStatus = String(item?.scan_review?.status || '').trim().toLowerCase();
+  if (!verdict || verdict === 'clean' || reviewStatus === 'approved') return '';
+  return `<button class="btn btn-ghost" data-action="approve-scan" data-asset="${escapeHtml(item.asset_id)}">mark reviewed clean</button>`;
+}
+
+function closeScanDetailsModal() {
+  state.activeScanAssetId = null;
+  const meta = document.getElementById('scanDetailsMeta');
+  const summary = document.getElementById('scanDetailsSummary');
+  const findings = document.getElementById('scanDetailsFindings');
+  if (meta) meta.textContent = 'Loading scan details…';
+  if (summary) summary.innerHTML = '';
+  if (findings) findings.innerHTML = '';
+  getUiShell().closeModal('scanDetailsModal');
+}
+
+function renderScanDetailsModal(data = {}) {
+  const listing = data?.listing && typeof data.listing === 'object' ? data.listing : null;
+  const report = data?.scan_report && typeof data.scan_report === 'object' ? data.scan_report : null;
+  const meta = document.getElementById('scanDetailsMeta');
+  const summary = document.getElementById('scanDetailsSummary');
+  const findings = document.getElementById('scanDetailsFindings');
+  const approveBtn = document.getElementById('approveScanBtn');
+  const reviewStatus = String(listing?.scan_review?.status || '').toLowerCase();
+
+  if (meta) {
+    const verdict = String(report?.verdict || listing?.scan_verdict || '-').toLowerCase();
+    meta.textContent = `${listing?.asset_id || '-'} · verdict ${verdict} · scanned ${formatDate(report?.scanned_at || listing?.scan_scanned_at || null)}`;
+  }
+  if (summary) {
+    const stats = report?.summary && typeof report.summary === 'object' ? report.summary : {};
+    summary.innerHTML = `
+      <article class="admin-card">
+        <p class="admin-line">status: <code>${escapeHtml(reviewStatus === 'approved' ? 'reviewed clean' : 'not reviewed')}</code></p>
+        <p class="admin-line">findings total: <code>${escapeHtml(String(Number(stats?.total || 0)))}</code></p>
+        <p class="admin-line">warn: <code>${escapeHtml(String(Number(stats?.by_action?.warn || 0)))}</code> · block: <code>${escapeHtml(String(Number(stats?.by_action?.block || 0)))}</code></p>
+      </article>
+    `;
+  }
+
+  const findingsList = Array.isArray(report?.findings) ? report.findings : [];
+  if (findings) {
+    if (!findingsList.length) {
+      findings.innerHTML = '<p class="admin-empty">No detailed findings available for this listing.</p>';
+    } else {
+      findings.innerHTML = findingsList
+        .slice(0, 50)
+        .map(
+          (item) => `
+            <article class="admin-card">
+              <p class="admin-line">scanner: <code>${escapeHtml(String(item?.scanner || '-'))}</code></p>
+              <p class="admin-line">code: <code>${escapeHtml(String(item?.code || '-'))}</code></p>
+              <p class="admin-line">severity: <code>${escapeHtml(String(item?.severity || '-'))}</code> · action: <code>${escapeHtml(String(item?.action || '-'))}</code></p>
+              <p class="admin-line">${escapeHtml(String(item?.message || '-'))}</p>
+            </article>
+          `
+        )
+        .join('');
+    }
+  }
+  if (approveBtn instanceof HTMLButtonElement) {
+    const allowApprove = Boolean(listing?.asset_id) && reviewStatus !== 'approved';
+    approveBtn.disabled = !allowApprove;
+    approveBtn.setAttribute('data-asset', String(listing?.asset_id || ''));
+  }
+}
+
+async function openScanDetailsModal(assetId) {
+  await requireAllowedModerator();
+  state.activeScanAssetId = String(assetId || '').trim();
+  getUiShell().openModal('scanDetailsModal');
+  const response = await apiCall('get_listing_scan_details', {
+    method: 'GET',
+    moderatorAuth: true,
+    query: { asset_id: state.activeScanAssetId }
+  });
+  renderScanDetailsModal(response);
+}
+
+async function approveListingScan(assetId) {
+  await requireAllowedModerator();
+  const note = window.prompt('Optional review note for audit trail:', '') || '';
+  const response = await apiCall('approve_listing_scan', {
+    method: 'POST',
+    moderatorAuth: true,
+    body: { asset_id: assetId, note }
+  });
+  return response;
 }
 
 function renderTelemetryEmpty(message) {
@@ -1180,6 +1283,24 @@ function bindEvents() {
     }
   });
 
+  document.getElementById('approveScanBtn')?.addEventListener('click', async (event) => {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLButtonElement)) return;
+    const assetId = String(target.getAttribute('data-asset') || '').trim();
+    if (!assetId) return;
+    target.disabled = true;
+    try {
+      await approveListingScan(assetId);
+      showToast('Scan marked as reviewed clean', 'success');
+      await loadModerationListings();
+      await openScanDetailsModal(assetId);
+    } catch (error) {
+      showToast(error.message, 'error');
+    } finally {
+      target.disabled = false;
+    }
+  });
+
   document.addEventListener('click', async (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
@@ -1187,10 +1308,10 @@ function bindEvents() {
     if (!action) return;
     const assetId = target.getAttribute('data-asset');
     if (!assetId) return;
-    if (action !== 'hide-listing' && action !== 'restore-listing' && action !== 'delete-listing' && action !== 'edit-listing') {
+    if (action !== 'hide-listing' && action !== 'restore-listing' && action !== 'delete-listing' && action !== 'edit-listing' && action !== 'view-scan' && action !== 'approve-scan') {
       return;
     }
-    if (action !== 'edit-listing') target.setAttribute('disabled', 'true');
+    if (action !== 'edit-listing' && action !== 'view-scan') target.setAttribute('disabled', 'true');
     try {
       if (action === 'hide-listing') {
         await hideListing(assetId);
@@ -1208,11 +1329,17 @@ function bindEvents() {
         }
       } else if (action === 'edit-listing') {
         openEditListingModal(assetId);
+      } else if (action === 'view-scan') {
+        await openScanDetailsModal(assetId);
+      } else if (action === 'approve-scan') {
+        await approveListingScan(assetId);
+        showToast('Scan marked as reviewed clean', 'success');
+        await loadModerationListings();
       }
     } catch (error) {
       showToast(error.message, 'error');
     } finally {
-      if (action !== 'edit-listing') target.removeAttribute('disabled');
+      if (action !== 'edit-listing' && action !== 'view-scan') target.removeAttribute('disabled');
     }
   });
 }

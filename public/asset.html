@@ -49,20 +49,20 @@
     </div>
   </header>
 
-  <main class="soul-detail" id="soulDetailPage">
+  <main class="asset-detail" id="assetDetailPage">
     <div class="container">
       <div class="soul-hero">
         <div class="soul-header-content">
           <div class="soul-lineage">
-            <span class="badge badge-hybrid" id="soulDetailType">Hybrid</span>
-            <span class="lineage-text" id="soulDetailLineage">Creator listing</span>
+            <span class="badge badge-hybrid" id="assetDetailType">Hybrid</span>
+            <span class="lineage-text" id="assetDetailLineage">Creator listing</span>
           </div>
           <div class="soul-title-row">
-            <span class="title-hash hash-tone-blue" id="soulDetailHash">#</span>
-            <h1 class="soul-title" id="soulDetailName">Loading asset...</h1>
+            <span class="title-hash hash-tone-blue" id="assetDetailHash">#</span>
+            <h1 class="soul-title" id="assetDetailName">Loading asset...</h1>
           </div>
-          <p class="soul-description" id="soulDetailDescription">Fetching listing details.</p>
-          <div class="soul-tags" id="soulDetailTags">
+          <p class="soul-description" id="assetDetailDescription">Fetching listing details.</p>
+          <div class="soul-tags" id="assetDetailTags">
             <span class="tag">loading</span>
           </div>
         </div>
@@ -83,14 +83,23 @@
 
           <div class="preview-section">
             <h4>Preview</h4>
-            <blockquote class="preview-quote" id="soulDetailPreview">Preview unavailable.</blockquote>
+            <blockquote class="preview-quote" id="assetDetailPreview">Preview unavailable.</blockquote>
           </div>
         </div>
 
         <div class="soul-purchase">
           <div class="purchase-card" id="purchaseCard">
+            <a
+              id="assetDetailScanIndicator"
+              class="scan-indicator purchase-scan-indicator-position"
+              href="/security.html"
+              data-scan-tooltip=""
+              title="Security scan details"
+              aria-label="Open security scan details"
+              style="display: none;"
+            ><span aria-hidden="true">✓</span></a>
             <div class="price-display">
-              <span class="price" id="soulDetailPrice">$0.00</span>
+              <span class="price" id="assetDetailPrice">$0.00</span>
               <span class="currency">USDC</span>
             </div>
             <div class="network-badge">
@@ -100,7 +109,7 @@
             <button class="btn btn-primary btn-lg btn-full" id="buyBtn" data-soul-id="">
               Purchase Asset
             </button>
-            <p class="purchase-note" id="soulDetailPurchaseNote">Delivered instantly through canonical x402 settlement.</p>
+            <p class="purchase-note" id="assetDetailPurchaseNote">Delivered instantly through canonical x402 settlement.</p>
           </div>
 
           <div class="purchase-card success-card" id="successCard" style="display: none;">
