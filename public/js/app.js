@@ -995,10 +995,14 @@ async function initEmblemAuth() {
     if (!appId) { console.warn('[EmblemAuth] No EMBLEM_APP_ID in wallet-config response'); return; }
     emblemAuth.init({
       emblemAppId: appId,
-      onSessionChange: function (info) {
+      onSessionChange: async function (info) {
         if (info.evmAddress) {
           walletAddress = info.evmAddress;
           walletType = 'emblem';
+          try {
+            var emblemSigner = await emblemAuth.getEthersSigner();
+            if (emblemSigner) signer = emblemSigner;
+          } catch (_) {}
           updateWalletUI();
           updateVaultDropdown(info.session);
           refreshEntitlementsForWallet(walletAddress);
@@ -1009,6 +1013,7 @@ async function initEmblemAuth() {
         } else {
           walletAddress = null;
           walletType = null;
+          signer = null;
           updateWalletUI();
           clearVaultDropdown();
           loadSouls();
@@ -1023,6 +1028,10 @@ async function initEmblemAuth() {
       if (evmAddress && !walletAddress) {
         walletAddress = evmAddress;
         walletType = 'emblem';
+        try {
+          var restoredSigner = await emblemAuth.getEthersSigner();
+          if (restoredSigner) signer = restoredSigner;
+        } catch (_) {}
         updateWalletUI();
         updateVaultDropdown(emblemAuth.getSession());
         await Promise.all([refreshEntitlementsForWallet(walletAddress), refreshCreatedSoulsForWallet(walletAddress)]);

@@ -116,6 +116,11 @@
     return sdk.getVaultInfo();
   }
 
+  function getEthersSigner() {
+    if (!sdk || typeof sdk.toEthersWallet !== 'function') return Promise.resolve(null);
+    return sdk.toEthersWallet().catch(function () { return null; });
+  }
+
   function destroy() {
     if (sdk && typeof sdk.destroy === 'function') {
       sdk.destroy();
@@ -132,6 +137,7 @@
     isAuthenticated: isAuthenticated,
     getEvmAddress: getEvmAddress,
     getVaultInfo: getVaultInfo,
+    getEthersSigner: getEthersSigner,
     destroy: destroy
   };
 })(typeof window !== 'undefined' ? window : globalThis);

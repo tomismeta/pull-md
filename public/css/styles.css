@@ -666,6 +666,29 @@ main {
   transform: none;
 }
 
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.82;
+}
+
+.btn-loading::after {
+  content: '';
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-left: 0.5em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: btn-spin 0.6s linear infinite;
+}
+
 .agent-api-card {
   padding: 18px;
 }
@@ -1659,6 +1682,9 @@ main {
   background: linear-gradient(135deg, #4f46e5, #6366f1);
   color: #e0e7ff;
   border-color: #6366f1;
+  border-radius: 50%;
+  overflow: hidden;
+  padding: 0;
 }
 
 .toast-container {
