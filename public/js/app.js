@@ -257,6 +257,10 @@ function disconnectWallet() {
   if (walletAddress) {
     clearRedownloadSession(walletAddress);
   }
+  var emblemAuth = window.PullMdEmblemAuth;
+  if (emblemAuth && typeof emblemAuth.isAuthenticated === 'function' && emblemAuth.isAuthenticated()) {
+    emblemAuth.logout();
+  }
   provider = null;
   signer = null;
   walletAddress = null;
@@ -285,6 +289,16 @@ function clearWalletSession() {
 
 function readWalletSession() {
   return getWalletCommon().readWalletSession({ key: WALLET_SESSION_KEY });
+}
+
+function syncVaultDropdownVisibility() {
+  const wrap = document.getElementById('walletBtnWrap');
+  if (!wrap) return;
+  const showVault = Boolean(walletAddress && walletType === 'emblem');
+  wrap.classList.toggle('has-emblem-vault', showVault);
+  if (!showVault) {
+    clearVaultDropdown();
+  }
 }
 
 async function connectWithProvider(rawProvider) {
@@ -358,6 +372,18 @@ async function connectBankr() {
   });
 }
 
+async function connectEmblem() {
+  const emblemAuth = window.PullMdEmblemAuth;
+  if (!emblemAuth || typeof emblemAuth.login !== 'function') {
+    showToast('Emblem Vault not available', 'error');
+    return;
+  }
+  closeWalletModal();
+  if (!emblemAuth.login()) {
+    showToast('Emblem auth not configured. Set EMBLEM_APP_ID.', 'error');
+  }
+}
+
 async function ensureBaseNetwork(targetProvider = provider) {
   return getWalletCommon().ensureBaseNetwork(targetProvider, {
     chainIdDec: CONFIG.baseChainIdDec,
@@ -374,6 +400,7 @@ function updateWalletUI() {
     onDisconnect: disconnectWallet,
     onConnect: openWalletModal
   });
+  syncVaultDropdownVisibility();
 }
 
 function updateModeratorNavLinkVisibility() {
@@ -898,6 +925,8 @@ function bindWalletOptionHandlers() {
         await connectRabby();
       } else if (kind === 'bankr') {
         await connectBankr();
+      } else if (kind === 'emblem') {
+        await connectEmblem();
       }
     },
     onError: (error) => {
@@ -914,6 +943,126 @@ function initMobileNav() {
   });
 }
 
+function updateVaultDropdown(session) {
+  syncVaultDropdownVisibility();
+  var emblemAuth = window.PullMdEmblemAuth;
+  var vaultIdEl = document.getElementById('vaultDropdownVaultId');
+  var evmEl = document.getElementById('vaultDropdownEvm');
+  var solanaEl = document.getElementById('vaultDropdownSolana');
+  if (!vaultIdEl || !evmEl || !solanaEl) return;
+
+  var user = session && session.user;
+  vaultIdEl.textContent = user && user.vaultId ? user.vaultId : '—';
+
+  // session.user may have evmAddress directly, or we fetch vault info
+  var directEvm = user ? String(user.evmAddress || '').trim() : '';
+  var directSolana = user ? String(user.solanaAddress || '').trim() : '';
+  evmEl.textContent = directEvm || '—';
+  solanaEl.textContent = directSolana || '—';
+
+  if ((!directEvm || !directSolana) && emblemAuth && typeof emblemAuth.getVaultInfo === 'function') {
+    emblemAuth.getVaultInfo().then(function (vault) {
+      if (vault) {
+        if (!directEvm && vault.evmAddress) evmEl.textContent = vault.evmAddress;
+        if (!directSolana && vault.solanaAddress) solanaEl.textContent = vault.solanaAddress;
+      }
+    }).catch(function () {});
+  }
+}
+
+function clearVaultDropdown() {
+  var ids = ['vaultDropdownVaultId', 'vaultDropdownEvm', 'vaultDropdownSolana'];
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '—';
+  });
+}
+
+function initVaultCopyButtons() {
+  document.querySelectorAll('.vault-copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var targetId = btn.getAttribute('data-copy-target');
+      var targetEl = targetId && document.getElementById(targetId);
+      if (!targetEl || targetEl.textContent === '—') return;
+      navigator.clipboard.writeText(targetEl.textContent).then(function () {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(function () {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 1500);
+      }).catch(function () {});
+    });
+  });
+}
+
+async function initEmblemAuth() {
+  var emblemAuth = window.PullMdEmblemAuth;
+  if (!emblemAuth || typeof emblemAuth.init !== 'function') return;
+  try {
+    var response = await fetchWithTimeout('/api/wallet-config');
+    var config = await response.json();
+    var appId = String(config && config.emblemAppId || '').trim();
+    if (!appId) { console.warn('[EmblemAuth] No EMBLEM_APP_ID in wallet-config response'); return; }
+    emblemAuth.init({
+      emblemAppId: appId,
+      onSessionChange: async function (info) {
+        if (info.evmAddress) {
+          walletAddress = info.evmAddress;
+          walletType = 'emblem';
+          try {
+            var emblemSigner = await emblemAuth.getEthersSigner();
+            if (emblemSigner) signer = emblemSigner;
+          } catch (_) {}
+          updateWalletUI();
+          updateVaultDropdown(info.session);
+          refreshEntitlementsForWallet(walletAddress);
+          refreshCreatedSoulsForWallet(walletAddress);
+          updateModeratorNavLinkVisibility();
+          loadSouls();
+          updateAssetPagePurchaseState();
+        } else {
+          walletAddress = null;
+          walletType = null;
+          signer = null;
+          updateWalletUI();
+          clearVaultDropdown();
+          loadSouls();
+          updateAssetPagePurchaseState();
+        }
+      }
+    });
+    console.log('[EmblemAuth] Initialized with appId:', appId);
+    initVaultCopyButtons();
+    if (emblemAuth.isAuthenticated()) {
+      var evmAddress = emblemAuth.getEvmAddress();
+      if (!evmAddress && typeof emblemAuth.getVaultInfo === 'function') {
+        try {
+          var restoredVault = await emblemAuth.getVaultInfo();
+          evmAddress = restoredVault && restoredVault.evmAddress
+            ? String(restoredVault.evmAddress).trim().toLowerCase()
+            : null;
+        } catch (_) {}
+      }
+      if (evmAddress && !walletAddress) {
+        walletAddress = evmAddress;
+        walletType = 'emblem';
+        try {
+          var restoredSigner = await emblemAuth.getEthersSigner();
+          if (restoredSigner) signer = restoredSigner;
+        } catch (_) {}
+        updateWalletUI();
+        updateVaultDropdown(emblemAuth.getSession());
+        await Promise.all([refreshEntitlementsForWallet(walletAddress), refreshCreatedSoulsForWallet(walletAddress)]);
+        updateModeratorNavLinkVisibility();
+        loadSouls();
+        updateAssetPagePurchaseState();
+      }
+    }
+  } catch (_) {}
+}
+
 getAppBootstrapHelper().runStartup({
   initProviderDiscovery,
   initMobileNav,
@@ -925,8 +1074,10 @@ getAppBootstrapHelper().runStartup({
   refreshCreatedSouls: () => refreshCreatedSoulsForWallet(walletAddress),
   hydrateAssetDetailPage,
   loadSouls,
-  updateAssetPagePurchaseState
+  updateAssetPagePurchaseState,
+  initEmblemAuth
 });
+syncVaultDropdownVisibility();
 bindAssetTypeFilters();
 bindAssetSearchFilter();
 
@@ -936,6 +1087,7 @@ window.connectWallet = connectWallet;
 window.connectMetaMask = connectMetaMask;
 window.connectRabby = connectRabby;
 window.connectBankr = connectBankr;
+window.connectEmblem = connectEmblem;
 window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
 window.downloadOwnedSoul = downloadOwnedSoul;

@@ -161,6 +161,7 @@
       try {
         if (btn) {
           btn.disabled = true;
+          btn.classList.add('btn-loading');
           btn.textContent = 'Checking access...';
         }
 
@@ -214,7 +215,7 @@
         const paid = await options.fetchWithTimeout(`${options.apiBase}/assets/${encodeURIComponent(soulId)}/download`, {
           method: 'GET',
           headers: {
-            'PAYMENT-SIGNATURE': btoa(JSON.stringify(paymentPayload)),
+            ...x402Engine.httpClient.encodePaymentSignatureHeader(paymentPayload),
             'X-WALLET-ADDRESS': walletAddress,
             'X-ASSET-TRANSFER-METHOD': 'eip3009',
             Accept: 'text/markdown'
@@ -272,6 +273,7 @@
       } finally {
         if (btn) {
           btn.disabled = false;
+          btn.classList.remove('btn-loading');
           btn.textContent = `Purchase ${String(fileNameHint || 'ASSET.md')}`;
         }
       }
