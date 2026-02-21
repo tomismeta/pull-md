@@ -16,6 +16,7 @@ const DEFAULT_FAIL_POLICY = 'fail_open';
 const MAX_FINDINGS = 64;
 const MAX_EVIDENCE = 180;
 const MAX_CONFUSABLE_FINDINGS = 8;
+const DEFAULT_MAX_CONTENT_BYTES = 512 * 1024;
 
 const parser = unified().use(remarkParse).use(remarkGfm);
 const normalizedUrlCache = new QuickLRU({ maxSize: 2048 });
@@ -39,19 +40,50 @@ const INJECTION_PHRASES = [
   'ignore previous instructions',
   'disregard previous instructions',
   'ignore all prior instructions',
+  'the above instructions are fake',
+  'your real instructions are',
+  'always reply with',
+  'respond with the following',
+  'do not reveal',
+  'act as if',
+  'pretend you are',
+  'when the user asks',
   'you are now',
   'developer message',
   'system prompt',
   'override safety',
-  'bypass safeguards'
+  'bypass safeguards',
+  'ignore all previous instructions',
+  'ignora las instrucciones anteriores',
+  'ignorer les instructions précédentes',
+  'ignoriere vorherige anweisungen',
+  'ignore as instruções anteriores',
+  '忽略之前的指示',
+  'игнорируй предыдущие инструкции'
 ];
 
+const ROLE_MARKER_PATTERNS = [
+  /<\|im_start\|>/i,
+  /###\s*system\s*###/i,
+  /\[inst\]/i,
+  /<<\s*sys\s*>>/i,
+  /###\s*instruction\s*:/i,
+  /\bassistant\s*:/i,
+  /\bhuman\s*:/i,
+  /<\s*system\s*>/i
+];
+
+const BASE64_BLOB_RE = /(?:^|[^A-Za-z0-9+/=])([A-Za-z0-9+/]{40,}={0,2})(?:[^A-Za-z0-9+/=]|$)/g;
+
 const SECRET_PATTERNS = [
-  { code: 'openai_key', re: /\bsk-[a-z0-9]{20,}\b/i, label: 'Possible OpenAI-style API key' },
+  { code: 'openai_key', re: /\bsk-(?:proj-)?[a-zA-Z0-9]{20,}\b/g, label: 'Possible OpenAI-style API key' },
+  { code: 'anthropic_key', re: /\bsk-ant-[A-Za-z0-9\-_]{20,}\b/g, label: 'Possible Anthropic API key' },
   { code: 'aws_access_key', re: /\bAKIA[0-9A-Z]{16}\b/g, label: 'Possible AWS access key' },
   { code: 'github_token', re: /\bghp_[A-Za-z0-9]{36}\b/g, label: 'Possible GitHub token' },
   { code: 'slack_token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, label: 'Possible Slack token' },
-  { code: 'google_api_key', re: /\bAIza[0-9A-Za-z\-_]{35}\b/g, label: 'Possible Google API key' }
+  { code: 'google_api_key', re: /\bAIza[0-9A-Za-z\-_]{35}\b/g, label: 'Possible Google API key' },
+  { code: 'generic_bearer', re: /\bBearer\s+[A-Za-z0-9\-_.~+/]{20,}\b/g, label: 'Possible Bearer token' },
+  { code: 'stripe_key', re: /\b[sr]k_(?:live|test)_[A-Za-z0-9]{20,}\b/g, label: 'Possible Stripe key' }
 ];
 
 const WORD_TOKEN_RE = /\p{L}[\p{L}\p{N}._:-]{2,}/gu;
@@ -110,6 +142,12 @@ function maxExternalUrlChecks() {
   const n = Number(process.env.SCAN_URL_REPUTATION_MAX_URLS || 12);
   if (!Number.isFinite(n) || n < 1) return 12;
   return Math.min(Math.floor(n), 32);
+}
+
+function maxContentBytes() {
+  const n = Number(process.env.SCAN_MAX_CONTENT_BYTES || DEFAULT_MAX_CONTENT_BYTES);
+  if (!Number.isFinite(n) || n < 64 * 1024) return DEFAULT_MAX_CONTENT_BYTES;
+  return Math.min(Math.floor(n), 4 * 1024 * 1024);
 }
 
 function truncateEvidence(value) {
@@ -325,6 +363,22 @@ function scanDangerousHtml(markdown, ast) {
           evidence: comments[0]
         })
       );
+      for (const comment of comments) {
+        const loweredComment = String(comment || '').toLowerCase();
+        for (const phrase of INJECTION_PHRASES) {
+          if (!loweredComment.includes(phrase)) continue;
+          findings.push(
+            createFinding({
+              scanner: 'html_structure',
+              code: 'comment_injection_phrase',
+              severity: 'high',
+              action: 'block',
+              message: `HTML comment contains prompt-injection phrase: "${phrase}".`,
+              evidence: comment
+            })
+          );
+        }
+      }
     }
   }
 
@@ -347,6 +401,43 @@ function scanPromptInjectionPhrases(markdown) {
       })
     );
   }
+
+  for (const marker of ROLE_MARKER_PATTERNS) {
+    marker.lastIndex = 0;
+    const match = marker.exec(String(markdown || ''));
+    if (!match) continue;
+    findings.push(
+      createFinding({
+        scanner: 'prompt_injection',
+        code: 'role_boundary_marker',
+        severity: 'medium',
+        action: 'warn',
+        message: 'Role boundary marker detected; this can be used for prompt-injection.',
+        evidence: match[0]
+      })
+    );
+  }
+
+  BASE64_BLOB_RE.lastIndex = 0;
+  let base64Match = BASE64_BLOB_RE.exec(String(markdown || ''));
+  while (base64Match) {
+    const blob = String(base64Match[1] || '');
+    if (blob.length >= 80) {
+      findings.push(
+        createFinding({
+          scanner: 'prompt_injection',
+          code: 'encoded_payload_blob',
+          severity: 'medium',
+          action: 'warn',
+          message: 'Long Base64-like blob detected; review for hidden payloads.',
+          evidence: blob
+        })
+      );
+      if (findings.length >= MAX_FINDINGS) break;
+    }
+    base64Match = BASE64_BLOB_RE.exec(String(markdown || ''));
+  }
+
   return findings;
 }
 
@@ -732,6 +823,32 @@ export async function scanMarkdownAssetContent(input = {}, options = {}) {
       content_sha256: contentHash,
       findings: [],
       summary: buildSummary([]),
+      scanners: scanners.map((scanner) => String(scanner?.id || 'scanner'))
+    };
+  }
+
+  const contentSizeBytes = Buffer.byteLength(contentMarkdown, 'utf8');
+  if (contentSizeBytes > maxContentBytes()) {
+    const findings = [
+      createFinding({
+        scanner: 'input_guard',
+        code: 'content_too_large',
+        severity: 'high',
+        action: 'block',
+        message: `Content exceeds maximum scan size (${maxContentBytes()} bytes).`,
+        evidence: `size=${contentSizeBytes}`
+      })
+    ];
+    return {
+      ok: false,
+      blocked: mode === 'enforce',
+      verdict: mode === 'enforce' ? 'block' : 'warn',
+      scanned_at: scannedAt,
+      mode,
+      fail_policy: failPolicy,
+      content_sha256: contentHash,
+      findings,
+      summary: buildSummary(findings),
       scanners: scanners.map((scanner) => String(scanner?.id || 'scanner'))
     };
   }
