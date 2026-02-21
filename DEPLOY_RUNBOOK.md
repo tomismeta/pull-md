@@ -1,5 +1,39 @@
 # PullMd Deploy Runbook
 
+## Recommended Environment Strategy
+
+Use three deployment lanes:
+
+1. `Production` (domain: `pull.md`)
+2. `Preview` (automatic per PR)
+3. `Development` (optional local/CLI testing)
+
+Current recommendation:
+
+- Enable `Speed Insights`
+- Keep `Web Analytics` disabled for now (you already capture product telemetry)
+- Keep production deploys only from `main` after required checks pass
+
+## Vercel Setup Checklist (Project Settings)
+
+1. **Enable Speed Insights**
+   - Vercel -> Project -> `Analytics` -> `Speed Insights` -> Enable
+
+2. **Web Analytics**
+   - Leave disabled for now to avoid duplicate metrics with app telemetry
+
+3. **Environment Variables Separation**
+   - Vercel -> Project -> `Settings` -> `Environment Variables`
+   - Ensure all sensitive vars are scoped correctly:
+     - `Production`: real DB/keys
+     - `Preview`: separate DB + non-prod keys
+   - Never reuse production database URLs in `Preview`.
+
+4. **Git + Deploy flow**
+   - PR branch -> Preview deployment URL
+   - Merge to `main` -> Production deployment
+   - Keep GitHub required checks including `Vercel` status.
+
 ## Production Deploy Command
 
 ```bash
@@ -100,3 +134,22 @@ npx vercel --prod --yes --token <VERCEL_TOKEN>
 
 - Auto-deploy smoke check: 2026-02-19
 - Deploy auth owner fix: 2026-02-19
+
+## Quick Verification Commands
+
+Verify latest deployments:
+
+```bash
+npx vercel ls --token <VERCEL_TOKEN>
+```
+
+Inspect production target:
+
+```bash
+npx vercel inspect pullmd.vercel.app --token <VERCEL_TOKEN>
+```
+
+Expected:
+- status is `Ready`
+- latest `main` commit is attached to production deployment
+- `pull.md` alias points to that deployment
