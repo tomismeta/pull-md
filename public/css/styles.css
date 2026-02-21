@@ -666,6 +666,29 @@ main {
   transform: none;
 }
 
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.82;
+}
+
+.btn-loading::after {
+  content: '';
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-left: 0.5em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: btn-spin 0.6s linear infinite;
+}
+
 .agent-api-card {
   padding: 18px;
 }
@@ -1655,6 +1678,15 @@ main {
   font-size: 0.74rem;
 }
 
+.wallet-icon-emblem {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #e0e7ff;
+  border-color: #6366f1;
+  border-radius: 50%;
+  overflow: hidden;
+  padding: 0;
+}
+
 .toast-container {
   position: fixed;
   right: 16px;
@@ -1898,6 +1930,95 @@ body {
   background: rgba(63, 185, 80, 0.12);
   color: #9ee6aa;
   border-color: rgba(63, 185, 80, 0.45);
+}
+
+.wallet-btn-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.vault-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 260px;
+  background: #161b22;
+  border: 1px solid #253041;
+  border-radius: 10px;
+  padding: 8px 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+}
+
+.wallet-btn-wrap.has-emblem-vault:hover .vault-dropdown,
+.vault-dropdown:hover {
+  display: block;
+}
+
+.wallet-btn-wrap:not(:hover) .vault-dropdown {
+  display: none;
+}
+
+/* Only show dropdown when connected */
+.wallet-btn-wrap:hover .vault-dropdown:empty,
+.wallet-btn:not(.connected) ~ .vault-dropdown {
+  display: none;
+}
+
+/* Emblem-only vault dropdown */
+.wallet-btn-wrap:not(.has-emblem-vault) .vault-dropdown {
+  display: none !important;
+}
+
+.vault-dropdown-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+}
+
+.vault-dropdown-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b9ab0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 48px;
+  flex-shrink: 0;
+}
+
+.vault-dropdown-value {
+  font-size: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: #e6edf3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.vault-copy-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #334155;
+  background: transparent;
+  color: #8b9ab0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.vault-copy-btn:hover {
+  color: #e6edf3;
+  border-color: #58a6ff;
+}
+
+.vault-copy-btn.copied {
+  color: #3fb950;
+  border-color: #3fb950;
 }
 
 .hero-shell,

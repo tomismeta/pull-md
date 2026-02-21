@@ -13,6 +13,7 @@ export default function handler(req, res) {
 
   return res.status(200).json({
     walletConnectProjectId: process.env.WALLETCONNECT_PROJECT_ID || null,
-    network: 'eip155:8453'
+    network: 'eip155:8453',
+    emblemAppId: process.env.EMBLEM_APP_ID || ''
   });
 }
