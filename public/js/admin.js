@@ -894,6 +894,14 @@ function renderTelemetryDashboard(data) {
   if (!errors.length) {
     errorsEl.innerHTML = '<p class="admin-empty">No recent errors in selected window.</p>';
   } else {
+    const getErrorMessage = (item) => {
+      const message = String(item?.error_message || '').trim();
+      if (message) return message;
+      if (String(item?.event_type || '') === 'mcp.transport_request' && Number(item?.status_code || 0) === 406) {
+        return 'MCP transport negotiation rejected request (406). Client should send Accept: application/json, text/event-stream.';
+      }
+      return 'Unknown error';
+    };
     errorsEl.innerHTML = `
       <div class="telemetry-stack">
         ${errors
@@ -905,7 +913,7 @@ function renderTelemetryDashboard(data) {
                 <span class="telemetry-row-metric">${escapeHtml(formatDate(item.occurred_at))}</span>
               </div>
               <p class="telemetry-row-meta">code ${escapeHtml(item.error_code || '-')} · status ${escapeHtml(item.status_code || '-')}</p>
-              <p class="telemetry-row-message">${escapeHtml(item.error_message || 'Unknown error')}</p>
+              <p class="telemetry-row-message">${escapeHtml(getErrorMessage(item))}</p>
             </article>
           `
           )

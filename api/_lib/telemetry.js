@@ -438,9 +438,12 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
              OR (event_type = 'moderation.request' AND success = false)
         )::int AS moderation_failures,
         COUNT(*) FILTER (
-          WHERE success = false
-             OR status_code >= 400
-             OR event_type LIKE '%.failed'
+          WHERE (
+            success = false
+            OR status_code >= 400
+            OR event_type LIKE '%.failed'
+          )
+            AND NOT (event_type = 'mcp.transport_request' AND status_code = 406)
         )::int AS failed_events
       FROM ${tableRef}
       WHERE occurred_at >= NOW() - make_interval(hours => $1::int);
@@ -493,6 +496,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
       FROM ${tableRef}
       WHERE occurred_at >= NOW() - make_interval(hours => $1::int)
         AND route IS NOT NULL
+        AND NOT (event_type = 'mcp.transport_request' AND status_code = 406)
       GROUP BY route, http_method
       ORDER BY hits DESC, failures DESC, route ASC
       LIMIT $2::int;
@@ -508,6 +512,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
         COUNT(*) FILTER (WHERE success = false OR status_code >= 400)::int AS failures
       FROM ${tableRef}
       WHERE occurred_at >= NOW() - make_interval(hours => $1::int)
+        AND NOT (event_type = 'mcp.transport_request' AND status_code = 406)
       GROUP BY source
       ORDER BY hits DESC, failures DESC, source ASC
       LIMIT $2::int;
@@ -535,6 +540,7 @@ export async function getTelemetryDashboard({ windowHours, rowLimit } = {}) {
           OR event_type LIKE '%.failed'
           OR error_code IS NOT NULL
         )
+        AND NOT (event_type = 'mcp.transport_request' AND status_code = 406)
       ORDER BY occurred_at DESC
       LIMIT $2::int;
     `,

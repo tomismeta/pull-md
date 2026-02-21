@@ -53,7 +53,7 @@ Tool invocation contract:
 - For `flow=creator` + `action=publish_listing`, response includes `suggested_listing`.
 
 5. `name=get_listing_template`
-- Returns template for immediate publish payloads.
+- Returns template for immediate publish payloads plus active scan policy metadata.
 
 6. `name=publish_listing`
 - Creator wallet-authenticated immediate publish.
@@ -61,6 +61,7 @@ Tool invocation contract:
 `wallet_address`, `auth_signature`, `auth_timestamp`, `listing`, optional `dry_run`.
 - No draft state or approval queue.
 - Success returns `share_url` and `purchase_endpoint`.
+- Returns `scan_report` so creators/agents can inspect scanner verdict and reasons.
 - `dry_run=true` validates payload and returns `field_errors` without persisting.
 
 7. `name=list_my_published_listings`
@@ -71,6 +72,7 @@ Tool invocation contract:
 - Backed by Postgres JSONB when configured (`MARKETPLACE_DATABASE_URL`/`DATABASE_URL`/`POSTGRES_URL`).
 - On Vercel, creator publish requires one of these DB vars; otherwise `publish_listing` returns `503 marketplace_persistence_unconfigured` to avoid non-durable listings.
 - Response may include `storage_warning` when persistence configuration is incomplete.
+- Listings include scan metadata fields (`scan_verdict`, `scan_mode`, `scan_summary`, `scan_state`) when available.
 
 9. `name=list_moderators`
 - Lists allowlisted moderator wallet addresses.

@@ -4,6 +4,8 @@ import {
   listAssetsCatalog,
   resolveAssetDetails
 } from './services/assets.js';
+import fs from 'fs/promises';
+import path from 'path';
 
 function baseUrlFromHeaders(headers = {}) {
   const host = String(headers['x-forwarded-host'] || headers.host || 'www.pull.md').trim();
@@ -82,10 +84,16 @@ export async function readMcpResource(uri, context = {}) {
   }
 
   if (normalizedUri === 'pullmd://docs/webmcp') {
+    let webmcp = '';
+    try {
+      webmcp = await fs.readFile(path.join(process.cwd(), 'WEBMCP.md'), 'utf8');
+    } catch (_) {
+      webmcp = `Read the full contract at ${baseUrl}/WEBMCP.md`;
+    }
     return {
       uri: requestedUri || normalizedUri,
       mimeType: 'text/markdown',
-      text: `Read the full contract at ${baseUrl}/WEBMCP.md`
+      text: webmcp
     };
   }
 

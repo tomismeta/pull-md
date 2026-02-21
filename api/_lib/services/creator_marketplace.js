@@ -280,8 +280,19 @@ export async function executeCreatorMarketplaceAction({
   if (normalizedAction === 'get_listing_template' && normalizedMethod === 'GET') {
     return {
       template: getMarketplaceDraftTemplate(),
+      security_scan: {
+        enabled: true,
+        stages: ['publish', 'moderation_update'],
+        mode: String(process.env.CONTENT_SCANNER_MODE || 'advisory').trim().toLowerCase() || 'advisory',
+        outcomes: {
+          clean: 'No findings detected.',
+          warn: 'Non-blocking findings detected; returned in scan_report.',
+          block: 'Critical findings detected; publish/edit blocked when mode=enforce.'
+        }
+      },
       notes: [
         'Immediate publish workflow: name, price_usdc, description, content_markdown.',
+        'Security scan runs automatically during publish/edit and returns scan_report metadata.',
         'No drafts, no approval queue, no publish state transitions.',
         'Successful publish returns a shareable asset page URL.'
       ]

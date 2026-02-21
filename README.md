@@ -70,6 +70,10 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - No drafts, no approval queue, no intermediate states.
 - Successful publish response includes:
 `asset_id`, `share_url`, and `purchase_endpoint`.
+- Security scanning:
+  - `publish_listing` and moderator `update_listing` trigger markdown security scanning automatically.
+  - Responses include `scan_report` with `verdict`, `mode`, `summary`, and reason keys.
+  - `scan_mode=advisory` returns findings without blocking; `scan_mode=enforce` blocks critical findings.
 - Published listings are immediately discoverable in:
 `POST /mcp` `tools/call` `name=list_assets` and purchasable through `GET /api/assets/{id}/download`.
 - Catalog persistence:

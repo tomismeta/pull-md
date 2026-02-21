@@ -24,6 +24,31 @@ function matchesAssetType(item, assetType) {
   return String(item?.asset_type || '').toLowerCase() === target;
 }
 
+function normalizeScanState(input) {
+  const asset = input && typeof input === 'object' ? input : {};
+  const verdict = String(asset.scan_verdict || asset?.scan?.verdict || '').trim().toLowerCase();
+  const mode = String(asset.scan_mode || asset?.scan?.mode || '').trim().toLowerCase() || null;
+  const scannedAt = String(asset.scan_scanned_at || asset?.scan?.scannedAt || '').trim() || null;
+  const blocked = Boolean(asset.scan_blocked || asset?.scan?.blocked);
+  const summary =
+    asset.scan_summary && typeof asset.scan_summary === 'object'
+      ? asset.scan_summary
+      : asset?.scan?.summary && typeof asset.scan.summary === 'object'
+        ? asset.scan.summary
+        : null;
+
+  const scanState = verdict || 'unscanned';
+  return {
+    ...asset,
+    scan_verdict: verdict || null,
+    scan_mode: mode,
+    scan_scanned_at: scannedAt,
+    scan_blocked: blocked,
+    scan_summary: summary,
+    scan_state: scanState
+  };
+}
+
 export async function listAssetsCatalog({ category, assetType } = {}) {
   const assets = await listAssetsResolved();
   return assets.filter((asset) => {
@@ -38,13 +63,16 @@ export async function listSoulsCatalog({ category } = {}) {
 }
 
 export function buildMcpListAssetsResponse(assets) {
+  const normalized = Array.isArray(assets) ? assets.map((asset) => normalizeScanState(asset)) : [];
   return {
-    assets,
-    count: assets.length,
+    assets: normalized,
+    count: normalized.length,
     meta: {
       agent_friendly: true,
       access_type: 'x402_paywall',
       flow: 'GET /api/assets/{id}/download -> 402 PAYMENT-REQUIRED -> GET with PAYMENT-SIGNATURE',
+      security_scan_policy:
+        'Publish/edit triggers markdown security scanning. In advisory mode findings are returned but publish can continue; in enforce mode critical findings block publish/edit.',
       reauth_flow:
         'Strict headless agent: X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP. Human recovery: X-WALLET-ADDRESS + X-REDOWNLOAD-SESSION (or signed fallback).',
       receipt_handling:
@@ -101,15 +129,18 @@ export async function resolveAssetDetails(id) {
 export function buildMcpAssetDetailsResponse({ assetId, asset, summary, sellerAddress }) {
   const effectiveAsset = asset || {};
   const id = String(assetId || summary?.id || effectiveAsset.id || '').trim();
+  const normalizedSummary = normalizeScanState(summary || {});
   const fileName =
-    String(summary?.file_name || effectiveAsset.fileName || effectiveAsset.file_name || '').trim() || 'SOUL.md';
+    String(normalizedSummary?.file_name || effectiveAsset.fileName || effectiveAsset.file_name || '').trim() || 'SOUL.md';
   return {
     asset: {
-      ...summary,
+      ...normalizedSummary,
       long_description: effectiveAsset.longDescription,
       files: [fileName],
       purchase_endpoint: `/api/assets/${id}/download`,
       payment_protocol: 'x402',
+      security_scan_policy:
+        'Scan runs automatically on publish/edit. scan_state is one of unscanned|clean|warn|block.',
       auth_headers: {
         purchase: ['PAYMENT-SIGNATURE', 'X-WALLET-ADDRESS', 'X-ASSET-TRANSFER-METHOD'],
         auth_challenge_tool: ['POST /mcp', 'tools/call', 'name=get_auth_challenge'],

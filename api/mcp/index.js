@@ -41,14 +41,20 @@ export default async function handler(req, res) {
   const rpcMethod = String(req?.body?.method || '').trim() || null;
   try {
     await handleMcpRequestWithSdk(req, res);
+    const statusCode = Number(res.statusCode || 200);
+    const isAcceptMismatch = statusCode === 406;
     void recordTelemetryEvent({
       eventType: 'mcp.transport_request',
       source: 'mcp',
       route: '/mcp',
       httpMethod: 'POST',
       rpcMethod,
-      success: Number(res.statusCode || 200) < 400,
-      statusCode: Number(res.statusCode || 200),
+      success: statusCode < 400,
+      statusCode,
+      errorCode: isAcceptMismatch ? 'mcp_not_acceptable' : null,
+      errorMessage: isAcceptMismatch
+        ? 'MCP client request was rejected by transport content negotiation (406 Not Acceptable).'
+        : null,
       metadata: {
         duration_ms: Date.now() - start
       }
