@@ -1951,7 +1951,7 @@ body {
   z-index: 200;
 }
 
-.wallet-btn-wrap:hover .vault-dropdown,
+.wallet-btn-wrap.has-emblem-vault:hover .vault-dropdown,
 .vault-dropdown:hover {
   display: block;
 }
@@ -1964,6 +1964,11 @@ body {
 .wallet-btn-wrap:hover .vault-dropdown:empty,
 .wallet-btn:not(.connected) ~ .vault-dropdown {
   display: none;
+}
+
+/* Emblem-only vault dropdown */
+.wallet-btn-wrap:not(.has-emblem-vault) .vault-dropdown {
+  display: none !important;
 }
 
 .vault-dropdown-row {
