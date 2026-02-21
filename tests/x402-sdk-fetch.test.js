@@ -55,11 +55,16 @@ function makeAccept({ method = 'eip3009', amount = '10000' } = {}) {
 
 test('x402 SDK fetch wrapper performs 402 -> sign -> retry and preserves settlement response', async () => {
   const wallet = ethers.Wallet.createRandom();
+  const publicClient = {
+    readContract: async () => {
+      throw new Error('readContract should not be called in x402-sdk-fetch.test');
+    }
+  };
   const signer = toClientEvmSigner({
     address: wallet.address,
     signTypedData: async ({ domain, types, message }) =>
       wallet.signTypedData(domain || {}, stripEip712Domain(types), message || {})
-  });
+  }, publicClient);
 
   const paymentRequired = makePaymentRequired({ accepts: [makeAccept({ method: 'eip3009' })] });
   const paymentResponse = {
@@ -122,11 +127,16 @@ test('x402 SDK fetch wrapper performs 402 -> sign -> retry and preserves settlem
 
 test('x402 SDK selector enforces eip3009 default when multiple methods are offered', async () => {
   const wallet = ethers.Wallet.createRandom();
+  const publicClient = {
+    readContract: async () => {
+      throw new Error('readContract should not be called in x402-sdk-fetch.test');
+    }
+  };
   const signer = toClientEvmSigner({
     address: wallet.address,
     signTypedData: async ({ domain, types, message }) =>
       wallet.signTypedData(domain || {}, stripEip712Domain(types), message || {})
-  });
+  }, publicClient);
 
   const paymentRequired = makePaymentRequired({
     accepts: [makeAccept({ method: 'permit2', amount: '15000' }), makeAccept({ method: 'eip3009', amount: '10000' })]
