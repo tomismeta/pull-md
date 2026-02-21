@@ -291,6 +291,16 @@ function readWalletSession() {
   return getWalletCommon().readWalletSession({ key: WALLET_SESSION_KEY });
 }
 
+function syncVaultDropdownVisibility() {
+  const wrap = document.getElementById('walletBtnWrap');
+  if (!wrap) return;
+  const showVault = Boolean(walletAddress && walletType === 'emblem');
+  wrap.classList.toggle('has-emblem-vault', showVault);
+  if (!showVault) {
+    clearVaultDropdown();
+  }
+}
+
 async function connectWithProvider(rawProvider) {
   return connectWithProviderInternal(rawProvider, 'injected', false);
 }
@@ -390,6 +400,7 @@ function updateWalletUI() {
     onDisconnect: disconnectWallet,
     onConnect: openWalletModal
   });
+  syncVaultDropdownVisibility();
 }
 
 function updateModeratorNavLinkVisibility() {
@@ -933,6 +944,7 @@ function initMobileNav() {
 }
 
 function updateVaultDropdown(session) {
+  syncVaultDropdownVisibility();
   var emblemAuth = window.PullMdEmblemAuth;
   var vaultIdEl = document.getElementById('vaultDropdownVaultId');
   var evmEl = document.getElementById('vaultDropdownEvm');
@@ -1065,6 +1077,7 @@ getAppBootstrapHelper().runStartup({
   updateAssetPagePurchaseState,
   initEmblemAuth
 });
+syncVaultDropdownVisibility();
 bindAssetTypeFilters();
 bindAssetSearchFilter();
 
