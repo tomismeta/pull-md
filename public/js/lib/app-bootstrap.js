@@ -42,7 +42,8 @@
     refreshCreatedSouls,
     hydrateAssetDetailPage,
     loadSouls,
-    updateAssetPagePurchaseState
+    updateAssetPagePurchaseState,
+    initEmblemAuth
   } = {}) {
     onReady(async () => {
       if (typeof initProviderDiscovery === 'function') initProviderDiscovery();
@@ -51,6 +52,7 @@
       if (typeof bindWalletOptions === 'function') bindWalletOptions();
       if (typeof updateWalletUI === 'function') updateWalletUI();
       if (typeof restoreWalletSession === 'function') await restoreWalletSession();
+      if (typeof initEmblemAuth === 'function') await initEmblemAuth();
       if (typeof refreshEntitlements === 'function') await refreshEntitlements();
       if (typeof refreshCreatedSouls === 'function') await refreshCreatedSouls();
       if (typeof hydrateAssetDetailPage === 'function') await hydrateAssetDetailPage();

@@ -53,9 +53,28 @@
           <a href="/create.html" class="nav-link">Create</a>
           <a href="#for-agents" class="nav-link">For Agents</a>
           <a href="/admin.html" class="nav-link moderator-nav-link" style="display: none;">Moderate</a>
-          <button class="wallet-btn" id="walletBtn" onclick="openWalletModal()">
-            <span id="walletText">Connect Wallet</span>
-          </button>
+          <div class="wallet-btn-wrap" id="walletBtnWrap">
+            <button class="wallet-btn" id="walletBtn" onclick="openWalletModal()">
+              <span id="walletText">Connect Wallet</span>
+            </button>
+            <div class="vault-dropdown" id="vaultDropdown">
+              <div class="vault-dropdown-row">
+                <span class="vault-dropdown-label">Vault ID</span>
+                <span class="vault-dropdown-value" id="vaultDropdownVaultId">—</span>
+                <button class="vault-copy-btn" data-copy-target="vaultDropdownVaultId">Copy</button>
+              </div>
+              <div class="vault-dropdown-row">
+                <span class="vault-dropdown-label">EVM</span>
+                <span class="vault-dropdown-value" id="vaultDropdownEvm">—</span>
+                <button class="vault-copy-btn" data-copy-target="vaultDropdownEvm">Copy</button>
+              </div>
+              <div class="vault-dropdown-row">
+                <span class="vault-dropdown-label">Solana</span>
+                <span class="vault-dropdown-value" id="vaultDropdownSolana">—</span>
+                <button class="vault-copy-btn" data-copy-target="vaultDropdownSolana">Copy</button>
+              </div>
+            </div>
+          </div>
         </nav>
       </div>
     </div>
@@ -211,6 +230,13 @@ GET /WEBMCP.md</pre>
               <span class="wallet-desc">Agent and human compatible</span>
             </div>
           </button>
+          <button class="wallet-option" data-wallet-kind="emblem">
+            <span class="wallet-icon wallet-icon-emblem">EV</span>
+            <div class="wallet-info">
+              <span class="wallet-name">Emblem Vault</span>
+              <span class="wallet-desc">Multi-chain vault wallet</span>
+            </div>
+          </button>
         </div>
       </div>
     </div>
@@ -222,6 +248,8 @@ GET /WEBMCP.md</pre>
   <script src="js/lib/wallet-connect.js"></script>
   <script src="js/lib/storage.js"></script>
   <script src="js/lib/wallet-state.js"></script>
+  <script src="https://unpkg.com/@emblemvault/auth-sdk@latest/dist/emblem-auth.min.js"></script>
+  <script src="js/lib/emblem-auth.js"></script>
   <script src="js/lib/siwe-messages.js"></script>
   <script src="js/lib/ui-shell.js"></script>
   <script src="js/lib/toast.js"></script>
