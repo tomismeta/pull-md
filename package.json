@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Human-nurtured agent memory marketplace with x402 payments",
   "scripts": {
-    "dev": "vercel dev",
+    "start": "vercel dev",
     "deploy": "vercel --prod",
     "test": "node --test tests/*.test.js",
     "test:all": "npm run test && node --check public/js/app.js && node --check public/js/create.js && node --check public/js/admin.js",
