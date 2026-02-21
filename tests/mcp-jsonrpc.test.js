@@ -84,6 +84,29 @@ test('MCP initialize returns protocol capabilities over streamable HTTP', async 
   assert.equal(typeof res.body?.result?.capabilities?.tools, 'object');
 });
 
+test('MCP initialize works for JSON-only Accept clients (compat mode)', async () => {
+  const res = await runMcpRequest({
+    headers: {
+      accept: 'application/json'
+    },
+    body: {
+      jsonrpc: '2.0',
+      id: 'init-compat',
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'mcp-json-compat-test', version: '1.0.0' }
+      }
+    }
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.jsonrpc, '2.0');
+  assert.equal(res.body?.id, 'init-compat');
+  assert.equal(typeof res.body?.result?.protocolVersion, 'string');
+  assert.equal(typeof res.body?.result?.serverInfo?.name, 'string');
+});
+
 test('MCP tools/list exposes expected tool names', async () => {
   const res = await runMcpRequest({
     body: {

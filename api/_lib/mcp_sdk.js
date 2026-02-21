@@ -294,15 +294,10 @@ export function getMcpServerMetadata() {
 }
 
 export async function handleMcpRequestWithSdk(req, res) {
-  // Backward-compatibility shim:
-  // existing PullMd clients send `Accept: application/json`.
-  // Streamable HTTP expects clients to accept both JSON and SSE.
   const currentAccept = String(req?.headers?.accept || '').toLowerCase();
-  if (!currentAccept.includes('text/event-stream')) {
-    const merged = [String(req?.headers?.accept || '').trim(), 'application/json', 'text/event-stream']
-      .filter(Boolean)
-      .join(', ');
-    req.headers.accept = merged;
+  const acceptsSse = currentAccept.includes('text/event-stream');
+  if (!acceptsSse) {
+    return handleMcpRequestJsonCompat(req, res);
   }
 
   const server = buildMcpSdkServer({ requestHeaders: req?.headers || {} });
@@ -325,5 +320,167 @@ export async function handleMcpRequestWithSdk(req, res) {
     } catch (_) {
       // best-effort close for stateless server instance
     }
+  }
+}
+
+function sendJsonResponse(res, statusCode, payload) {
+  if (typeof res?.status === 'function' && typeof res?.json === 'function') {
+    return res.status(statusCode).json(payload);
+  }
+  res.statusCode = statusCode;
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('content-type', 'application/json');
+  }
+  if (typeof res.end === 'function') {
+    res.end(JSON.stringify(payload));
+  }
+}
+
+function jsonRpcError(res, id, code, message, data = null, statusCode = 200) {
+  const payload = {
+    jsonrpc: '2.0',
+    id: id ?? null,
+    error: {
+      code,
+      message,
+      ...(data && typeof data === 'object' ? { data } : {})
+    }
+  };
+  sendJsonResponse(res, statusCode, payload);
+}
+
+function jsonRpcResult(res, id, result, statusCode = 200) {
+  sendJsonResponse(res, statusCode, {
+    jsonrpc: '2.0',
+    id: id ?? null,
+    result
+  });
+}
+
+async function handleMcpRequestJsonCompat(req, res) {
+  const body = await readJsonBody(req);
+  const id = Object.prototype.hasOwnProperty.call(body, 'id') ? body.id : null;
+  const method = String(body?.method || '').trim();
+  const params = body?.params && typeof body.params === 'object' ? body.params : {};
+  const requestHeaders = req?.headers || {};
+
+  if (!method) {
+    return jsonRpcError(res, id, -32600, 'Invalid Request');
+  }
+
+  if (method === 'initialize') {
+    return jsonRpcResult(res, id, {
+      protocolVersion: '2024-11-05',
+      capabilities: { tools: {}, prompts: {}, resources: {} },
+      serverInfo: SERVER_INFO,
+      instructions: SERVER_INSTRUCTIONS
+    });
+  }
+
+  if (method === 'notifications/initialized') {
+    if (id === null || typeof id === 'undefined') {
+      return res.status(202).end();
+    }
+    return jsonRpcResult(res, id, {});
+  }
+
+  if (method === 'ping') {
+    return jsonRpcResult(res, id, {});
+  }
+
+  try {
+    if (method === 'tools/list') {
+      return jsonRpcResult(res, id, { tools: getMcpToolsListResult() });
+    }
+
+    if (method === 'tools/call') {
+      const name = String(params?.name || '').trim();
+      if (!name) {
+        return jsonRpcError(res, id, -32602, 'Missing required params.name');
+      }
+      const args = params?.arguments && typeof params.arguments === 'object' ? params.arguments : {};
+      try {
+        const output = await invokeToolRegistry(name, args, { headers: requestHeaders });
+        return jsonRpcResult(res, id, {
+          content: [{ type: 'text', text: `Tool ${name} executed successfully.` }],
+          structuredContent: output
+        });
+      } catch (error) {
+        if (isAppError(error)) {
+          const normalized = normalizeToolError(error);
+          return jsonRpcResult(res, id, {
+            isError: true,
+            content: [{ type: 'text', text: normalized.hint ? `${normalized.message} Hint: ${normalized.hint}` : normalized.message }],
+            structuredContent: normalized
+          });
+        }
+        throw error;
+      }
+    }
+
+    if (method === 'prompts/list') {
+      return jsonRpcResult(res, id, { prompts: getMcpPromptsList() });
+    }
+
+    if (method === 'prompts/get') {
+      const name = String(params?.name || '').trim();
+      if (!name) {
+        return jsonRpcError(res, id, -32602, 'Missing required params.name');
+      }
+      const args = params?.arguments && typeof params.arguments === 'object' ? params.arguments : {};
+      try {
+        return jsonRpcResult(res, id, getMcpPrompt(name, args));
+      } catch (error) {
+        if (isAppError(error)) {
+          const normalized = normalizeToolError(error);
+          return jsonRpcResult(res, id, {
+            isError: true,
+            content: [{ type: 'text', text: normalized.message }],
+            structuredContent: normalized
+          });
+        }
+        throw error;
+      }
+    }
+
+    if (method === 'resources/list') {
+      const resources = await getMcpResourcesList({ headers: requestHeaders });
+      return jsonRpcResult(res, id, { resources });
+    }
+
+    if (method === 'resources/read') {
+      const uri = String(params?.uri || '').trim();
+      if (!uri) {
+        return jsonRpcError(res, id, -32602, 'Missing required params.uri');
+      }
+      const content = await readMcpResource(uri, { headers: requestHeaders });
+      return jsonRpcResult(res, id, { contents: [content] });
+    }
+
+    return jsonRpcError(res, id, -32601, 'Method not found');
+  } catch (error) {
+    return jsonRpcError(
+      res,
+      id,
+      -32603,
+      error instanceof Error ? error.message : String(error || 'Internal error')
+    );
+  }
+}
+
+async function readJsonBody(req) {
+  if (req?.body && typeof req.body === 'object') return req.body;
+  if (!req || typeof req.on !== 'function') return {};
+  const chunks = [];
+  await new Promise((resolve, reject) => {
+    req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    req.on('end', resolve);
+    req.on('error', reject);
+  });
+  if (!chunks.length) return {};
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch (_) {
+    return {};
   }
 }
