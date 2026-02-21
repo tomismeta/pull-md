@@ -1,0 +1,9 @@
+# Default owner
+* @tomismeta
+
+# High-risk paths
+/api/** @tomismeta
+/public/js/lib/** @tomismeta
+/public/js/app.js @tomismeta
+/README.md @tomismeta
+/WEBMCP.md @tomismeta
