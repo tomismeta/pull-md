@@ -1025,6 +1025,14 @@ async function initEmblemAuth() {
     initVaultCopyButtons();
     if (emblemAuth.isAuthenticated()) {
       var evmAddress = emblemAuth.getEvmAddress();
+      if (!evmAddress && typeof emblemAuth.getVaultInfo === 'function') {
+        try {
+          var restoredVault = await emblemAuth.getVaultInfo();
+          evmAddress = restoredVault && restoredVault.evmAddress
+            ? String(restoredVault.evmAddress).trim().toLowerCase()
+            : null;
+        } catch (_) {}
+      }
       if (evmAddress && !walletAddress) {
         walletAddress = evmAddress;
         walletType = 'emblem';

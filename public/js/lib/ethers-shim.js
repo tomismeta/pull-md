@@ -1,6 +1,10 @@
 // ES module shim: re-exports window.ethers (loaded via UMD script tag)
 // Allows `await import('ethers')` to resolve via the HTML import map.
-const e = window.ethers;
+const e = (typeof window !== 'undefined' && window.ethers) ? window.ethers : null;
+if (!e && typeof console !== 'undefined' && typeof console.error === 'function') {
+  console.error('[ethers-shim] window.ethers is unavailable. Ensure the ethers UMD script loads before module imports.');
+}
+const safe = e || {};
 export default e;
 export const {
   AbstractSigner,
@@ -190,4 +194,4 @@ export const {
   JsonRpcApiProvider,
   WordlistOwl,
   WordlistOwlA
-} = e;
+} = safe;
