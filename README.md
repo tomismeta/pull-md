@@ -43,6 +43,8 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 `Content-Type: application/json`
 `Accept: application/json, text/event-stream`
 
+- `GET /.well-known/api-catalog` (RFC 9727 Linkset discovery)
+- `GET /api/openapi.json` (REST service description)
 - `GET /api/mcp/manifest`
 - `POST /mcp` (JSON-RPC streamable HTTP endpoint, implemented with `@modelcontextprotocol/sdk`)
 - `POST /mcp` + `tools/call` `name=list_assets`

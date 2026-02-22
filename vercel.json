@@ -23,6 +23,10 @@
       "dest": "/api/assets/[id]/download.js?id=$1"
     },
     {
+      "src": "/\\.well-known/api-catalog",
+      "dest": "/api/well-known/api-catalog.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/$1"
     },

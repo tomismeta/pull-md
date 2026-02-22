@@ -94,6 +94,8 @@ export function buildPublicAssetsResponse(assets) {
     count: assets.length,
     meta: {
       discovery: 'public_catalog',
+      api_catalog: '/.well-known/api-catalog',
+      service_desc: '/api/openapi.json',
       mcp_manifest: '/api/mcp/manifest',
       mcp_endpoint: '/mcp',
       mcp_list_tool: 'list_assets',

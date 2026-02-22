@@ -37,6 +37,10 @@ test('manifest exposes strict agent guardrails and facilitator capability flags'
   const body = res.body;
   assert.ok(body);
 
+  assert.equal(body.discovery?.api_catalog?.endsWith('/.well-known/api-catalog'), true);
+  assert.equal(body.discovery?.service_desc?.endsWith('/api/openapi.json'), true);
+  assert.equal(body.discovery?.service_doc?.endsWith('/WEBMCP.md'), true);
+  assert.equal(body.discovery?.service_meta?.endsWith('/api/mcp/manifest'), true);
   assert.equal(body.download_contract?.method, 'GET');
   assert.match(String(body.download_contract?.first_request || ''), /X-WALLET-ADDRESS/);
   assert.equal(body.facilitator_capabilities?.strict_agent_default_transfer_method, 'eip3009');

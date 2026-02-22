@@ -38,6 +38,8 @@ test('public assets discovery endpoint returns canonical asset response shape', 
   assert.ok(Array.isArray(res.body.assets));
   assert.equal(typeof res.body.count, 'number');
   assert.equal(res.body.count, res.body.assets.length);
+  assert.equal(res.body.meta?.api_catalog, '/.well-known/api-catalog');
+  assert.equal(res.body.meta?.service_desc, '/api/openapi.json');
   assert.equal(res.body.meta?.mcp_manifest, '/api/mcp/manifest');
   assert.equal(res.body.meta?.mcp_endpoint, '/mcp');
   assert.equal(res.body.meta?.mcp_list_tool, 'list_assets');
