@@ -32,6 +32,9 @@ let walletAddress = null;
 let walletType = null;
 let currentAssetDetailId = null;
 let purchaseFlowController = null;
+let emblemAuthInitialized = false;
+let emblemAuthInitPromise = null;
+let vaultCopyButtonsInitialized = false;
 
 function initProviderDiscovery() {
   window?.PullMdWalletProviders?.initDiscovery?.();
@@ -55,6 +58,11 @@ const HELPER_SPECS = Object.freeze({
     globalName: 'PullMdWalletConnect',
     methods: [],
     error: 'Wallet connector helper unavailable'
+  },
+  sdkLoader: {
+    globalName: 'PullMdSdkLoader',
+    methods: ['ensureEthersLoaded', 'ensureEmblemAuthSdkLoaded'],
+    error: 'SDK loader helper unavailable'
   },
   storage: {
     globalName: 'PullMdStorage',
@@ -122,7 +130,7 @@ const HELPER_SPECS = Object.freeze({
       'updateAssetDetailMetadata',
       'hydrateAssetDetailPage',
       'renderOwnedSouls',
-      'loadSouls',
+      'loadAssets',
       'renderCatalogGrid'
     ],
     error: 'Catalog UI helper unavailable'
@@ -182,6 +190,7 @@ function requireHelper(specKey) {
 
 function getWalletCommon() { return requireHelper('walletCommon'); }
 function getWalletConnector() { return requireHelper('walletConnector'); }
+function getSdkLoader() { return requireHelper('sdkLoader'); }
 function getStorageHelper() { return requireHelper('storage'); }
 function getWalletStateHelper() { return requireHelper('walletState'); }
 function getToastHelper() { return requireHelper('toast'); }
@@ -198,6 +207,14 @@ function getSellerGuardHelper() { return requireHelper('sellerGuard'); }
 function getNetworkHelper() { return requireHelper('network'); }
 function getAppBootstrapHelper() { return requireHelper('appBootstrap'); }
 function getUiShell() { return requireHelper('uiShell'); }
+
+async function ensureEthersLoaded() {
+  await getSdkLoader().ensureEthersLoaded();
+}
+
+async function ensureEmblemAuthSdkLoaded() {
+  await getSdkLoader().ensureEmblemAuthSdkLoaded();
+}
 
 function getPurchaseFlowController() {
   if (purchaseFlowController) return purchaseFlowController;
@@ -224,7 +241,7 @@ function getPurchaseFlowController() {
       owned.add(soulId);
       entitlementCacheByWallet.set(normalized, owned);
     },
-    loadSouls,
+    loadAssets,
     updateAssetPagePurchaseState,
     renderSettlementVerification,
     verifySettlementOnchain,
@@ -270,7 +287,7 @@ function disconnectWallet() {
   createdSoulCacheByWallet.clear();
   updateWalletUI();
   updateModeratorNavLinkVisibility();
-  loadSouls();
+  loadAssets();
   updateAssetPagePurchaseState();
   showToast('Wallet disconnected', 'info');
 }
@@ -306,6 +323,7 @@ async function connectWithProvider(rawProvider) {
 }
 
 async function connectWithProviderInternal(rawProvider, type, silent) {
+  await ensureEthersLoaded();
   return getWalletConnector().connectWithProviderInternal({
     rawProvider,
     walletType: type,
@@ -323,7 +341,7 @@ async function connectWithProviderInternal(rawProvider, type, silent) {
       await Promise.all([refreshEntitlementsForWallet(walletAddress), refreshCreatedSoulsForWallet(walletAddress)]);
       updateWalletUI();
       updateModeratorNavLinkVisibility();
-      loadSouls();
+      loadAssets();
       updateAssetPagePurchaseState();
       if (!wasSilent) showToast('Wallet connected', 'success');
     }
@@ -331,6 +349,7 @@ async function connectWithProviderInternal(rawProvider, type, silent) {
 }
 
 async function connectMetaMask() {
+  await ensureEthersLoaded();
   return getWalletConnector().connectWithPreferredKind({
     kind: 'metamask',
     walletType: 'metamask',
@@ -345,6 +364,7 @@ async function connectMetaMask() {
 }
 
 async function connectRabby() {
+  await ensureEthersLoaded();
   return getWalletConnector().connectWithPreferredKind({
     kind: 'rabby',
     walletType: 'rabby',
@@ -359,6 +379,7 @@ async function connectRabby() {
 }
 
 async function connectBankr() {
+  await ensureEthersLoaded();
   return getWalletConnector().connectWithPreferredKind({
     kind: 'bankr',
     walletType: 'bankr',
@@ -373,6 +394,11 @@ async function connectBankr() {
 }
 
 async function connectEmblem() {
+  const initialized = await ensureEmblemAuthInitialized();
+  if (!initialized) {
+    showToast('Emblem Vault not available', 'error');
+    return;
+  }
   const emblemAuth = window.PullMdEmblemAuth;
   if (!emblemAuth || typeof emblemAuth.login !== 'function') {
     showToast('Emblem Vault not available', 'error');
@@ -587,6 +613,7 @@ async function restoreWalletSession() {
     return;
   }
   try {
+    await ensureEthersLoaded();
     await connectWithProviderInternal(providerCandidate, session.walletType, true);
     if (walletAddress !== session.wallet) clearWalletSession();
   } catch (_) {
@@ -622,6 +649,7 @@ function normalizeAddress(address) {
 }
 
 async function getExpectedSellerAddressForSoul(soulId) {
+  await ensureEthersLoaded();
   return getSellerGuardHelper().resolveExpectedSellerAddress({
     soulId,
     cache: sellerAddressCache,
@@ -635,6 +663,7 @@ async function createX402SdkEngine({
   expectedSeller,
   preferredAssetTransferMethod = 'eip3009'
 }) {
+  await ensureEthersLoaded();
   return getX402Helper().createSdkEngine({
     wallet,
     signer: activeSigner,
@@ -651,6 +680,7 @@ async function decodePaymentRequiredWithSdk(response, httpClient) {
 }
 
 async function buildX402PaymentSignature(paymentRequired, soulId, x402Engine = null) {
+  await ensureEthersLoaded();
   const expectedSeller = await getExpectedSellerAddressForSoul(soulId);
   const result = await getX402Helper().createPaymentPayload({
     paymentRequired,
@@ -708,11 +738,9 @@ function readSettlementResponse(response) {
 }
 
 function normalizeAddressLower(value) {
-  try {
-    return ethers.getAddress(String(value || '').trim()).toLowerCase();
-  } catch (_) {
-    return null;
-  }
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(normalized)) return null;
+  return normalized;
 }
 
 function formatMicroUsdc(value) {
@@ -735,6 +763,7 @@ function renderSettlementVerification(view) {
 }
 
 async function verifySettlementOnchain(txHash, expectedSettlement) {
+  await ensureEthersLoaded();
   return getSettlementVerifier().verifySettlementOnchain(txHash, expectedSettlement);
 }
 
@@ -822,7 +851,7 @@ function bindAssetTypeFilters() {
         if (!next || next === currentAssetTypeFilter) return;
         currentAssetTypeFilter = next;
         applyState();
-        await loadSouls();
+        await loadAssets();
       });
     });
     applyState();
@@ -866,8 +895,8 @@ function bindAssetSearchFilter() {
   });
 }
 
-async function loadSouls() {
-  await getCatalogUiHelper().loadSouls({
+async function loadAssets() {
+  await getCatalogUiHelper().loadAssets({
     fetchWithTimeout,
     soulCardsHelper: getSoulCardsHelper(),
     soulCatalogCache,
@@ -979,6 +1008,8 @@ function clearVaultDropdown() {
 }
 
 function initVaultCopyButtons() {
+  if (vaultCopyButtonsInitialized) return;
+  vaultCopyButtonsInitialized = true;
   document.querySelectorAll('.vault-copy-btn').forEach(function (btn) {
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -998,13 +1029,16 @@ function initVaultCopyButtons() {
 }
 
 async function initEmblemAuth() {
+  if (emblemAuthInitialized) return true;
+  await ensureEthersLoaded();
+  await ensureEmblemAuthSdkLoaded();
   var emblemAuth = window.PullMdEmblemAuth;
-  if (!emblemAuth || typeof emblemAuth.init !== 'function') return;
+  if (!emblemAuth || typeof emblemAuth.init !== 'function') return false;
   try {
     var response = await fetchWithTimeout('/api/wallet-config');
     var config = await response.json();
     var appId = String(config && config.emblemAppId || '').trim();
-    if (!appId) { console.warn('[EmblemAuth] No EMBLEM_APP_ID in wallet-config response'); return; }
+    if (!appId) { console.warn('[EmblemAuth] No EMBLEM_APP_ID in wallet-config response'); return false; }
     emblemAuth.init({
       emblemAppId: appId,
       onSessionChange: async function (info) {
@@ -1020,7 +1054,7 @@ async function initEmblemAuth() {
           refreshEntitlementsForWallet(walletAddress);
           refreshCreatedSoulsForWallet(walletAddress);
           updateModeratorNavLinkVisibility();
-          loadSouls();
+          loadAssets();
           updateAssetPagePurchaseState();
         } else {
           walletAddress = null;
@@ -1028,11 +1062,12 @@ async function initEmblemAuth() {
           signer = null;
           updateWalletUI();
           clearVaultDropdown();
-          loadSouls();
+          loadAssets();
           updateAssetPagePurchaseState();
         }
       }
     });
+    emblemAuthInitialized = true;
     console.log('[EmblemAuth] Initialized with appId:', appId);
     initVaultCopyButtons();
     if (emblemAuth.isAuthenticated()) {
@@ -1056,11 +1091,31 @@ async function initEmblemAuth() {
         updateVaultDropdown(emblemAuth.getSession());
         await Promise.all([refreshEntitlementsForWallet(walletAddress), refreshCreatedSoulsForWallet(walletAddress)]);
         updateModeratorNavLinkVisibility();
-        loadSouls();
+        loadAssets();
         updateAssetPagePurchaseState();
       }
     }
-  } catch (_) {}
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function ensureEmblemAuthInitialized() {
+  if (emblemAuthInitialized) return true;
+  if (emblemAuthInitPromise) return emblemAuthInitPromise;
+  emblemAuthInitPromise = initEmblemAuth()
+    .then((initialized) => {
+      if (!initialized) {
+        emblemAuthInitPromise = null;
+      }
+      return initialized;
+    })
+    .catch((error) => {
+      emblemAuthInitPromise = null;
+      throw error;
+    });
+  return emblemAuthInitPromise;
 }
 
 getAppBootstrapHelper().runStartup({
@@ -1073,9 +1128,8 @@ getAppBootstrapHelper().runStartup({
   refreshEntitlements: () => refreshEntitlementsForWallet(walletAddress),
   refreshCreatedSouls: () => refreshCreatedSoulsForWallet(walletAddress),
   hydrateAssetDetailPage,
-  loadSouls,
-  updateAssetPagePurchaseState,
-  initEmblemAuth
+  loadAssets,
+  updateAssetPagePurchaseState
 });
 syncVaultDropdownVisibility();
 bindAssetTypeFilters();

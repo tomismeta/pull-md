@@ -148,6 +148,11 @@
       }
     }
 
+    function refreshAssetCatalog() {
+      if (typeof options.loadAssets !== 'function') return null;
+      return options.loadAssets();
+    }
+
     async function purchaseSoul(soulId, fileNameHint = null) {
       const walletAddress = getWalletAddress();
       const signer = getSigner();
@@ -172,7 +177,7 @@
         const prior = await options.tryRedownload(soulId);
         if (prior.ok) {
           markSoulOwned(soulId);
-          if (typeof options.loadSouls === 'function') options.loadSouls();
+          refreshAssetCatalog();
           const updateAssetPurchaseState =
             options.updateAssetPagePurchaseState || options.updateSoulPagePurchaseState;
           if (typeof updateAssetPurchaseState === 'function') updateAssetPurchaseState();
@@ -261,7 +266,7 @@
         };
         showPaymentSuccess(content, tx, soulId, false, expectedSettlement, deliveredFileName);
         if (typeof options.showToast === 'function') options.showToast('Asset acquired successfully.', 'success');
-        if (typeof options.loadSouls === 'function') options.loadSouls();
+        refreshAssetCatalog();
         const updateAssetPurchaseState =
           options.updateAssetPagePurchaseState || options.updateSoulPagePurchaseState;
         if (typeof updateAssetPurchaseState === 'function') updateAssetPurchaseState();

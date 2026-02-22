@@ -210,7 +210,7 @@ async function hydrateAssetDetailPage({
     });
   }
 
-async function loadSouls({
+async function loadAssets({
     fetchWithTimeout,
     soulCardsHelper,
     soulCatalogCache = [],
@@ -238,13 +238,13 @@ async function loadSouls({
       const response = await fetchWithTimeout(`/api/assets${query}`);
       if (!response.ok) throw new Error('Failed to load asset catalog');
       const payload = await response.json();
-      const souls = payload.assets || payload.souls || [];
+      const assets = payload.assets || payload.souls || [];
       if (typeof setSoulCatalogCache === 'function') {
-        setSoulCatalogCache(souls);
+        setSoulCatalogCache(assets);
       }
       const visible = renderCatalogGrid({
         grid,
-        souls,
+        souls: assets,
         searchQuery,
         soulCardsHelper,
         isSoulAccessible,
@@ -255,7 +255,7 @@ async function loadSouls({
         renderInventorySummary(visible, '');
       }
       if (typeof renderOwnedSouls === 'function') renderOwnedSouls();
-      return { souls, loaded: true };
+      return { assets, loaded: true };
     } catch (error) {
       console.error('Catalog load failed:', error);
       grid.innerHTML = '<p>Assets are temporarily unavailable. Please try again.</p>';
@@ -263,7 +263,7 @@ async function loadSouls({
         renderInventorySummary([], 'Assets are temporarily unavailable.');
       }
       if (typeof renderOwnedSouls === 'function') renderOwnedSouls();
-      return { souls: [], loaded: true, error };
+      return { assets: [], loaded: true, error };
     }
   }
 
@@ -272,7 +272,7 @@ async function loadSouls({
     updateAssetDetailMetadata,
     hydrateAssetDetailPage,
     renderOwnedSouls,
-    loadSouls,
+    loadAssets,
     filterSoulsByQuery,
     renderCatalogGrid
   };
