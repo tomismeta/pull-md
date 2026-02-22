@@ -28,6 +28,10 @@ function normalizeScanState(input) {
   const asset = input && typeof input === 'object' ? input : {};
   const verdict = String(asset.scan_verdict || asset?.scan?.verdict || '').trim().toLowerCase();
   const mode = String(asset.scan_mode || asset?.scan?.mode || '').trim().toLowerCase() || null;
+  const scannerEngine = String(asset.scan_scanner_engine || asset?.scan?.scannerEngine || '').trim() || null;
+  const scannerRuleset = String(asset.scan_scanner_ruleset || asset?.scan?.scannerRuleset || '').trim() || null;
+  const scannerFingerprint =
+    String(asset.scan_scanner_fingerprint || asset?.scan?.scannerFingerprint || '').trim() || null;
   const scannedAt = String(asset.scan_scanned_at || asset?.scan?.scannedAt || '').trim() || null;
   const blocked = Boolean(asset.scan_blocked || asset?.scan?.blocked);
   const summary =
@@ -42,6 +46,9 @@ function normalizeScanState(input) {
     ...asset,
     scan_verdict: verdict || null,
     scan_mode: mode,
+    scan_scanner_engine: scannerEngine,
+    scan_scanner_ruleset: scannerRuleset,
+    scan_scanner_fingerprint: scannerFingerprint,
     scan_scanned_at: scannedAt,
     scan_blocked: blocked,
     scan_summary: summary,

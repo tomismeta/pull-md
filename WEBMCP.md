@@ -53,7 +53,7 @@ Tool invocation contract:
 - For `flow=creator` + `action=publish_listing`, response includes `suggested_listing`.
 
 5. `name=get_listing_template`
-- Returns template for immediate publish payloads plus active scan policy metadata.
+- Returns template for immediate publish payloads plus active scan policy metadata (`mode`, `scanner_engine`, `scanner_ruleset`, `scanner_fingerprint`).
 
 6. `name=publish_listing`
 - Creator wallet-authenticated immediate publish.
@@ -73,6 +73,8 @@ Tool invocation contract:
 - On Vercel, creator publish requires one of these DB vars; otherwise `publish_listing` returns `503 marketplace_persistence_unconfigured` to avoid non-durable listings.
 - Response may include `storage_warning` when persistence configuration is incomplete.
 - Listings include scan metadata fields (`scan_verdict`, `scan_mode`, `scan_summary`, `scan_state`) when available.
+- Scan metadata also includes scanner provenance fields when available:
+`scan_scanner_engine`, `scan_scanner_ruleset`, `scan_scanner_fingerprint`.
 
 9. `name=list_moderators`
 - Lists allowlisted moderator wallet addresses.
@@ -89,8 +91,16 @@ Tool invocation contract:
 `{ asset_id, reason? }`
 - Hides listing from public discovery/purchase without draft state transitions.
 
+12. `POST /api/moderation?action=rescan_listing` (moderator wallet auth)
+- Headers:
+`X-MODERATOR-ADDRESS`, `X-MODERATOR-SIGNATURE`, `X-MODERATOR-TIMESTAMP`
+- Body:
+`{ asset_id }`
+- Re-runs current scanner rules against the current published markdown and stores a fresh `scan_report` without modifying listing content.
+
 UI companion:
 - `/admin.html` provides a lightweight human moderation console for visibility removal only.
+- `/admin.html` provides a lightweight human moderation console for visibility control, edit/delete, scan review approval, and explicit re-scan.
 - It requires connected allowlisted moderator wallet and signs SIWE (EIP-4361) authentication messages per moderation action.
 - `/create.html` provides a lightweight creator console for immediate publish and share-link retrieval.
 - Creator/moderator auth requires SIWE (EIP-4361) message signatures with action-scoped timestamps.

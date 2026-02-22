@@ -17,6 +17,8 @@ const MAX_FINDINGS = 64;
 const MAX_EVIDENCE = 180;
 const MAX_CONFUSABLE_FINDINGS = 8;
 const DEFAULT_MAX_CONTENT_BYTES = 512 * 1024;
+const SCANNER_ENGINE_ID = 'pullmd.markdown-scanner';
+const DEFAULT_RULESET_VERSION = '2026-02-21.phase2';
 
 const parser = unified().use(remarkParse).use(remarkGfm);
 const normalizedUrlCache = new QuickLRU({ maxSize: 2048 });
@@ -148,6 +150,32 @@ function maxContentBytes() {
   const n = Number(process.env.SCAN_MAX_CONTENT_BYTES || DEFAULT_MAX_CONTENT_BYTES);
   if (!Number.isFinite(n) || n < 64 * 1024) return DEFAULT_MAX_CONTENT_BYTES;
   return Math.min(Math.floor(n), 4 * 1024 * 1024);
+}
+
+function rulesetVersion() {
+  const explicit = String(process.env.MARKDOWN_SCAN_RULESET_VERSION || process.env.ASSET_SCAN_RULESET_VERSION || '').trim();
+  return explicit || DEFAULT_RULESET_VERSION;
+}
+
+function scannerFingerprint(scanners = []) {
+  const scannerIds = scanners.map((scanner) => String(scanner?.id || 'scanner')).join(',');
+  const seed = [
+    SCANNER_ENGINE_ID,
+    rulesetVersion(),
+    scannerIds,
+    String(INJECTION_PHRASES.length),
+    String(ROLE_MARKER_PATTERNS.length),
+    String(SECRET_PATTERNS.length)
+  ].join('|');
+  return crypto.createHash('sha256').update(seed, 'utf8').digest('hex').slice(0, 16);
+}
+
+function scannerMetadata(scanners = []) {
+  return {
+    scanner_engine: SCANNER_ENGINE_ID,
+    scanner_ruleset: rulesetVersion(),
+    scanner_fingerprint: scannerFingerprint(scanners)
+  };
 }
 
 function truncateEvidence(value) {
@@ -782,12 +810,15 @@ function createScannerErrorFinding(scannerId, error, failPolicy) {
 }
 
 export function getContentScannerConfig() {
+  const scanners = DEFAULT_SCANNERS.map((scanner) => scanner.id);
+  const metadata = scannerMetadata(DEFAULT_SCANNERS);
   return {
     mode: scanMode(),
     fail_policy: scanFailPolicy(),
     url_reputation_enabled: urlhausEnabled(),
     url_reputation_source: urlhausEnabled() ? 'urlhaus' : null,
-    scanners: DEFAULT_SCANNERS.map((scanner) => scanner.id)
+    scanners,
+    ...metadata
   };
 }
 
@@ -796,6 +827,7 @@ export async function scanMarkdownAssetContent(input = {}, options = {}) {
   const mode = normalizeScanMode(options.mode || scanMode());
   const failPolicy = normalizeFailPolicy(options.failPolicy || scanFailPolicy());
   const scanners = Array.isArray(options.scanners) && options.scanners.length > 0 ? options.scanners : DEFAULT_SCANNERS;
+  const metadata = scannerMetadata(scanners);
   const contentMarkdown = String(input?.content_markdown || '');
   const ast = parseMarkdownAst(contentMarkdown);
   const urls = extractUrls(contentMarkdown, ast);
@@ -823,7 +855,8 @@ export async function scanMarkdownAssetContent(input = {}, options = {}) {
       content_sha256: contentHash,
       findings: [],
       summary: buildSummary([]),
-      scanners: scanners.map((scanner) => String(scanner?.id || 'scanner'))
+      scanners: scanners.map((scanner) => String(scanner?.id || 'scanner')),
+      ...metadata
     };
   }
 
@@ -849,7 +882,8 @@ export async function scanMarkdownAssetContent(input = {}, options = {}) {
       content_sha256: contentHash,
       findings,
       summary: buildSummary(findings),
-      scanners: scanners.map((scanner) => String(scanner?.id || 'scanner'))
+      scanners: scanners.map((scanner) => String(scanner?.id || 'scanner')),
+      ...metadata
     };
   }
 
@@ -882,6 +916,7 @@ export async function scanMarkdownAssetContent(input = {}, options = {}) {
     content_sha256: contentHash,
     findings,
     summary: buildSummary(findings),
-    scanners: scanners.map((scanner) => String(scanner?.id || 'scanner'))
+    scanners: scanners.map((scanner) => String(scanner?.id || 'scanner')),
+    ...metadata
   };
 }

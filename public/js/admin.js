@@ -584,6 +584,7 @@ function renderVisible(items) {
           <div class="admin-card-actions">
             ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
             <button class="btn btn-ghost" data-action="view-scan" data-asset="${escapeHtml(item.asset_id)}">scan details</button>
+            <button class="btn btn-ghost" data-action="rescan-listing" data-asset="${escapeHtml(item.asset_id)}">re-scan</button>
             ${showApproveScanButton(item)}
             <button class="btn btn-ghost" data-action="edit-listing" data-asset="${escapeHtml(item.asset_id)}">edit</button>
             <button class="btn btn-primary" data-action="hide-listing" data-asset="${escapeHtml(item.asset_id)}">remove visibility</button>
@@ -620,6 +621,7 @@ function renderHidden(items) {
           <div class="admin-card-actions">
             ${item.share_url ? `<a class="btn btn-ghost" href="${escapeHtml(item.share_url)}" target="_blank" rel="noopener noreferrer">open</a>` : ''}
             <button class="btn btn-ghost" data-action="view-scan" data-asset="${escapeHtml(item.asset_id)}">scan details</button>
+            <button class="btn btn-ghost" data-action="rescan-listing" data-asset="${escapeHtml(item.asset_id)}">re-scan</button>
             ${showApproveScanButton(item)}
             <button class="btn btn-ghost" data-action="edit-listing" data-asset="${escapeHtml(item.asset_id)}">edit</button>
             <button class="btn btn-primary" data-action="restore-listing" data-asset="${escapeHtml(item.asset_id)}">restore visibility</button>
@@ -690,7 +692,9 @@ function renderScanDetailsModal(data = {}) {
 
   if (meta) {
     const verdict = String(report?.verdict || listing?.scan_verdict || '-').toLowerCase();
-    meta.textContent = `${listing?.asset_id || '-'} · verdict ${verdict} · scanned ${formatDate(report?.scanned_at || listing?.scan_scanned_at || null)}`;
+    const ruleset =
+      String(report?.scanner_ruleset || listing?.scan_scanner_ruleset || '').trim() || 'default';
+    meta.textContent = `${listing?.asset_id || '-'} · verdict ${verdict} · scanned ${formatDate(report?.scanned_at || listing?.scan_scanned_at || null)} · ruleset ${ruleset}`;
   }
   if (summary) {
     const stats = report?.summary && typeof report.summary === 'object' ? report.summary : {};
@@ -699,6 +703,8 @@ function renderScanDetailsModal(data = {}) {
         <p class="admin-line">status: <code>${escapeHtml(reviewStatus === 'approved' ? 'reviewed clean' : 'not reviewed')}</code></p>
         <p class="admin-line">findings total: <code>${escapeHtml(String(Number(stats?.total || 0)))}</code></p>
         <p class="admin-line">warn: <code>${escapeHtml(String(Number(stats?.by_action?.warn || 0)))}</code> · block: <code>${escapeHtml(String(Number(stats?.by_action?.block || 0)))}</code></p>
+        <p class="admin-line">scanner: <code>${escapeHtml(String(report?.scanner_engine || 'pullmd.markdown-scanner'))}</code></p>
+        <p class="admin-line">ruleset: <code>${escapeHtml(String(report?.scanner_ruleset || listing?.scan_scanner_ruleset || 'default'))}</code></p>
       </article>
     `;
   }
@@ -749,6 +755,16 @@ async function approveListingScan(assetId) {
     method: 'POST',
     moderatorAuth: true,
     body: { asset_id: assetId, note }
+  });
+  return response;
+}
+
+async function rescanListing(assetId) {
+  await requireAllowedModerator();
+  const response = await apiCall('rescan_listing', {
+    method: 'POST',
+    moderatorAuth: true,
+    body: { asset_id: assetId }
   });
   return response;
 }
@@ -1316,7 +1332,7 @@ function bindEvents() {
     if (!action) return;
     const assetId = target.getAttribute('data-asset');
     if (!assetId) return;
-    if (action !== 'hide-listing' && action !== 'restore-listing' && action !== 'delete-listing' && action !== 'edit-listing' && action !== 'view-scan' && action !== 'approve-scan') {
+    if (action !== 'hide-listing' && action !== 'restore-listing' && action !== 'delete-listing' && action !== 'edit-listing' && action !== 'view-scan' && action !== 'approve-scan' && action !== 'rescan-listing') {
       return;
     }
     if (action !== 'edit-listing' && action !== 'view-scan') target.setAttribute('disabled', 'true');
@@ -1343,6 +1359,15 @@ function bindEvents() {
         await approveListingScan(assetId);
         showToast('Scan marked as reviewed clean', 'success');
         await loadModerationListings();
+      } else if (action === 'rescan-listing') {
+        const result = await rescanListing(assetId);
+        const verdict = String(result?.scan_report?.verdict || '').trim().toLowerCase();
+        if (verdict === 'clean') showToast('Security scan complete: clean', 'success');
+        else if (verdict === 'warn') showToast('Security scan complete: warnings found', 'warning');
+        else if (verdict === 'block') showToast('Security scan complete: critical findings', 'error');
+        else showToast('Security scan complete', 'success');
+        await loadModerationListings();
+        await openScanDetailsModal(assetId);
       }
     } catch (error) {
       showToast(error.message, 'error');

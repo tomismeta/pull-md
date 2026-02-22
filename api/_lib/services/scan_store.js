@@ -89,6 +89,9 @@ async function ensureSecuritySchema() {
         revision_sha256 TEXT,
         scan_verdict TEXT NOT NULL,
         scan_mode TEXT,
+        scanner_engine TEXT,
+        scanner_ruleset TEXT,
+        scanner_fingerprint TEXT,
         blocked BOOLEAN NOT NULL DEFAULT FALSE,
         summary JSONB NOT NULL DEFAULT '{}'::jsonb,
         findings JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -108,6 +111,18 @@ async function ensureSecuritySchema() {
       ON ${reportsTable} (scan_verdict, occurred_at DESC);
     `);
     await pool.query(`
+      ALTER TABLE ${reportsTable}
+      ADD COLUMN IF NOT EXISTS scanner_engine TEXT;
+    `);
+    await pool.query(`
+      ALTER TABLE ${reportsTable}
+      ADD COLUMN IF NOT EXISTS scanner_ruleset TEXT;
+    `);
+    await pool.query(`
+      ALTER TABLE ${reportsTable}
+      ADD COLUMN IF NOT EXISTS scanner_fingerprint TEXT;
+    `);
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS ${latestTable} (
         asset_id TEXT PRIMARY KEY,
         asset_type TEXT,
@@ -115,12 +130,27 @@ async function ensureSecuritySchema() {
         revision_sha256 TEXT,
         scan_verdict TEXT NOT NULL,
         scan_mode TEXT,
+        scanner_engine TEXT,
+        scanner_ruleset TEXT,
+        scanner_fingerprint TEXT,
         blocked BOOLEAN NOT NULL DEFAULT FALSE,
         summary JSONB NOT NULL DEFAULT '{}'::jsonb,
         findings_preview JSONB NOT NULL DEFAULT '[]'::jsonb,
         content_sha256 TEXT,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+    await pool.query(`
+      ALTER TABLE ${latestTable}
+      ADD COLUMN IF NOT EXISTS scanner_engine TEXT;
+    `);
+    await pool.query(`
+      ALTER TABLE ${latestTable}
+      ADD COLUMN IF NOT EXISTS scanner_ruleset TEXT;
+    `);
+    await pool.query(`
+      ALTER TABLE ${latestTable}
+      ADD COLUMN IF NOT EXISTS scanner_fingerprint TEXT;
     `);
   })();
 
@@ -163,6 +193,9 @@ function normalizeScanSnapshot(row) {
   return {
     verdict: asString(row.scan_verdict).toLowerCase() || null,
     mode: asString(row.scan_mode).toLowerCase() || null,
+    scanner_engine: asString(row.scanner_engine) || null,
+    scanner_ruleset: asString(row.scanner_ruleset) || null,
+    scanner_fingerprint: asString(row.scanner_fingerprint) || null,
     blocked: Boolean(row.blocked),
     scanned_at: row.latest_occurred_at ? new Date(row.latest_occurred_at).toISOString() : null,
     content_sha256: asString(row.content_sha256) || asString(row.revision_sha256) || null,
@@ -186,6 +219,7 @@ export async function getLatestAssetScan(assetId) {
   const result = await pool.query(
     `
       SELECT asset_id, asset_type, latest_occurred_at, revision_sha256, scan_verdict, scan_mode, blocked, summary, findings_preview, content_sha256
+      , scanner_engine, scanner_ruleset, scanner_fingerprint
       FROM ${latestTable}
       WHERE asset_id = $1
       LIMIT 1
@@ -211,6 +245,9 @@ function normalizeScanReportRow(row) {
     asset_type: asString(row.asset_type) || null,
     verdict: asString(row.scan_verdict).toLowerCase() || null,
     mode: asString(row.scan_mode).toLowerCase() || null,
+    scanner_engine: asString(row.scanner_engine) || null,
+    scanner_ruleset: asString(row.scanner_ruleset) || null,
+    scanner_fingerprint: asString(row.scanner_fingerprint) || null,
     blocked: Boolean(row.blocked),
     scanned_at: row.occurred_at ? new Date(row.occurred_at).toISOString() : null,
     content_sha256: asString(row.revision_sha256) || null,
@@ -235,6 +272,7 @@ export async function getLatestAssetScanReport(assetId) {
   const result = await pool.query(
     `
       SELECT asset_id, asset_type, revision_sha256, scan_verdict, scan_mode, blocked, summary, findings, context, occurred_at
+      , scanner_engine, scanner_ruleset, scanner_fingerprint
       FROM ${reportsTable}
       WHERE asset_id = $1
       ORDER BY occurred_at DESC, id DESC
@@ -285,6 +323,9 @@ export async function persistAssetScanReport({
   const verdict = asString(report.verdict || 'warn').toLowerCase() || 'warn';
   const mode = asString(report.mode || 'advisory').toLowerCase() || 'advisory';
   const blocked = Boolean(report.blocked);
+  const scannerEngine = asString(report.scanner_engine || '');
+  const scannerRuleset = asString(report.scanner_ruleset || '');
+  const scannerFingerprint = asString(report.scanner_fingerprint || '');
   const summary = report.summary && typeof report.summary === 'object' ? report.summary : {};
   const findings = Array.isArray(report.findings) ? report.findings : [];
   const revisionSha = asString(report.content_sha256 || '');
@@ -299,6 +340,9 @@ export async function persistAssetScanReport({
     revisionSha || null,
     verdict,
     mode,
+    scannerEngine || null,
+    scannerRuleset || null,
+    scannerFingerprint || null,
     blocked,
     JSON.stringify(summary),
     JSON.stringify(findings),
@@ -312,16 +356,16 @@ export async function persistAssetScanReport({
   await pool.query(
     `
       INSERT INTO ${reportsTable}
-      (asset_id, asset_type, revision_sha256, scan_verdict, scan_mode, blocked, summary, findings, context, wallet_address, source, route, action)
-      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10, $11, $12, $13)
+      (asset_id, asset_type, revision_sha256, scan_verdict, scan_mode, scanner_engine, scanner_ruleset, scanner_fingerprint, blocked, summary, findings, context, wallet_address, source, route, action)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13, $14, $15, $16)
     `,
     values
   );
   await pool.query(
     `
       INSERT INTO ${latestTable}
-      (asset_id, asset_type, latest_occurred_at, revision_sha256, scan_verdict, scan_mode, blocked, summary, findings_preview, content_sha256, updated_at)
-      VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, NOW())
+      (asset_id, asset_type, latest_occurred_at, revision_sha256, scan_verdict, scan_mode, scanner_engine, scanner_ruleset, scanner_fingerprint, blocked, summary, findings_preview, content_sha256, updated_at)
+      VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12, NOW())
       ON CONFLICT (asset_id)
       DO UPDATE SET
         asset_type = EXCLUDED.asset_type,
@@ -329,6 +373,9 @@ export async function persistAssetScanReport({
         revision_sha256 = EXCLUDED.revision_sha256,
         scan_verdict = EXCLUDED.scan_verdict,
         scan_mode = EXCLUDED.scan_mode,
+        scanner_engine = EXCLUDED.scanner_engine,
+        scanner_ruleset = EXCLUDED.scanner_ruleset,
+        scanner_fingerprint = EXCLUDED.scanner_fingerprint,
         blocked = EXCLUDED.blocked,
         summary = EXCLUDED.summary,
         findings_preview = EXCLUDED.findings_preview,
@@ -341,6 +388,9 @@ export async function persistAssetScanReport({
       revisionSha || null,
       verdict,
       mode,
+      scannerEngine || null,
+      scannerRuleset || null,
+      scannerFingerprint || null,
       blocked,
       JSON.stringify(summary),
       JSON.stringify(findingsPreview(findings)),
@@ -357,6 +407,9 @@ export async function persistAssetScanReport({
       asset_type: normalizedAssetType || null,
       scan_verdict: verdict,
       scan_mode: mode,
+      scanner_engine: scannerEngine || null,
+      scanner_ruleset: scannerRuleset || null,
+      scanner_fingerprint: scannerFingerprint || null,
       blocked,
       summary,
       findings_preview: findingsPreview(findings),
