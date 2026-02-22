@@ -1,4 +1,5 @@
 import manifestHandler from './manifest.js';
+import { setDiscoveryHeaders } from '../_lib/discovery.js';
 import { setCors } from '../_lib/payments.js';
 
 function escapeCell(value) {
@@ -62,6 +63,7 @@ function renderWebmcpMarkdown(manifest) {
   const dl = manifest?.download_contract || {};
   const errors = manifest?.error_codes || {};
   const capabilities = manifest?.facilitator_capabilities || {};
+  const discovery = manifest?.discovery || {};
 
   const errorLines = Object.entries(errors).map(([code, description]) => `- \`${escapeCell(code)}\`: ${escapeCell(description)}`);
   const capabilityLines = Object.entries(capabilities).map(([key, value]) => `- \`${escapeCell(key)}\`: ${escapeCell(value)}`);
@@ -72,6 +74,8 @@ function renderWebmcpMarkdown(manifest) {
     '> Generated dynamically from `GET /api/mcp/manifest`.',
     '',
     '## Canonical Endpoints',
+    '- API catalog: `GET /.well-known/api-catalog`',
+    '- OpenAPI service description: `GET /api/openapi.json`',
     '- Manifest: `GET /api/mcp/manifest`',
     '- Markdown contract: `GET /WEBMCP.md`',
     '- MCP transport: `POST /mcp`',
@@ -83,6 +87,12 @@ function renderWebmcpMarkdown(manifest) {
     `- Description: ${escapeCell(manifest?.description || '')}`,
     `- Base URL: ${escapeCell(manifest?.url || '')}`,
     `- Schema: ${escapeCell(manifest?.schema_version || '')}`,
+    '',
+    '## Discovery',
+    `- API catalog: ${escapeCell(discovery.api_catalog || '/.well-known/api-catalog')}`,
+    `- Service description: ${escapeCell(discovery.service_desc || '/api/openapi.json')}`,
+    `- Service docs: ${escapeCell(discovery.service_doc || '/WEBMCP.md')}`,
+    `- Service metadata: ${escapeCell(discovery.service_meta || '/api/mcp/manifest')}`,
     '',
     '## Auth and Payment',
     `- Type: \`${escapeCell(auth.type)}\``,
@@ -119,6 +129,7 @@ function renderWebmcpMarkdown(manifest) {
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
+  setDiscoveryHeaders(res, req);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();

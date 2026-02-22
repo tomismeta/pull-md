@@ -1,5 +1,16 @@
 {
   "version": 2,
+  "headers": [
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "</.well-known/api-catalog>; rel=\"api-catalog\", </api/openapi.json>; rel=\"service-desc\"; type=\"application/vnd.oai.openapi+json;version=3.1\", </WEBMCP.md>; rel=\"service-doc\"; type=\"text/markdown\", </api/mcp/manifest>; rel=\"service-meta\"; type=\"application/json\""
+        }
+      ]
+    }
+  ],
   "functions": {
     "api/assets/[id]/download.js": {
       "includeFiles": "souls/**/*.md"
@@ -21,6 +32,10 @@
     {
       "src": "/api/assets/([^/]+)/download",
       "dest": "/api/assets/[id]/download.js?id=$1"
+    },
+    {
+      "src": "/\\.well-known/api-catalog",
+      "dest": "/api/well-known/api-catalog.js"
     },
     {
       "src": "/api/(.*)",

@@ -1,5 +1,6 @@
 import { getMcpToolsForManifest } from '../_lib/mcp_tools.js';
 import { getMcpServerMetadata } from '../_lib/mcp_sdk.js';
+import { setDiscoveryHeaders } from '../_lib/discovery.js';
 
 function enabledAssetTypes() {
   const raw = String(process.env.ENABLED_MARKDOWN_ASSET_TYPES || 'soul,skill')
@@ -26,6 +27,7 @@ export default function handler(req, res) {
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Content-Type', 'application/json');
+  setDiscoveryHeaders(res, req);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -43,6 +45,12 @@ export default function handler(req, res) {
     name: 'PULL.md',
     description: 'Markdown asset marketplace with x402 payments and receipt-first redownloads',
     url: baseUrl,
+    discovery: {
+      api_catalog: `${baseUrl}/.well-known/api-catalog`,
+      service_desc: `${baseUrl}/api/openapi.json`,
+      service_doc: `${baseUrl}/WEBMCP.md`,
+      service_meta: `${baseUrl}/api/mcp/manifest`
+    },
     marketplace: {
       enabled_asset_types: enabledAssetTypes(),
       ethos: ['plain_text_first', 'portable', 'diff_friendly', 'agent_ready', 'human_readable']

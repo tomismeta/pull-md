@@ -1,4 +1,5 @@
 import { setCors } from '../_lib/payments.js';
+import { setDiscoveryHeaders } from '../_lib/discovery.js';
 import { getMcpServerMetadata, handleMcpRequestWithSdk } from '../_lib/mcp_sdk.js';
 import { recordTelemetryEvent } from '../_lib/telemetry.js';
 
@@ -15,6 +16,7 @@ function sendJsonRpcInternalError(res, message = 'Internal error') {
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
+  setDiscoveryHeaders(res, req);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();

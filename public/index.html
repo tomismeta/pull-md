@@ -18,6 +18,10 @@
   <meta name="mcp:version" content="1.0">
   <meta name="mcp:endpoint" content="/mcp">
   <meta name="mcp:manifest" content="/api/mcp/manifest">
+  <link rel="api-catalog" href="/.well-known/api-catalog" type="application/linkset+json">
+  <link rel="service-desc" href="/api/openapi.json" type="application/vnd.oai.openapi+json;version=3.1">
+  <link rel="service-doc" href="/WEBMCP.md" type="text/markdown">
+  <link rel="service-meta" href="/api/mcp/manifest" type="application/json">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
   <link rel="shortcut icon" href="/favicon.ico">
@@ -169,23 +173,29 @@
       <div class="container">
         <div class="agent-api-card">
           <h3>For Agents</h3>
-          <p>MCP handles discovery and orchestration. Canonical x402 HTTP handles payment and delivery.</p>
+          <p>MCP handles orchestration. RFC9727 API catalog + OpenAPI expose standards-aligned REST and MCP discovery.</p>
           <div class="agent-quickstart">
             <p><strong>Quickstart</strong></p>
             <code>POST /mcp</code>
-            <code>GET /api/mcp/manifest</code>
-            <code>GET /api/assets</code>
+            <code>GET /.well-known/api-catalog</code>
             <code>GET /api/assets/{id}/download</code>
           </div>
-          <pre class="hero-code-block">MCP transport
+          <pre class="hero-code-block">Standards discovery
+GET /.well-known/api-catalog
+GET /api/openapi.json
+
+MCP transport
 POST /mcp
 
 Canonical x402 purchase and re-download
 GET /api/assets/{id}/download
 
-Full contract and examples
+Full contract + metadata
+GET /api/mcp/manifest
 GET /WEBMCP.md</pre>
           <div class="agent-api-actions">
+            <a href="/.well-known/api-catalog" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Open API Catalog</a>
+            <a href="/api/openapi.json" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Open OpenAPI</a>
             <a href="/api/mcp/manifest" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Open MCP Manifest</a>
             <a href="/WEBMCP.md" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Read WebMCP Contract</a>
           </div>
