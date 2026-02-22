@@ -8,6 +8,7 @@ import {
   listModeratorWallets,
   listPublishedListingSummaries,
   publishCreatorListingDirect,
+  rescanPublishedListingByModerator,
   setListingScanReview,
   setListingVisibility,
   updatePublishedListingByModerator,
@@ -17,6 +18,7 @@ import {
 import { AppError } from '../errors.js';
 import { getTelemetryDashboard, normalizeTelemetryWindowHours, recordTelemetryEvent } from '../telemetry.js';
 import { resolveSiweIdentity, verifyRedownloadSessionToken } from '../payments.js';
+import { getContentScannerConfig } from './content_scanner.js';
 
 const ETH_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
@@ -180,6 +182,9 @@ function scanMetadataForTelemetry(scanReport) {
   return {
     scan_verdict: String(scan.verdict || '').trim() || null,
     scan_mode: String(scan.mode || '').trim() || null,
+    scan_scanner_engine: String(scan.scanner_engine || '').trim() || null,
+    scan_scanner_ruleset: String(scan.scanner_ruleset || '').trim() || null,
+    scan_scanner_fingerprint: String(scan.scanner_fingerprint || '').trim() || null,
     scan_blocked: Boolean(scan.blocked),
     scan_total_findings: Number(scan?.summary?.total || 0),
     scan_block_findings: Number(scan?.summary?.by_action?.block || 0),
@@ -208,6 +213,9 @@ function sanitizeScanReportForClient(scanReport) {
   return {
     verdict: String(scan.verdict || '').trim().toLowerCase() || null,
     mode: String(scan.mode || '').trim().toLowerCase() || null,
+    scanner_engine: String(scan.scanner_engine || '').trim() || null,
+    scanner_ruleset: String(scan.scanner_ruleset || '').trim() || null,
+    scanner_fingerprint: String(scan.scanner_fingerprint || '').trim() || null,
     blocked: Boolean(scan.blocked),
     scanned_at: String(scan.scanned_at || '').trim() || null,
     summary:
@@ -244,6 +252,9 @@ export function getCreatorMarketplaceSupportedActions() {
     'list_moderators',
     'get_telemetry_dashboard',
     'list_moderation_listings',
+    'get_listing_scan_details',
+    'approve_listing_scan',
+    'rescan_listing',
     'remove_listing_visibility',
     'restore_listing_visibility',
     'update_listing',
@@ -278,12 +289,16 @@ export async function executeCreatorMarketplaceAction({
   }
 
   if (normalizedAction === 'get_listing_template' && normalizedMethod === 'GET') {
+    const scannerConfig = getContentScannerConfig();
     return {
       template: getMarketplaceDraftTemplate(),
       security_scan: {
         enabled: true,
-        stages: ['publish', 'moderation_update'],
-        mode: String(process.env.CONTENT_SCANNER_MODE || 'advisory').trim().toLowerCase() || 'advisory',
+        stages: ['publish', 'moderation_update', 'moderation_rescan'],
+        mode: scannerConfig.mode,
+        scanner_engine: scannerConfig.scanner_engine,
+        scanner_ruleset: scannerConfig.scanner_ruleset,
+        scanner_fingerprint: scannerConfig.scanner_fingerprint,
         outcomes: {
           clean: 'No findings detected.',
           warn: 'Non-blocking findings detected; returned in scan_report.',
@@ -584,6 +599,47 @@ export async function executeCreatorMarketplaceAction({
       listing: withShareUrl(baseUrl, result.listing),
       scan_report: sanitizeDetailedScanReportForClient(result.scan_report),
       scan_review: result.listing?.scan_review || null
+    };
+  }
+
+  if (normalizedAction === 'rescan_listing' && normalizedMethod === 'POST') {
+    const moderator = moderatorAuthFromRequest({ headers, body: requestBody, action: normalizedAction });
+    if (!moderator.ok) {
+      throw new AppError(401, moderatorAuthError(normalizedAction, moderator, headers));
+    }
+    const assetId = String(requestBody.asset_id || '').trim();
+    if (!assetId) throw new AppError(400, { error: 'Missing required field: asset_id' });
+    const result = await rescanPublishedListingByModerator({
+      assetId,
+      moderator: moderator.wallet,
+      scanContext: {
+        source: telemetrySource,
+        route: telemetryRoute,
+        action: normalizedAction
+      }
+    });
+    if (!result.ok) {
+      const statusCode = /not found/i.test(result.error) ? 404 : 400;
+      throw new AppError(statusCode, { ok: false, error: result.error });
+    }
+    recordMarketplaceTelemetry({
+      eventType: 'moderation.action_success',
+      source: telemetrySource,
+      route: telemetryRoute,
+      httpMethod: telemetryMethod,
+      action: normalizedAction,
+      walletAddress: moderator.wallet,
+      assetId,
+      success: true,
+      statusCode: 200,
+      metadata: {
+        ...scanMetadataForTelemetry(result.scan_report)
+      }
+    });
+    return {
+      ok: true,
+      listing: withShareUrl(baseUrl, result.listing),
+      scan_report: sanitizeDetailedScanReportForClient(result.scan_report)
     };
   }
 

@@ -14,6 +14,7 @@ import {
   listModeratorWallets,
   listPublishedListingSummaries,
   publishCreatorListingDirect,
+  rescanPublishedListingByModerator,
   setListingVisibility,
   updatePublishedListingByModerator,
   verifyCreatorAuth,
@@ -27,6 +28,7 @@ test('immediate publish + visibility removal flow', async () => {
   const originalMarketplaceDbUrl = process.env.MARKETPLACE_DATABASE_URL;
   const originalDatabaseUrl = process.env.DATABASE_URL;
   const originalPostgresUrl = process.env.POSTGRES_URL;
+  const originalScanRuleset = process.env.MARKDOWN_SCAN_RULESET_VERSION;
 
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'pullmd-marketplace-test-'));
   process.chdir(tempDir);
@@ -35,6 +37,7 @@ test('immediate publish + visibility removal flow', async () => {
   delete process.env.MARKETPLACE_DATABASE_URL;
   delete process.env.DATABASE_URL;
   delete process.env.POSTGRES_URL;
+  process.env.MARKDOWN_SCAN_RULESET_VERSION = 'test-ruleset-v2';
 
   try {
     const { getSoul, getSoulResolved, listSouls, listSoulsResolved, loadSoulContent } = await import(
@@ -160,6 +163,21 @@ test('immediate publish + visibility removal flow', async () => {
     assert.equal(updated.listing.name, 'Creator Alpha Revised');
     assert.equal(updated.listing.price_micro_usdc, '420000');
 
+    const rescanned = await rescanPublishedListingByModerator({
+      assetId: 'creator-alpha-v1',
+      moderator: moderatorAuth.wallet,
+      scanContext: {
+        source: 'test',
+        route: '/tests/marketplace-flow',
+        action: 'rescan_listing'
+      }
+    });
+    assert.equal(rescanned.ok, true);
+    assert.equal(String(rescanned?.scan_report?.scanner_engine || ''), 'pullmd.markdown-scanner');
+    assert.equal(String(rescanned?.scan_report?.scanner_ruleset || ''), 'test-ruleset-v2');
+    assert.ok(String(rescanned?.scan_report?.scanner_fingerprint || '').length > 0);
+    assert.equal(String(rescanned?.listing?.scan_review?.status || ''), '');
+
     const moderationRows = await listModerationListingDetails();
     const revised = moderationRows.find((item) => item.asset_id === 'creator-alpha-v1');
     assert.ok(revised);
@@ -182,6 +200,7 @@ test('immediate publish + visibility removal flow', async () => {
     assert.ok(auditRaw.includes('"event":"visibility_hidden"'));
     assert.ok(auditRaw.includes('"event":"visibility_public"'));
     assert.ok(auditRaw.includes('"event":"moderator_edit"'));
+    assert.ok(auditRaw.includes('"event":"moderator_rescan"'));
     assert.ok(auditRaw.includes('"event":"moderator_delete"'));
   } finally {
     process.chdir(originalCwd);
@@ -195,6 +214,8 @@ test('immediate publish + visibility removal flow', async () => {
     else process.env.DATABASE_URL = originalDatabaseUrl;
     if (originalPostgresUrl === undefined) delete process.env.POSTGRES_URL;
     else process.env.POSTGRES_URL = originalPostgresUrl;
+    if (originalScanRuleset === undefined) delete process.env.MARKDOWN_SCAN_RULESET_VERSION;
+    else process.env.MARKDOWN_SCAN_RULESET_VERSION = originalScanRuleset;
     await rm(tempDir, { recursive: true, force: true });
   }
 });

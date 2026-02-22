@@ -49,6 +49,7 @@ function mapCreatorActionToTool(action) {
 
 function normalizeModeratorAction(action) {
   if (action === 'get_telemetry_dashboard') return 'get_telemetry_dashboard';
+  if (action === 'rescan_listing') return 'rescan_listing';
   if (action === 'remove_listing_visibility') return 'remove_listing_visibility';
   if (action === 'restore_listing_visibility') return 'restore_listing_visibility';
   if (action === 'update_listing') return 'update_listing';
@@ -142,6 +143,10 @@ function buildAuthChallengePayload(args = {}, context = {}) {
                 asset_id: '<asset_id>',
                 reason: '<optional_reason>'
               }
+            : action === 'rescan_listing'
+              ? {
+                  asset_id: '<asset_id>'
+                }
             : action === 'update_listing'
               ? {
                 asset_id: '<asset_id>',

@@ -72,7 +72,8 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 `asset_id`, `share_url`, and `purchase_endpoint`.
 - Security scanning:
   - `publish_listing` and moderator `update_listing` trigger markdown security scanning automatically.
-  - Responses include `scan_report` with `verdict`, `mode`, `summary`, and reason keys.
+  - Moderator `rescan_listing` can re-run current scanner rules on existing content without editing.
+  - Responses include `scan_report` with `verdict`, `mode`, `summary`, reason keys, and scanner provenance (`scanner_engine`, `scanner_ruleset`, `scanner_fingerprint`).
   - `scan_mode=advisory` returns findings without blocking; `scan_mode=enforce` blocks critical findings.
 - Published listings are immediately discoverable in:
 `POST /mcp` `tools/call` `name=list_assets` and purchasable through `GET /api/assets/{id}/download`.
@@ -105,7 +106,7 @@ Audit trail:
 - Lightweight moderation UI:
 `/admin.html` (requires connected wallet in moderator allowlist; action requests are signed per call).
 - Moderation scope:
-remove listing visibility only (`remove_listing_visibility`). No approval/publish queue workflow.
+hide/restore, edit, delete, scan review approve, and explicit re-scan (`rescan_listing`). No approval/publish queue workflow.
 - Creator UI:
 `/create.html` (wallet-authenticated immediate publish with share-link output + list of creator-owned published assets).
 

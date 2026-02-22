@@ -678,6 +678,9 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
       ? {
           verdict: asString(draft.scan_report.verdict).toLowerCase() || null,
           mode: asString(draft.scan_report.mode).toLowerCase() || null,
+          scannerEngine: asString(draft.scan_report.scanner_engine) || null,
+          scannerRuleset: asString(draft.scan_report.scanner_ruleset) || null,
+          scannerFingerprint: asString(draft.scan_report.scanner_fingerprint) || null,
           blocked: Boolean(draft.scan_report.blocked),
           scannedAt: asString(draft.scan_report.scanned_at) || null,
           contentSha256: asString(draft.scan_report.content_sha256) || null,
@@ -744,6 +747,9 @@ function toCatalogScanFromReport(scanReport) {
   return {
     verdict: asString(report.verdict).toLowerCase() || null,
     mode: asString(report.mode).toLowerCase() || null,
+    scannerEngine: asString(report.scanner_engine) || null,
+    scannerRuleset: asString(report.scanner_ruleset) || null,
+    scannerFingerprint: asString(report.scanner_fingerprint) || null,
     blocked: Boolean(report.blocked),
     scannedAt: asString(report.scanned_at) || null,
     contentSha256: asString(report.content_sha256) || null,
@@ -766,6 +772,9 @@ function toCatalogScanFromLatest(latest) {
   return {
     verdict: asString(scan.verdict).toLowerCase() || null,
     mode: asString(scan.mode).toLowerCase() || null,
+    scannerEngine: asString(scan.scanner_engine) || null,
+    scannerRuleset: asString(scan.scanner_ruleset) || null,
+    scannerFingerprint: asString(scan.scanner_fingerprint) || null,
     blocked: Boolean(scan.blocked),
     scannedAt: asString(scan.scanned_at) || null,
     contentSha256: asString(scan.content_sha256) || null,
@@ -1716,6 +1725,9 @@ function summarizePublishedListing(entry) {
     share_path: sharePath,
     scan_verdict: asString(listing?.scan?.verdict || null) || null,
     scan_mode: asString(listing?.scan?.mode || null) || null,
+    scan_scanner_engine: asString(listing?.scan?.scannerEngine || null) || null,
+    scan_scanner_ruleset: asString(listing?.scan?.scannerRuleset || null) || null,
+    scan_scanner_fingerprint: asString(listing?.scan?.scannerFingerprint || null) || null,
     scan_blocked: Boolean(listing?.scan?.blocked),
     scan_scanned_at: asString(listing?.scan?.scannedAt || null) || null,
     scan_summary:
@@ -2159,6 +2171,9 @@ export async function getModerationListingScanDetails({ assetId }) {
           asset_type: asString(entry.assetType || entry.asset_type) || 'soul',
           verdict: asString(entry.scan.verdict).toLowerCase() || null,
           mode: asString(entry.scan.mode).toLowerCase() || null,
+          scanner_engine: asString(entry.scan.scannerEngine) || null,
+          scanner_ruleset: asString(entry.scan.scannerRuleset) || null,
+          scanner_fingerprint: asString(entry.scan.scannerFingerprint) || null,
           blocked: Boolean(entry.scan.blocked),
           scanned_at: asString(entry.scan.scannedAt) || null,
           content_sha256: asString(entry.scan.contentSha256) || null,
@@ -2172,6 +2187,85 @@ export async function getModerationListingScanDetails({ assetId }) {
     ok: true,
     listing: toModerationListing(entry),
     scan_report: latestReport || fallbackFromEntry || null
+  };
+}
+
+function buildScanInputFromCatalogEntry(entry) {
+  const item = entry && typeof entry === 'object' ? entry : {};
+  const assetType = normalizeAssetType(item.assetType || item.asset_type) || 'soul';
+  return {
+    asset_id: asString(item.id),
+    asset_type: assetType,
+    file_name: normalizeMarkdownFileName(item.fileName || item.file_name, defaultFileNameForAssetType(assetType)),
+    name: asString(item.name),
+    description: asString(item.description),
+    content_markdown: typeof item.contentInline === 'string' ? item.contentInline : ''
+  };
+}
+
+export async function rescanPublishedListingByModerator({ assetId, moderator, scanContext = {} }) {
+  const id = asString(assetId);
+  if (!id) return { ok: false, error: 'Missing asset_id' };
+
+  const catalog = await loadPublishedCatalog();
+  const idx = catalog.entries.findIndex((entry) => entry?.id === id);
+  if (idx < 0) return { ok: false, error: 'Listing not found' };
+
+  const existing = catalog.entries[idx];
+  const publisherWallet = asString(existing?.publishedBy).toLowerCase() || null;
+  const scanInput = buildScanInputFromCatalogEntry(existing);
+  const scanReport = await scanMarkdownAssetContent(scanInput, { stage: 'moderation_rescan' });
+
+  let persistedScanReport = scanReport;
+  try {
+    const persisted = await persistAssetScanReport({
+      assetId: scanInput.asset_id,
+      assetType: scanInput.asset_type,
+      scanReport,
+      walletAddress: publisherWallet,
+      source: asString(scanContext.source) || 'marketplace',
+      route: asString(scanContext.route) || '/shared/moderation',
+      action: asString(scanContext.action) || 'rescan_listing'
+    });
+    persistedScanReport = {
+      ...scanReport,
+      persisted: Boolean(persisted?.persisted),
+      persistence_schema: persisted?.schema || null
+    };
+  } catch (error) {
+    persistedScanReport = {
+      ...scanReport,
+      persisted: false,
+      persistence_error: error instanceof Error ? error.message : String(error || 'unknown_error')
+    };
+  }
+
+  const now = new Date().toISOString();
+  const actor = asString(moderator).toLowerCase() || 'moderator';
+  const updated = {
+    ...existing,
+    scan: toCatalogScanFromReport(persistedScanReport),
+    scanReview: null
+  };
+  catalog.entries[idx] = updated;
+  await savePublishedCatalog(catalog);
+
+  await appendReviewAudit({
+    at: now,
+    event: 'moderator_rescan',
+    wallet: publisherWallet,
+    draft_id: asString(existing?.draftId || ''),
+    actor,
+    status_before: asString(existing?.scanReview?.status || '').toLowerCase() || null,
+    status_after: 'rescanned',
+    notes: persistedScanReport?.verdict ? `scan_verdict:${persistedScanReport.verdict}` : null,
+    asset_id: id
+  });
+
+  return {
+    ok: true,
+    listing: toModerationListing(updated),
+    scan_report: persistedScanReport
   };
 }
 

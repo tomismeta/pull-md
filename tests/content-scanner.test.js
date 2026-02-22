@@ -46,6 +46,9 @@ test('scanMarkdownAssetContent warns on prompt-injection phrases in advisory mod
   assert.equal(report.blocked, false);
   assert.equal(report.verdict, 'warn');
   assert.equal(report.summary.total > 0, true);
+  assert.equal(String(report.scanner_engine || ''), 'pullmd.markdown-scanner');
+  assert.ok(String(report.scanner_ruleset || '').length > 0);
+  assert.ok(String(report.scanner_fingerprint || '').length > 0);
 });
 
 test('scanMarkdownAssetContent flags zero-width unicode characters', async () => {

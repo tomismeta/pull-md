@@ -8,6 +8,7 @@ const ALLOWED_ACTIONS = new Set([
   'list_moderation_listings',
   'get_listing_scan_details',
   'approve_listing_scan',
+  'rescan_listing',
   'remove_listing_visibility',
   'restore_listing_visibility',
   'update_listing',
@@ -17,6 +18,7 @@ const ALLOWED_ACTIONS = new Set([
 const READ_ACTIONS = new Set(['list_moderators', 'get_telemetry_dashboard', 'list_moderation_listings', 'get_listing_scan_details']);
 const WRITE_ACTIONS = new Set([
   'approve_listing_scan',
+  'rescan_listing',
   'remove_listing_visibility',
   'restore_listing_visibility',
   'update_listing',

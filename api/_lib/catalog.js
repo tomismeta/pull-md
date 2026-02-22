@@ -264,6 +264,9 @@ function toAssetSummary(asset) {
     source_url: asset.sourceUrl || null,
     scan_verdict: String(asset?.scan?.verdict || '').trim().toLowerCase() || null,
     scan_mode: String(asset?.scan?.mode || '').trim().toLowerCase() || null,
+    scan_scanner_engine: String(asset?.scan?.scannerEngine || '').trim() || null,
+    scan_scanner_ruleset: String(asset?.scan?.scannerRuleset || '').trim() || null,
+    scan_scanner_fingerprint: String(asset?.scan?.scannerFingerprint || '').trim() || null,
     scan_blocked: Boolean(asset?.scan?.blocked),
     scan_scanned_at: String(asset?.scan?.scannedAt || '').trim() || null,
     scan_summary:
