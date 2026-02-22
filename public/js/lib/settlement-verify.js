@@ -2,11 +2,20 @@
   if (!globalScope || typeof globalScope !== 'object') return;
 
   const DEFAULT_BASE_RPC_URL = 'https://mainnet.base.org';
-  const transferTopic = ethers.id('Transfer(address,address,uint256)');
-  const transferInterface = new ethers.Interface(['event Transfer(address indexed from,address indexed to,uint256 value)']);
+  const TRANSFER_SIGNATURE = 'Transfer(address,address,uint256)';
+  const TRANSFER_ABI = ['event Transfer(address indexed from,address indexed to,uint256 value)'];
   const providerCache = new Map();
 
+  function getEthers() {
+    const sdk = globalScope.ethers;
+    if (!sdk) {
+      throw new Error('ethers SDK unavailable');
+    }
+    return sdk;
+  }
+
   function getBaseRpcProvider(rpcUrl = DEFAULT_BASE_RPC_URL) {
+    const ethers = getEthers();
     const normalizedRpcUrl = String(rpcUrl || DEFAULT_BASE_RPC_URL).trim();
     if (!providerCache.has(normalizedRpcUrl)) {
       providerCache.set(normalizedRpcUrl, new ethers.JsonRpcProvider(normalizedRpcUrl));
@@ -16,6 +25,7 @@
 
   function normalizeAddressLower(value) {
     try {
+      const ethers = getEthers();
       return ethers.getAddress(String(value || '').trim()).toLowerCase();
     } catch (_) {
       return null;
@@ -44,6 +54,9 @@
   }
 
   async function verifySettlementOnchain(txHash, expectedSettlement, { rpcUrl = DEFAULT_BASE_RPC_URL } = {}) {
+    const ethers = getEthers();
+    const transferTopic = ethers.id(TRANSFER_SIGNATURE);
+    const transferInterface = new ethers.Interface(TRANSFER_ABI);
     const expected = {
       token: normalizeAddressLower(expectedSettlement?.token),
       payTo: normalizeAddressLower(expectedSettlement?.payTo),

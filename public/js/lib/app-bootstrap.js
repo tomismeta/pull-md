@@ -41,23 +41,43 @@
     refreshEntitlements,
     refreshCreatedSouls,
     hydrateAssetDetailPage,
-    loadSouls,
+    loadAssets,
     updateAssetPagePurchaseState,
     initEmblemAuth
   } = {}) {
     onReady(async () => {
       if (typeof initProviderDiscovery === 'function') initProviderDiscovery();
       if (typeof initMobileNav === 'function') initMobileNav();
-      if (typeof loadModeratorAllowlist === 'function') await loadModeratorAllowlist();
       if (typeof bindWalletOptions === 'function') bindWalletOptions();
       if (typeof updateWalletUI === 'function') updateWalletUI();
-      if (typeof restoreWalletSession === 'function') await restoreWalletSession();
-      if (typeof initEmblemAuth === 'function') await initEmblemAuth();
-      if (typeof refreshEntitlements === 'function') await refreshEntitlements();
-      if (typeof refreshCreatedSouls === 'function') await refreshCreatedSouls();
-      if (typeof hydrateAssetDetailPage === 'function') await hydrateAssetDetailPage();
-      if (typeof loadSouls === 'function') await loadSouls();
+      if (typeof loadAssets === 'function') await loadAssets();
       if (typeof updateAssetPagePurchaseState === 'function') updateAssetPagePurchaseState();
+
+      const backgroundTasks = [];
+      if (typeof loadModeratorAllowlist === 'function') {
+        backgroundTasks.push(Promise.resolve().then(() => loadModeratorAllowlist()));
+      }
+      if (typeof restoreWalletSession === 'function') {
+        backgroundTasks.push(Promise.resolve().then(() => restoreWalletSession()));
+      }
+      if (typeof initEmblemAuth === 'function') {
+        backgroundTasks.push(Promise.resolve().then(() => initEmblemAuth()));
+      }
+      if (typeof refreshEntitlements === 'function') {
+        backgroundTasks.push(Promise.resolve().then(() => refreshEntitlements()));
+      }
+      if (typeof refreshCreatedSouls === 'function') {
+        backgroundTasks.push(Promise.resolve().then(() => refreshCreatedSouls()));
+      }
+      if (typeof hydrateAssetDetailPage === 'function') {
+        backgroundTasks.push(Promise.resolve().then(() => hydrateAssetDetailPage()));
+      }
+
+      if (backgroundTasks.length > 0) {
+        void Promise.allSettled(backgroundTasks).then(() => {
+          if (typeof updateAssetPagePurchaseState === 'function') updateAssetPagePurchaseState();
+        });
+      }
     });
   }
 
