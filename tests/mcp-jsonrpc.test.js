@@ -207,6 +207,59 @@ test('MCP get_auth_challenge returns suggested listing for creator publish actio
   assert.equal(typeof payload?.suggested_listing?.content_markdown, 'string');
 });
 
+test('MCP get_auth_challenge defaults creator flow action to publish_listing', async () => {
+  const res = await runMcpRequest({
+    body: {
+      jsonrpc: '2.0',
+      id: 341,
+      method: 'tools/call',
+      params: {
+        name: 'get_auth_challenge',
+        arguments: {
+          flow: 'creator',
+          wallet_address: '0x2420888eAaA361c0e919C4F942D154BD47924793'
+        }
+      }
+    }
+  });
+  assert.equal(res.statusCode, 200);
+  const payload = res.body?.result?.structuredContent || {};
+  assert.equal(payload.ok, true);
+  assert.equal(payload.action, 'publish_listing');
+  assert.equal(typeof payload?.suggested_listing?.name, 'string');
+});
+
+test('MCP publish_listing auth errors include challenge timestamp metadata', async () => {
+  const res = await runMcpRequest({
+    body: {
+      jsonrpc: '2.0',
+      id: 342,
+      method: 'tools/call',
+      params: {
+        name: 'publish_listing',
+        arguments: {
+          wallet_address: '0x2420888eAaA361c0e919C4F942D154BD47924793',
+          auth_signature: '0xdeadbeef',
+          auth_timestamp: Date.now(),
+          listing: {
+            name: 'Example Listing',
+            description: 'A valid description for publish auth challenge metadata testing.',
+            price_usdc: 0.01,
+            content_markdown: '# ASSET\\n\\ncontent'
+          }
+        }
+      }
+    }
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.result?.isError, true);
+  const payload = res.body?.result?.structuredContent || {};
+  assert.equal(payload.action, 'publish_listing');
+  assert.equal(typeof payload.auth_message_template, 'string');
+  assert.equal(Number.isFinite(Number(payload.auth_timestamp_ms)), true);
+  assert.equal(typeof payload.issued_at, 'string');
+});
+
 test('MCP tools/call returns tool error payload for unknown tool', async () => {
   const res = await runMcpRequest({
     body: {
