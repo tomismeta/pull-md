@@ -50,6 +50,7 @@ Tool invocation contract:
 - Returns SIWE message template + exact timestamp requirements for:
 `flow=creator|moderator|session|redownload`.
 - Use this first for authenticated flows; do not force a failed request to discover auth text.
+- For `flow=creator`, default action is `publish_listing` unless `action` is explicitly set.
 - For `flow=creator` + `action=publish_listing`, response includes `suggested_listing`.
 
 5. `name=get_listing_template`
@@ -141,7 +142,7 @@ const challenge = await callTool({
   name: 'get_auth_challenge',
   arguments: {
     flow: 'creator',
-    action: 'list_my_published_listings',
+    action: 'publish_listing',
     wallet_address
   }
 });
@@ -151,13 +152,47 @@ const authTimestamp = Date.parse(challenge.issued_at); // do not use Date.now()
 const signature = await wallet.signMessage(siweMessage);
 
 const result = await callTool({
-  name: 'list_my_published_listings',
+  name: 'publish_listing',
   arguments: {
     wallet_address,
     auth_signature: signature,
-    auth_timestamp: authTimestamp
+    auth_timestamp: authTimestamp,
+    listing: {
+      name: 'Example Listing',
+      description: 'Short buyer-facing summary.',
+      price_usdc: 0.01,
+      content_markdown: '# ASSET\\n\\n...'
+    }
   }
 });
+```
+
+## Flow Visualizations
+
+Creator publish (MCP):
+
+```mermaid
+flowchart TD
+    A["Client"] --> B["tools/call get_auth_challenge(flow=creator, action=publish_listing)"]
+    B --> C["Server returns auth_message_template + issued_at + auth_timestamp_ms + suggested_listing"]
+    C --> D["Client signs exact SIWE message"]
+    D --> E["tools/call publish_listing(wallet_address, auth_signature, auth_timestamp, listing)"]
+    E --> F["Server verifies SIWE + scans markdown + persists listing"]
+    F --> G["Response: asset_id + share_url + purchase_endpoint + scan_report"]
+```
+
+Purchase + re-download (REST canonical):
+
+```mermaid
+flowchart TD
+    A["Client"] --> B["GET /api/assets/{id}/download (no payment header)"]
+    B --> C["402 PAYMENT-REQUIRED"]
+    C --> D["Client signs x402 payload"]
+    D --> E["GET /api/assets/{id}/download with PAYMENT-SIGNATURE"]
+    E --> F["200 markdown + X-PURCHASE-RECEIPT"]
+    F --> G["Persist receipt securely (wallet+asset scoped)"]
+    G --> H["Re-download: GET /api/assets/{id}/download with wallet + receipt (+ strict agent challenge headers)"]
+    H --> I["200 markdown without repay"]
 ```
 
 ## Download Endpoint

@@ -44,7 +44,21 @@ function parseSiweField(message, label) {
 function mapCreatorActionToTool(action) {
   if (action === 'publish_listing') return 'publish_listing';
   if (action === 'list_my_published_listings') return 'list_my_published_listings';
-  return 'list_my_published_listings';
+  return 'publish_listing';
+}
+
+function normalizeCreatorAction(action) {
+  const normalized = String(action || '').trim();
+  if (!normalized) return 'publish_listing';
+  if (normalized === 'publish_listing') return normalized;
+  if (normalized === 'list_my_published_listings') return normalized;
+  throw new AppError(400, {
+    error: 'Unsupported creator action for get_auth_challenge',
+    code: 'unsupported_creator_auth_action',
+    action: normalized,
+    supported_actions: ['publish_listing', 'list_my_published_listings'],
+    flow_hint: 'Set action to publish_listing (default) or list_my_published_listings.'
+  });
 }
 
 function normalizeModeratorAction(action) {
@@ -85,7 +99,7 @@ function buildAuthChallengePayload(args = {}, context = {}) {
   let suggestedListing = null;
 
   if (flow === 'creator') {
-    action = String(parsed.action || 'list_my_published_listings').trim() || 'list_my_published_listings';
+    action = normalizeCreatorAction(parsed.action);
     authMessage = buildCreatorAuthMessage({ wallet, action, timestamp: timestampMs, domain: siweDomain, uri: siweUri });
     const toolName = mapCreatorActionToTool(action);
     submitVia = {
@@ -382,7 +396,10 @@ const MCP_TOOL_REGISTRY = [
           description: 'One of: creator, moderator, session, redownload'
         },
         wallet_address: { type: 'string', description: 'Wallet address used to sign the challenge' },
-        action: { type: 'string', description: 'Action name for creator/moderator flows' },
+        action: {
+          type: 'string',
+          description: 'Action name for creator/moderator flows. For flow=creator, defaults to publish_listing.'
+        },
         asset_id: { type: 'string', description: 'Required when flow=redownload' }
       },
       required: ['flow', 'wallet_address'],
@@ -394,7 +411,11 @@ const MCP_TOOL_REGISTRY = [
       parameters: {
         flow: { type: 'string', required: true, description: 'creator|moderator|session|redownload' },
         wallet_address: { type: 'string', required: true, description: 'Wallet used for SIWE signing' },
-        action: { type: 'string', required: false, description: 'Action name (creator/moderator only)' },
+        action: {
+          type: 'string',
+          required: false,
+          description: 'Action name (creator/moderator only). For flow=creator, defaults to publish_listing.'
+        },
         asset_id: { type: 'string', required: false, description: 'Required for redownload flow' }
       },
       returns: { type: 'object', description: 'SIWE challenge template + exact timestamp/signing guidance' }

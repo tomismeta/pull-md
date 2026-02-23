@@ -65,20 +65,45 @@ function withShareUrl(baseUrl, listing) {
   };
 }
 
-function creatorAuthError(action, auth, headers = {}) {
+function parseSiweField(message, label) {
+  const match = String(message || '').match(new RegExp(`^${label}:\\s*([^\\n\\r]+)`, 'm'));
+  return match?.[1]?.trim() || null;
+}
+
+function buildAuthTemplateMetadata(message, fallbackTimestampMs = Date.now()) {
+  const issuedAt = parseSiweField(message, 'Issued At') || new Date(fallbackTimestampMs).toISOString();
+  const expirationTime = parseSiweField(message, 'Expiration Time') || new Date(fallbackTimestampMs + 300000).toISOString();
+  const authTimestamp = Date.parse(issuedAt);
+  return {
+    auth_message_template: message,
+    issued_at: issuedAt,
+    expiration_time: expirationTime,
+    auth_timestamp_ms: Number.isFinite(authTimestamp) ? authTimestamp : fallbackTimestampMs
+  };
+}
+
+function resolveCreatorTemplateWallet(headers = {}, body = {}) {
+  const candidate = String(headers['x-wallet-address'] || body?.wallet_address || '').trim().toLowerCase();
+  return ETH_ADDRESS_RE.test(candidate) ? candidate : '0x<your-wallet>';
+}
+
+function creatorAuthError(action, auth, headers = {}, body = {}) {
   const siwe = resolveSiweContext(headers);
+  const nowMs = Date.now();
+  const authMessage =
+    auth.auth_message_template ||
+    buildCreatorAuthMessage({
+      wallet: resolveCreatorTemplateWallet(headers, body),
+      action,
+      timestamp: nowMs,
+      domain: siwe.domain,
+      uri: siwe.uri
+    });
   return {
     error: auth.error,
     ...(auth?.hint ? { hint: auth.hint } : {}),
-    auth_message_template:
-      auth.auth_message_template ||
-      buildCreatorAuthMessage({
-        wallet: '0x<your-wallet>',
-        action,
-        timestamp: Date.now(),
-        domain: siwe.domain,
-        uri: siwe.uri
-      })
+    action,
+    ...buildAuthTemplateMetadata(authMessage, nowMs)
   };
 }
 
@@ -332,7 +357,7 @@ export async function executeCreatorMarketplaceAction({
   if (normalizedAction === 'publish_listing' && normalizedMethod === 'POST') {
     const auth = creatorAuthFromHeaders({ headers, body: requestBody, action: normalizedAction });
     if (!auth.ok) {
-      throw new AppError(401, creatorAuthError(normalizedAction, auth, headers));
+      throw new AppError(401, creatorAuthError(normalizedAction, auth, headers, requestBody));
     }
 
     const listingPayload =
@@ -464,7 +489,7 @@ export async function executeCreatorMarketplaceAction({
   if (normalizedAction === 'list_my_published_listings' && normalizedMethod === 'GET') {
     const auth = creatorAuthFromHeaders({ headers, body: requestBody, action: normalizedAction });
     if (!auth.ok) {
-      throw new AppError(401, creatorAuthError(normalizedAction, auth, headers));
+      throw new AppError(401, creatorAuthError(normalizedAction, auth, headers, requestBody));
     }
     const listings = await listPublishedListingSummaries({ includeHidden: true, publishedBy: auth.wallet });
     recordMarketplaceTelemetry({

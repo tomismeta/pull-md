@@ -129,6 +129,31 @@ function resolveDeliveryMetadata(soul, soulId) {
   };
 }
 
+function parseSiweField(message, label) {
+  const match = String(message || '').match(new RegExp(`^${label}:\\s*([^\\n\\r]+)`, 'm'));
+  return match?.[1]?.trim() || null;
+}
+
+function buildSiweChallengeFields({ wallet, soulId, action, siweIdentity, timestampMs = Date.now() }) {
+  const authMessage = buildSiweAuthMessage({
+    wallet,
+    soulId,
+    action,
+    timestamp: timestampMs,
+    domain: siweIdentity.domain,
+    uri: siweIdentity.uri
+  });
+  const issuedAt = parseSiweField(authMessage, 'Issued At') || new Date(timestampMs).toISOString();
+  const expirationTime = parseSiweField(authMessage, 'Expiration Time') || new Date(timestampMs + 300000).toISOString();
+  const authTimestampMs = Date.parse(issuedAt);
+  return {
+    auth_message_template: authMessage,
+    issued_at: issuedAt,
+    expiration_time: expirationTime,
+    auth_timestamp_ms: Number.isFinite(authTimestampMs) ? authTimestampMs : timestampMs
+  };
+}
+
 export function classifyRedownloadHeaders({ headers = {}, cookieHeader = '', soulId = '' } = {}) {
   const cookies = parseCookieHeader(cookieHeader);
   const wallet = headers['x-wallet-address'];
@@ -336,13 +361,11 @@ export default async function handler(req, res) {
         flow_hint:
           'Strict agent redownload now requires proof-of-wallet-control: send X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP with X-WALLET-ADDRESS + X-PURCHASE-RECEIPT.',
         required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP'],
-        auth_message_template: buildSiweAuthMessage({
+        ...buildSiweChallengeFields({
           wallet: wallet || '0x<your-wallet>',
           soulId,
           action: 'redownload',
-          timestamp: Date.now(),
-          domain: siweIdentity.domain,
-          uri: siweIdentity.uri
+          siweIdentity
         })
       });
     }
@@ -373,13 +396,11 @@ export default async function handler(req, res) {
           code: 'invalid_agent_redownload_signature',
           flow_hint: 'Re-sign the redownload auth message with the same wallet and retry.',
           required_headers: ['X-WALLET-ADDRESS', 'X-PURCHASE-RECEIPT', 'X-REDOWNLOAD-SIGNATURE', 'X-REDOWNLOAD-TIMESTAMP'],
-          auth_message_template: buildSiweAuthMessage({
+          ...buildSiweChallengeFields({
             wallet: wallet || '0x<your-wallet>',
             soulId,
             action: 'redownload',
-            timestamp: Date.now(),
-            domain: siweIdentity.domain,
-            uri: siweIdentity.uri
+            siweIdentity
           }),
           ...(verify.auth_debug ? { auth_debug: verify.auth_debug } : {})
         });
@@ -444,22 +465,18 @@ export default async function handler(req, res) {
       redownload_session_bootstrap: {
         endpoint: '/api/auth/session',
         headers: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
-        auth_message_template: buildSiweAuthMessage({
+        ...buildSiweChallengeFields({
           wallet: walletForTemplate,
           soulId: '*',
           action: 'session',
-          timestamp: Date.now(),
-          domain: siweIdentity.domain,
-          uri: siweIdentity.uri
+          siweIdentity
         })
       },
-      auth_message_template: buildSiweAuthMessage({
+      ...buildSiweChallengeFields({
         wallet: walletForTemplate,
         soulId,
         action: 'redownload',
-        timestamp: Date.now(),
-        domain: siweIdentity.domain,
-        uri: siweIdentity.uri
+        siweIdentity
       })
     });
   }
@@ -866,14 +883,15 @@ export default async function handler(req, res) {
               disallowed_headers: ['X-REDOWNLOAD-SESSION', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
             };
           } else {
-            result.response.body.auth_message_template = buildSiweAuthMessage({
-              wallet: '0x<your-wallet>',
-              soulId,
-              action: 'redownload',
-              timestamp: Date.now(),
-              domain: siweIdentity.domain,
-              uri: siweIdentity.uri
-            });
+            Object.assign(
+              result.response.body,
+              buildSiweChallengeFields({
+                wallet: '0x<your-wallet>',
+                soulId,
+                action: 'redownload',
+                siweIdentity
+              })
+            );
             result.response.body.flow_hint =
               'No payment header was detected. Send PAYMENT-SIGNATURE with base64-encoded x402 payload for purchase.';
             result.response.body.purchase_receipt_security_hint = PURCHASE_RECEIPT_SECURITY_HINT;

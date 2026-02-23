@@ -69,6 +69,7 @@ Use EmblemVault (or another compatible signer) for now. Keep Bankr support as ex
 - Immediate publish only:
 `POST /mcp` with JSON-RPC `tools/call` `name=publish_listing` publishes directly with creator wallet auth.
 `get_auth_challenge(flow=creator, action=publish_listing)` includes a `suggested_listing` payload scaffold.
+For `flow=creator`, `action` defaults to `publish_listing` when omitted.
 - No drafts, no approval queue, no intermediate states.
 - Successful publish response includes:
 `asset_id`, `share_url`, and `purchase_endpoint`.
@@ -218,6 +219,7 @@ Creator/moderator auth discovery note:
 - Set `auth_timestamp`/`moderator_timestamp` to `Date.parse(Issued At)` from that same challenge.
 - SIWE parser accepts Unix ms or ISO-8601 timestamp values.
 - SIWE parser accepts LF/CRLF/trailing newline message variants.
+- Creator auth errors from `publish_listing` include `auth_message_template`, `issued_at`, and `auth_timestamp_ms` to avoid fragile timestamp parsing.
 
 Common mistakes:
 - Using `Date.now()` for `auth_timestamp` -> use `Date.parse(Issued At)` from the same template.
@@ -230,7 +232,7 @@ const challenge = await callTool({
   name: 'get_auth_challenge',
   arguments: {
     flow: 'creator',
-    action: 'list_my_published_listings',
+    action: 'publish_listing',
     wallet_address
   }
 });
@@ -240,13 +242,32 @@ const authTimestamp = Date.parse(challenge.issued_at);
 const signature = await wallet.signMessage(message);
 
 const result = await callTool({
-  name: 'list_my_published_listings',
+  name: 'publish_listing',
   arguments: {
     wallet_address,
     auth_signature: signature,
-    auth_timestamp: authTimestamp
+    auth_timestamp: authTimestamp,
+    listing: {
+      name: 'Example Listing',
+      description: 'Short buyer-facing summary.',
+      price_usdc: 0.01,
+      content_markdown: '# ASSET\\n\\n...'
+    }
   }
 });
+```
+
+Flow visualization (publish + purchase):
+
+```mermaid
+flowchart TD
+    A["get_auth_challenge(flow=creator, action=publish_listing)"] --> B["Sign SIWE message"]
+    B --> C["tools/call publish_listing"]
+    C --> D["share_url + purchase_endpoint"]
+    D --> E["GET /api/assets/{id}/download"]
+    E --> F["402 PAYMENT-REQUIRED"]
+    F --> G["Retry with PAYMENT-SIGNATURE"]
+    G --> H["200 markdown + X-PURCHASE-RECEIPT"]
 ```
 
 Multi-spend guardrails:
