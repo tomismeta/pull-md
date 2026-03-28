@@ -13,7 +13,7 @@
   "dependencies": {
     "@braintree/sanitize-url": "^7.1.2",
     "@coinbase/cdp-sdk": "^1.45.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@x402/core": "^2.8.0",
     "@x402/evm": "^2.8.0",
     "@x402/fetch": "^2.8.0",
