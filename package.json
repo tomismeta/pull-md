@@ -12,12 +12,12 @@
   },
   "dependencies": {
     "@braintree/sanitize-url": "^7.1.2",
-    "@coinbase/cdp-sdk": "^1.45.0",
-    "@modelcontextprotocol/sdk": "^1.28.0",
-    "@x402/core": "^2.8.0",
-    "@x402/evm": "^2.8.0",
-    "@x402/fetch": "^2.8.0",
-    "@x402/next": "^2.8.0",
+    "@coinbase/cdp-sdk": "^1.46.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@x402/core": "^2.9.0",
+    "@x402/evm": "^2.9.0",
+    "@x402/fetch": "^2.9.0",
+    "@x402/next": "^2.9.0",
     "confusables": "^1.1.1",
     "ethers": "^6.16.0",
     "ipaddr.js": "^2.3.0",
@@ -30,6 +30,6 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "vercel": "^50.37.3"
+    "vercel": "^50.39.0"
   }
 }
