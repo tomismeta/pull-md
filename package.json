@@ -30,6 +30,6 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "vercel": "^50.39.0"
+    "vercel": "^50.44.0"
   }
 }
