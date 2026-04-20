@@ -1,0 +1,89 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json",
+  "version": "1.0",
+  "protocolVersion": "2025-06-18",
+  "serverInfo": {
+    "name": "PULL.md",
+    "title": "PULL.md",
+    "version": "1.0.0"
+  },
+  "description": "Markdown asset marketplace with MCP orchestration and canonical x402 HTTP settlement.",
+  "iconUrl": "/favicon.svg",
+  "documentationUrl": "/WEBMCP.md",
+  "transport": {
+    "type": "streamable-http",
+    "endpoint": "/mcp"
+  },
+  "capabilities": {
+    "tools": {
+      "listChanged": false
+    },
+    "prompts": {
+      "listChanged": false
+    },
+    "resources": {
+      "subscribe": false,
+      "listChanged": false
+    }
+  },
+  "auth": {
+    "type": "none",
+    "note": "The MCP endpoint is public. Wallet proof and x402 payment are enforced within specific publish, entitlement, and download flows."
+  },
+  "discovery": {
+    "apiCatalog": "/.well-known/api-catalog",
+    "openapi": "/api/openapi.json",
+    "manifest": "/api/mcp/manifest",
+    "agentSkills": "/.well-known/agent-skills/index.json"
+  },
+  "tools": [
+    {
+      "name": "list_assets",
+      "description": "List public markdown assets available for purchase.",
+      "method": "POST",
+      "endpoint": "/mcp"
+    },
+    {
+      "name": "get_asset_details",
+      "description": "Fetch metadata, payment requirements, and download details for a single asset.",
+      "method": "POST",
+      "endpoint": "/mcp"
+    },
+    {
+      "name": "check_entitlements",
+      "description": "Check which purchased assets a wallet currently owns.",
+      "method": "POST",
+      "endpoint": "/mcp"
+    },
+    {
+      "name": "get_auth_challenge",
+      "description": "Get the exact SIWE auth message template to sign for creator, moderator, session, or redownload flows.",
+      "method": "POST",
+      "endpoint": "/mcp"
+    },
+    {
+      "name": "get_listing_template",
+      "description": "Return an example asset listing payload for the current marketplace schema.",
+      "method": "POST",
+      "endpoint": "/mcp"
+    },
+    {
+      "name": "publish_listing",
+      "description": "Publish a markdown asset listing after creator wallet authentication.",
+      "method": "POST",
+      "endpoint": "/mcp"
+    },
+    {
+      "name": "list_my_published_listings",
+      "description": "List listings published by the authenticated creator wallet.",
+      "method": "POST",
+      "endpoint": "/mcp"
+    },
+    {
+      "name": "list_published_listings",
+      "description": "List the public published marketplace catalog through MCP.",
+      "method": "POST",
+      "endpoint": "/mcp"
+    }
+  ]
+}

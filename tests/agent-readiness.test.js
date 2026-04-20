@@ -1,13 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
+import crypto from 'crypto';
 
 import homeHandler from '../api/home.js';
 import robotsHandler from '../api/robots.txt.js';
 import sitemapHandler from '../api/sitemap.xml.js';
-import serverCardHandler from '../api/well-known/mcp/server-card.js';
-import agentSkillsIndexHandler from '../api/well-known/agent-skills/index.js';
-import agentSkillHandler from '../api/well-known/agent-skills/skill.js';
 
 function runRequest(handler, { method = 'GET', headers = {}, query = {} } = {}) {
   return new Promise((resolve, reject) => {
@@ -99,43 +97,37 @@ test('sitemap.xml includes core discovery documents', async () => {
   assert.match(body, /https:\/\/pull\.md\/\.well-known\/mcp\/server-card\.json/);
 });
 
-test('mcp server card exposes the HTTP transport and capabilities', async () => {
-  const res = await runRequest(serverCardHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body?.serverInfo?.name, 'PULL.md');
-  assert.equal(res.body?.transport?.type, 'streamable-http');
-  assert.equal(res.body?.transport?.endpoint, '/mcp');
-  assert.equal(typeof res.body?.capabilities?.tools, 'object');
+test('static MCP server card exposes the HTTP transport and capabilities', () => {
+  const raw = fs.readFileSync(new URL('../public/.well-known/mcp/server-card.json', import.meta.url), 'utf8');
+  const body = JSON.parse(raw);
+  assert.equal(body?.serverInfo?.name, 'PULL.md');
+  assert.equal(body?.transport?.type, 'streamable-http');
+  assert.equal(body?.transport?.endpoint, '/mcp');
+  assert.equal(typeof body?.capabilities?.tools, 'object');
 });
 
-test('agent skills index publishes digested skill entries', async () => {
-  const res = await runRequest(agentSkillsIndexHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body?.$schema, 'https://schemas.agentskills.io/discovery/0.2.0/schema.json');
-  assert.ok(Array.isArray(res.body?.skills));
-  assert.ok(res.body.skills.length >= 3);
-  for (const skill of res.body.skills) {
+test('static agent skills index publishes digested skill entries', () => {
+  const raw = fs.readFileSync(new URL('../public/.well-known/agent-skills/index.json', import.meta.url), 'utf8');
+  const body = JSON.parse(raw);
+  assert.equal(body?.$schema, 'https://schemas.agentskills.io/discovery/0.2.0/schema.json');
+  assert.ok(Array.isArray(body?.skills));
+  assert.ok(body.skills.length >= 3);
+  for (const skill of body.skills) {
     assert.equal(skill.type, 'skill-md');
-    assert.match(String(skill.url || ''), /^https:\/\/pull\.md\/\.well-known\/agent-skills\/[^/]+\/SKILL\.md$/);
+    assert.match(String(skill.url || ''), /^\/\.well-known\/agent-skills\/[^/]+\/SKILL\.md$/);
     assert.match(String(skill.digest || ''), /^sha256:[a-f0-9]{64}$/);
+    const fileUrl = new URL(`../public${skill.url}`, import.meta.url);
+    const fileDigest = crypto.createHash('sha256').update(fs.readFileSync(fileUrl)).digest('hex');
+    assert.equal(skill.digest, `sha256:${fileDigest}`);
   }
 });
 
-test('agent skill markdown endpoint serves the requested SKILL.md', async () => {
-  const res = await runRequest(agentSkillHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' },
-    query: { name: 'publish-asset' }
-  });
-  assert.equal(res.statusCode, 200);
-  assert.match(String(res.headers['content-type'] || ''), /text\/markdown/i);
-  assert.match(String(res.body || ''), /^# Publish A PULL\.md Asset/m);
+test('static agent skill markdown files are present', () => {
+  const markdown = fs.readFileSync(
+    new URL('../public/.well-known/agent-skills/publish-asset/SKILL.md', import.meta.url),
+    'utf8'
+  );
+  assert.match(markdown, /^# Publish A PULL\.md Asset/m);
 });
 
 test('homepage loads the browser WebMCP shim', async () => {
