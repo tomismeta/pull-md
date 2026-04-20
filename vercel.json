@@ -10,8 +10,9 @@
   },
   "routes": [
     {
-      "src": "^/$",
-      "dest": "/api/home.js"
+      "src": "/",
+      "dest": "/api/home.js",
+      "methods": ["GET", "HEAD"]
     },
     {
       "src": "/robots\\.txt",
