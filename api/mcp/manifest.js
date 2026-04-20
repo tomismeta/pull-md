@@ -52,6 +52,8 @@ export default function handler(req, res) {
     url: baseUrl,
     discovery: {
       api_catalog: `${baseUrl}/.well-known/api-catalog`,
+      public_catalog: `${baseUrl}/api/assets`,
+      canonical_purchase_endpoint_pattern: `${baseUrl}/api/assets/{id}/download`,
       mcp_server_card: `${baseUrl}/.well-known/mcp/server-card.json`,
       agent_skills: `${baseUrl}/.well-known/agent-skills/index.json`,
       service_desc: `${baseUrl}/api/openapi.json`,
@@ -61,6 +63,21 @@ export default function handler(req, res) {
     marketplace: {
       enabled_asset_types: enabledAssetTypes(),
       ethos: ['plain_text_first', 'portable', 'diff_friendly', 'agent_ready', 'human_readable']
+    },
+    commerce: {
+      commerce_site: true,
+      payment_protocols: ['x402'],
+      public_catalog_endpoint: '/api/assets',
+      canonical_purchase_endpoint_pattern: '/api/assets/{id}/download',
+      paywall_status_code: 402,
+      payment_headers: {
+        required_response_header: 'PAYMENT-REQUIRED',
+        required_request_header: 'PAYMENT-SIGNATURE',
+        settlement_response_header: 'PAYMENT-RESPONSE'
+      },
+      asset_discovery_fields: ['purchase_endpoint', 'payment_protocol'],
+      facilitator_discovery:
+        'Paid asset routes declare x402 Bazaar discovery metadata for facilitator-side indexing when the active facilitator supports Bazaar.'
     },
     auth: {
       type: 'x402',

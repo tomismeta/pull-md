@@ -1,5 +1,6 @@
 import { x402HTTPResourceServer, x402ResourceServer } from '@x402/core/server';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
+import { bazaarResourceServerExtension, declareDiscoveryExtension } from '@x402/extensions/bazaar';
 import { generateJwt } from '@coinbase/cdp-sdk/auth';
 
 const BASE_MAINNET_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
@@ -860,6 +861,27 @@ function routeConfigForAsset({ assetId, asset, sellerAddress, assetTransferMetho
     },
     description: `Markdown asset purchase for ${assetId}`,
     mimeType: 'text/markdown',
+    extensions: declareDiscoveryExtension({
+      method: 'GET',
+      pathParams: { id: assetId },
+      pathParamsSchema: {
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Published markdown asset identifier'
+          }
+        },
+        required: ['id'],
+        additionalProperties: false
+      },
+      output: {
+        schema: {
+          type: 'string',
+          contentMediaType: 'text/markdown'
+        },
+        example: '# Markdown asset content'
+      }
+    }),
     unpaidResponseBody: () => ({
       contentType: 'application/json',
       body: {
@@ -898,7 +920,9 @@ export async function getX402HTTPServer({
   const method = normalizeAssetTransferMethod(assetTransferMethod) || getAssetTransferMethod();
   const key = `${resolvedId}:${sellerAddress}:${resolvedAsset.priceDisplay}:${method}`;
   if (!serverCache.has(key)) {
-    const resourceServer = new x402ResourceServer(facilitatorClient).register('eip155:*', new ExactEvmScheme());
+    const resourceServer = new x402ResourceServer(facilitatorClient)
+      .register('eip155:*', new ExactEvmScheme())
+      .registerExtension(bazaarResourceServerExtension);
     const httpServer = new x402HTTPResourceServer(resourceServer, {
       '*': routeConfigForAsset({
         assetId: resolvedId,

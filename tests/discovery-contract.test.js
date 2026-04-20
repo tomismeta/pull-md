@@ -58,6 +58,7 @@ test('api-catalog well-known endpoint returns RFC9727 linkset and head links', a
     true
   );
   assert.ok(getRes.body.linkset.some((entry) => Array.isArray(entry?.['service-desc'])));
+  assert.ok(getRes.body.linkset.some((entry) => entry?.anchor === 'https://pull.md/api/assets/{id}/download'));
 
   const headRes = await runRequest(apiCatalogHandler, {
     method: 'HEAD',
@@ -80,6 +81,9 @@ test('openapi endpoint exposes canonical REST paths', async () => {
   assert.ok(res.body?.paths?.['/api/assets/{id}/download']);
   assert.ok(res.body?.paths?.['/api/mcp/manifest']);
   assert.equal(res.body?.['x-pullmd-auth-model']?.oauth2_supported, false);
+  assert.equal(res.body?.['x-pullmd-commerce']?.commerce_site, true);
+  assert.equal(res.body?.['x-pullmd-commerce']?.paywall_status_code, 402);
+  assert.equal(res.body?.paths?.['/api/assets/{id}/download']?.get?.['x-pullmd-payment']?.bazaar_discovery_declared, true);
   assert.match(String(res.body?.info?.description || ''), /OAuth\/OIDC discovery metadata is intentionally absent/i);
 });
 

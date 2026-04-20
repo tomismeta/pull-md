@@ -38,9 +38,13 @@ test('manifest exposes strict agent guardrails and facilitator capability flags'
   assert.ok(body);
 
   assert.equal(body.discovery?.api_catalog?.endsWith('/.well-known/api-catalog'), true);
+  assert.equal(body.discovery?.public_catalog?.endsWith('/api/assets'), true);
+  assert.equal(body.discovery?.canonical_purchase_endpoint_pattern?.endsWith('/api/assets/{id}/download'), true);
   assert.equal(body.discovery?.service_desc?.endsWith('/api/openapi.json'), true);
   assert.equal(body.discovery?.service_doc?.endsWith('/WEBMCP.md'), true);
   assert.equal(body.discovery?.service_meta?.endsWith('/api/mcp/manifest'), true);
+  assert.equal(body.commerce?.commerce_site, true);
+  assert.deepEqual(body.commerce?.payment_protocols, ['x402']);
   assert.equal(body.download_contract?.method, 'GET');
   assert.equal(body.auth?.oauth2_supported, false);
   assert.equal(body.auth?.oidc_supported, false);

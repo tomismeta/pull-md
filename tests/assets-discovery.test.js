@@ -43,5 +43,9 @@ test('public assets discovery endpoint returns canonical asset response shape', 
   assert.equal(res.body.meta?.mcp_manifest, '/api/mcp/manifest');
   assert.equal(res.body.meta?.mcp_endpoint, '/mcp');
   assert.equal(res.body.meta?.mcp_list_tool, 'list_assets');
+  assert.equal(res.body.meta?.commerce_site, true);
+  assert.equal(res.body.meta?.payment_protocol, 'x402');
+  assert.equal(res.body.meta?.canonical_purchase_endpoint_pattern, '/api/assets/{id}/download');
+  assert.equal(res.body.meta?.paywall_status_code, 402);
   assert.match(String(res.body.meta?.purchase_flow || ''), /\/api\/assets\/\{id\}\/download/);
 });

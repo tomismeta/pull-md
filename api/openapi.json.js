@@ -22,13 +22,29 @@ function buildOpenApiDocument(baseUrl) {
       note:
         'Protected flows do not use OAuth bearer tokens in this deployment. Use SIWE for wallet identity/auth and x402 plus receipt-bound headers for payment and re-download.'
     },
+    'x-pullmd-commerce': {
+      commerce_site: true,
+      payment_protocols: ['x402'],
+      public_catalog_endpoint: '/api/assets',
+      canonical_purchase_endpoint_pattern: '/api/assets/{id}/download',
+      paywall_status_code: 402,
+      payment_headers: {
+        required_response_header: 'PAYMENT-REQUIRED',
+        required_request_header: 'PAYMENT-SIGNATURE',
+        settlement_response_header: 'PAYMENT-RESPONSE'
+      },
+      asset_discovery_fields: ['purchase_endpoint', 'payment_protocol'],
+      facilitator_discovery:
+        'Paid routes declare x402 Bazaar discovery metadata when the active facilitator supports Bazaar resource indexing.'
+    },
     servers: [{ url: baseUrl }],
     paths: {
       '/api/assets': {
         get: {
           operationId: 'listAssets',
           summary: 'List public assets',
-          description: 'Returns the current public markdown asset catalog.',
+          description:
+            'Returns the current public markdown asset catalog. Each item advertises `purchase_endpoint` and `payment_protocol` so agents can transition directly into the canonical x402 flow.',
           responses: {
             '200': {
               description: 'Catalog response',
@@ -77,6 +93,10 @@ function buildOpenApiDocument(baseUrl) {
             protocol: 'x402',
             payment_signature_header: 'PAYMENT-SIGNATURE',
             receipt_header: 'X-PURCHASE-RECEIPT',
+            payment_required_header: 'PAYMENT-REQUIRED',
+            payment_response_header: 'PAYMENT-RESPONSE',
+            paywall_status_code: 402,
+            bazaar_discovery_declared: true,
             docs: `${baseUrl}/WEBMCP.md`
           }
         }
