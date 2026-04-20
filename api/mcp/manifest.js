@@ -47,6 +47,8 @@ export default function handler(req, res) {
     url: baseUrl,
     discovery: {
       api_catalog: `${baseUrl}/.well-known/api-catalog`,
+      mcp_server_card: `${baseUrl}/.well-known/mcp/server-card.json`,
+      agent_skills: `${baseUrl}/.well-known/agent-skills/index.json`,
       service_desc: `${baseUrl}/api/openapi.json`,
       service_doc: `${baseUrl}/WEBMCP.md`,
       service_meta: `${baseUrl}/api/mcp/manifest`

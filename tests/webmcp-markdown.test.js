@@ -44,6 +44,8 @@ test('WEBMCP markdown endpoint is generated from manifest contract', async () =>
   const body = String(res.body || '');
   assert.match(body, /^# PULL\.md WebMCP Contract/m);
   assert.match(body, /GET \/\.well-known\/api-catalog/);
+  assert.match(body, /GET \/\.well-known\/mcp\/server-card\.json/);
+  assert.match(body, /GET \/\.well-known\/agent-skills\/index\.json/);
   assert.match(body, /GET \/api\/openapi\.json/);
   assert.match(body, /GET \/api\/mcp\/manifest/);
   assert.match(body, /GET \/api\/assets\/\{id\}\/download/);

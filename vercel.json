@@ -7,6 +7,18 @@
   },
   "routes": [
     {
+      "src": "/$",
+      "dest": "/api/home.js"
+    },
+    {
+      "src": "/robots\\.txt",
+      "dest": "/api/robots.txt.js"
+    },
+    {
+      "src": "/sitemap\\.xml",
+      "dest": "/api/sitemap.xml.js"
+    },
+    {
       "src": "/mcp",
       "dest": "/api/mcp/index.js"
     },
@@ -25,6 +37,18 @@
     {
       "src": "/\\.well-known/api-catalog",
       "dest": "/api/well-known/api-catalog.js"
+    },
+    {
+      "src": "/\\.well-known/mcp/server-card\\.json",
+      "dest": "/api/well-known/mcp/server-card.js"
+    },
+    {
+      "src": "/\\.well-known/agent-skills/index\\.json",
+      "dest": "/api/well-known/agent-skills/index.js"
+    },
+    {
+      "src": "/\\.well-known/agent-skills/([^/]+)/SKILL\\.md",
+      "dest": "/api/well-known/agent-skills/skill.js?name=$1"
     },
     {
       "src": "/api/(.*)",
