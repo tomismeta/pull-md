@@ -1,4 +1,5 @@
 import manifestHandler from './manifest.js';
+import { setMarkdownDocumentHeaders } from '../_lib/agent_ready.js';
 import { setDiscoveryHeaders } from '../_lib/discovery.js';
 import { setCors } from '../_lib/payments.js';
 
@@ -75,6 +76,8 @@ function renderWebmcpMarkdown(manifest) {
     '',
     '## Canonical Endpoints',
     '- API catalog: `GET /.well-known/api-catalog`',
+    '- MCP server card: `GET /.well-known/mcp/server-card.json`',
+    '- Agent skills index: `GET /.well-known/agent-skills/index.json`',
     '- OpenAPI service description: `GET /api/openapi.json`',
     '- Manifest: `GET /api/mcp/manifest`',
     '- Markdown contract: `GET /WEBMCP.md`',
@@ -90,6 +93,8 @@ function renderWebmcpMarkdown(manifest) {
     '',
     '## Discovery',
     `- API catalog: ${escapeCell(discovery.api_catalog || '/.well-known/api-catalog')}`,
+    `- MCP server card: ${escapeCell(discovery.mcp_server_card || '/.well-known/mcp/server-card.json')}`,
+    `- Agent skills index: ${escapeCell(discovery.agent_skills || '/.well-known/agent-skills/index.json')}`,
     `- Service description: ${escapeCell(discovery.service_desc || '/api/openapi.json')}`,
     `- Service docs: ${escapeCell(discovery.service_doc || '/WEBMCP.md')}`,
     `- Service metadata: ${escapeCell(discovery.service_meta || '/api/mcp/manifest')}`,
@@ -165,7 +170,7 @@ export default async function handler(req, res) {
   try {
     const manifest = await loadManifestPayload(req.headers.origin);
     const markdown = renderWebmcpMarkdown(manifest || {});
-    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    setMarkdownDocumentHeaders(res, markdown, { sMaxAge: 900, staleWhileRevalidate: 86400 });
     return res.status(200).send(markdown);
   } catch (error) {
     return res.status(500).json({

@@ -1,11 +1,19 @@
 {
   "version": 2,
   "functions": {
+    "api/mcp/manifest.js": {
+      "includeFiles": "public/index.html"
+    },
     "api/assets/[id]/download.js": {
       "includeFiles": "souls/**/*.md"
     }
   },
   "routes": [
+    {
+      "src": "/",
+      "dest": "/api/mcp/manifest.js?view=home",
+      "methods": ["GET", "HEAD"]
+    },
     {
       "src": "/mcp",
       "dest": "/api/mcp/index.js"

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "discover-catalog",
+      "type": "skill-md",
+      "description": "Discover the PULL.md catalog and choose the right REST or MCP entrypoint for the task.",
+      "url": "/.well-known/agent-skills/discover-catalog/SKILL.md",
+      "digest": "sha256:055cc0af8594c3351471ad4c9e5e4cad2ac21b3fc1950d7866f4f9009c86f201"
+    },
+    {
+      "name": "purchase-asset",
+      "type": "skill-md",
+      "description": "Buy or re-download a PULL.md markdown asset through the canonical x402 download flow.",
+      "url": "/.well-known/agent-skills/purchase-asset/SKILL.md",
+      "digest": "sha256:5ed5293b1427f9983af42f9e176cf940a7eeb1909d3fbb9cefce046f0ed74529"
+    },
+    {
+      "name": "publish-asset",
+      "type": "skill-md",
+      "description": "Publish a markdown asset to PULL.md using the MCP creator flow and SIWE wallet proof.",
+      "url": "/.well-known/agent-skills/publish-asset/SKILL.md",
+      "digest": "sha256:79860aa322067277bd8d15c31f648beab3e1b2541c0e27f504b34b42a29c4c1e"
+    }
+  ]
+}

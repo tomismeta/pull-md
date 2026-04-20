@@ -1,0 +1,50 @@
+User-agent: *
+Allow: /
+Allow: /.well-known/
+Allow: /WEBMCP.md
+Allow: /api/openapi.json
+Allow: /api/mcp/manifest
+Allow: /api/assets
+Disallow: /api/assets/
+Disallow: /admin.html
+Disallow: /create.html
+Disallow: /api/auth/
+Disallow: /api/moderation
+Disallow: /api/ui/
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+Allow: /.well-known/
+Allow: /WEBMCP.md
+Allow: /api/openapi.json
+Allow: /api/mcp/manifest
+Allow: /api/assets
+Disallow: /api/assets/
+Disallow: /admin.html
+Disallow: /create.html
+Disallow: /api/auth/
+Disallow: /api/moderation
+Disallow: /api/ui/
+
+User-agent: Claude-Web
+Allow: /
+Allow: /.well-known/
+Allow: /WEBMCP.md
+Allow: /api/openapi.json
+Allow: /api/mcp/manifest
+Allow: /api/assets
+Disallow: /api/assets/
+Disallow: /admin.html
+Disallow: /create.html
+Disallow: /api/auth/
+Disallow: /api/moderation
+Disallow: /api/ui/
+
+Sitemap: https://pull.md/sitemap.xml
+Content-Signal: ai-train=no, search=yes, ai-input=yes
