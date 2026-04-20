@@ -66,6 +66,7 @@ test('homepage returns markdown when requested by agents', async () => {
   assert.match(String(res.headers['x-markdown-tokens'] || ''), /^[0-9]+$/);
   assert.match(String(res.body || ''), /^# PULL\.md/m);
   assert.match(String(res.body || ''), /GET \/\.well-known\/mcp\/server-card\.json/);
+  assert.match(String(res.body || ''), /OAuth\/OIDC discovery metadata is intentionally absent/i);
 });
 
 test('robots.txt publishes crawler policy, sitemap, and AI preferences', async () => {

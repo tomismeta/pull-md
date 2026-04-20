@@ -64,6 +64,12 @@ export default function handler(req, res) {
     },
     auth: {
       type: 'x402',
+      payment_protocol: 'x402',
+      identity_auth: 'siwe_eip4361',
+      oauth2_supported: false,
+      oidc_supported: false,
+      oauth_discovery_note:
+        'OAuth/OIDC discovery metadata is intentionally absent in this deployment: protected flows do not use bearer tokens. Wallet identity/auth uses SIWE (EIP-4361); payment and entitlement delivery use x402 plus receipt-bound headers.',
       network: 'eip155:8453',
       currency: 'USDC',
       headers: [

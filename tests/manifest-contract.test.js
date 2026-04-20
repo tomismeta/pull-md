@@ -42,6 +42,9 @@ test('manifest exposes strict agent guardrails and facilitator capability flags'
   assert.equal(body.discovery?.service_doc?.endsWith('/WEBMCP.md'), true);
   assert.equal(body.discovery?.service_meta?.endsWith('/api/mcp/manifest'), true);
   assert.equal(body.download_contract?.method, 'GET');
+  assert.equal(body.auth?.oauth2_supported, false);
+  assert.equal(body.auth?.oidc_supported, false);
+  assert.match(String(body.auth?.oauth_discovery_note || ''), /do not use bearer tokens/i);
   assert.match(String(body.download_contract?.first_request || ''), /X-WALLET-ADDRESS/);
   assert.equal(body.facilitator_capabilities?.strict_agent_default_transfer_method, 'eip3009');
   assert.match(String(body.facilitator_capabilities?.note || ''), /permit2/i);

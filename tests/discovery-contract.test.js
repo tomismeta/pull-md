@@ -79,6 +79,8 @@ test('openapi endpoint exposes canonical REST paths', async () => {
   assert.ok(res.body?.paths?.['/api/assets']);
   assert.ok(res.body?.paths?.['/api/assets/{id}/download']);
   assert.ok(res.body?.paths?.['/api/mcp/manifest']);
+  assert.equal(res.body?.['x-pullmd-auth-model']?.oauth2_supported, false);
+  assert.match(String(res.body?.info?.description || ''), /OAuth\/OIDC discovery metadata is intentionally absent/i);
 });
 
 test('core endpoints include discovery Link headers', async () => {
