@@ -8,7 +8,6 @@ import {
   setMarkdownDocumentHeaders
 } from './_lib/agent_ready.js';
 import { buildDiscoveryLinkHeader, resolveBaseUrl } from './_lib/discovery.js';
-import { listAssetsCatalog } from './_lib/services/assets.js';
 
 const INDEX_HTML_PATH = path.join(process.cwd(), 'public', 'index.html');
 let homepageHtmlPromise = null;
@@ -20,21 +19,7 @@ function loadHomepageHtml() {
   return homepageHtmlPromise;
 }
 
-function assetSummaryLine(asset) {
-  const id = String(asset?.id || '').trim();
-  const assetType = String(asset?.asset_type || '').trim().toUpperCase() || 'ASSET';
-  const name = String(asset?.name || '').trim() || id || 'Untitled asset';
-  const description = String(asset?.description || '').trim() || 'Markdown asset listing';
-  const sharePath =
-    String(asset?.share_path || '').trim() || `/asset.html?id=${encodeURIComponent(id)}`;
-  return `- [${name}](${sharePath}) \`${assetType}.md\` - ${description}`;
-}
-
-function renderHomepageMarkdown(baseUrl, assets = []) {
-  const catalogLines = Array.isArray(assets) && assets.length
-    ? assets.slice(0, 12).map((asset) => assetSummaryLine(asset))
-    : ['- Catalog data loads from `GET /api/assets`.'];
-
+function renderHomepageMarkdown(baseUrl) {
   return [
     '---',
     'title: PULL.md',
@@ -66,7 +51,8 @@ function renderHomepageMarkdown(baseUrl, assets = []) {
     '',
     '## Current Catalog',
     '',
-    ...catalogLines,
+    '- Fetch `GET /api/assets` to enumerate the current public markdown asset catalog.',
+    '- Use `POST /mcp` with `list_assets` when you want the MCP orchestration view of the same catalog.',
     '',
     '## Notes',
     '',
@@ -98,13 +84,7 @@ export default async function handler(req, res) {
 
   const prefersMarkdown = requestPrefersMarkdown(req.headers || {});
   if (prefersMarkdown) {
-    let assets = [];
-    try {
-      assets = await listAssetsCatalog();
-    } catch (_) {
-      assets = [];
-    }
-    const markdown = renderHomepageMarkdown(baseUrl, assets);
+    const markdown = renderHomepageMarkdown(baseUrl);
     setMarkdownDocumentHeaders(res, markdown, { sMaxAge: 300, staleWhileRevalidate: 86400 });
     if (method === 'HEAD') {
       return res.status(200).end();

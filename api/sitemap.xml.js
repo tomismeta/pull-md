@@ -1,6 +1,5 @@
 import { cacheControl, escapeXml, setPublicReadHeaders } from './_lib/agent_ready.js';
 import { resolveBaseUrl } from './_lib/discovery.js';
-import { listAssetsCatalog } from './_lib/services/assets.js';
 
 function toAbsoluteUrl(baseUrl, pathOrUrl) {
   try {
@@ -8,22 +7,6 @@ function toAbsoluteUrl(baseUrl, pathOrUrl) {
   } catch (_) {
     return new URL('/', baseUrl).href;
   }
-}
-
-function candidateLastmod(asset) {
-  const values = [
-    asset?.scan_scanned_at,
-    asset?.updated_at,
-    asset?.published_at,
-    asset?.created_at
-  ];
-  for (const value of values) {
-    const timestamp = Date.parse(String(value || ''));
-    if (Number.isFinite(timestamp)) {
-      return new Date(timestamp).toISOString();
-    }
-  }
-  return null;
 }
 
 function renderUrlEntry(loc, lastmod = null) {
@@ -48,20 +31,9 @@ function buildStaticUrlEntries(baseUrl) {
   ];
 }
 
-function buildAssetEntries(baseUrl, assets) {
-  return (Array.isArray(assets) ? assets : []).map((asset) => {
-    const sharePath =
-      String(asset?.share_path || '').trim() || `/asset.html?id=${encodeURIComponent(String(asset?.id || ''))}`;
-    return {
-      loc: toAbsoluteUrl(baseUrl, sharePath),
-      lastmod: candidateLastmod(asset)
-    };
-  });
-}
-
-function renderSitemap(baseUrl, assets) {
+function renderSitemap(baseUrl) {
   const byUrl = new Map();
-  for (const entry of [...buildStaticUrlEntries(baseUrl), ...buildAssetEntries(baseUrl, assets)]) {
+  for (const entry of buildStaticUrlEntries(baseUrl)) {
     if (!entry?.loc) continue;
     if (!byUrl.has(entry.loc)) {
       byUrl.set(entry.loc, entry);
@@ -91,14 +63,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let assets = [];
-  try {
-    assets = await listAssetsCatalog();
-  } catch (_) {
-    assets = [];
-  }
-
-  const body = renderSitemap(resolveBaseUrl(req.headers || {}), assets);
+  const body = renderSitemap(resolveBaseUrl(req.headers || {}));
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
   if (method === 'HEAD') {
     return res.status(200).end();
