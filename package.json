@@ -12,12 +12,12 @@
   },
   "dependencies": {
     "@braintree/sanitize-url": "^7.1.2",
-    "@coinbase/cdp-sdk": "^1.47.0",
+    "@coinbase/cdp-sdk": "^1.48.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@x402/core": "^2.9.0",
-    "@x402/evm": "^2.9.0",
-    "@x402/fetch": "^2.9.0",
-    "@x402/next": "^2.9.0",
+    "@x402/core": "^2.10.0",
+    "@x402/evm": "^2.10.0",
+    "@x402/fetch": "^2.10.0",
+    "@x402/next": "^2.10.0",
     "confusables": "^1.1.1",
     "ethers": "^6.16.0",
     "ipaddr.js": "^2.3.0",
@@ -30,13 +30,14 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "vercel": "^50.44.0"
+    "vercel": "^51.8.0"
   },
   "overrides": {
     "axios": "1.15.0",
+    "follow-redirects": "1.16.0",
     "ajv": "8.18.0",
-    "hono": "4.12.12",
-    "@hono/node-server": "1.19.13",
+    "hono": "4.12.14",
+    "@hono/node-server": "1.19.14",
     "express-rate-limit": "8.3.2",
     "next": "16.2.3",
     "path-to-regexp": "8.4.2"
