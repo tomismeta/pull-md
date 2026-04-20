@@ -94,13 +94,20 @@ export function buildPublicAssetsResponse(assets) {
     count: assets.length,
     meta: {
       discovery: 'public_catalog',
+      commerce_site: true,
+      payment_protocol: 'x402',
       api_catalog: '/.well-known/api-catalog',
       service_desc: '/api/openapi.json',
       mcp_manifest: '/api/mcp/manifest',
       mcp_endpoint: '/mcp',
       mcp_list_tool: 'list_assets',
       enabled_asset_types: [...enabledAssetTypes()],
-      purchase_flow: 'GET /api/assets/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE'
+      purchase_flow: 'GET /api/assets/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE',
+      canonical_purchase_endpoint_pattern: '/api/assets/{id}/download',
+      paywall_status_code: 402,
+      payment_headers: ['PAYMENT-REQUIRED', 'PAYMENT-SIGNATURE', 'PAYMENT-RESPONSE'],
+      purchase_endpoint_field: 'purchase_endpoint',
+      payment_protocol_field: 'payment_protocol'
     }
   };
 }

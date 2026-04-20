@@ -35,6 +35,11 @@ function discoveryLinkEntries(baseUrl) {
       href: `${baseUrl}/api/mcp/manifest`,
       rel: 'service-meta',
       type: 'application/json'
+    },
+    {
+      href: `${baseUrl}/api/assets`,
+      rel: 'item',
+      type: 'application/json'
     }
   ];
 }
@@ -68,8 +73,7 @@ export function setDiscoveryHeaders(res, req) {
 export function buildApiCatalogHeadLinkHeader(baseUrl) {
   const entries = [
     ...discoveryLinkEntries(baseUrl),
-    { href: `${baseUrl}/mcp`, rel: 'item' },
-    { href: `${baseUrl}/api/assets`, rel: 'item' }
+    { href: `${baseUrl}/mcp`, rel: 'item' }
   ];
   return entries
     .map((entry) => serializeLinkEntry(entry))
@@ -92,6 +96,12 @@ export function buildApiCatalogDocument(baseUrl) {
       },
       {
         anchor: `${baseUrl}/api/assets`,
+        'service-desc': [{ href: `${baseUrl}/api/openapi.json`, type: OPENAPI_CONTENT_TYPE }],
+        'service-doc': [{ href: `${baseUrl}/WEBMCP.md`, type: 'text/markdown' }],
+        'service-meta': [{ href: `${baseUrl}/api/mcp/manifest`, type: 'application/json' }]
+      },
+      {
+        anchor: `${baseUrl}/api/assets/{id}/download`,
         'service-desc': [{ href: `${baseUrl}/api/openapi.json`, type: OPENAPI_CONTENT_TYPE }],
         'service-doc': [{ href: `${baseUrl}/WEBMCP.md`, type: 'text/markdown' }],
         'service-meta': [{ href: `${baseUrl}/api/mcp/manifest`, type: 'application/json' }]
