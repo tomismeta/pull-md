@@ -8,11 +8,19 @@ function buildOpenApiDocument(baseUrl) {
       version: '1.0.0',
       summary: 'REST discovery and commerce endpoints for PULL.md',
       description:
-        'REST surface for public catalog discovery and canonical x402 purchase/re-download delivery. MCP transport is exposed separately at /mcp.',
+        'REST surface for public catalog discovery and canonical x402 purchase/re-download delivery. MCP transport is exposed separately at /mcp. OAuth/OIDC discovery metadata is intentionally absent in this deployment: protected flows do not use bearer tokens, wallet identity uses SIWE (EIP-4361), and payment/entitlement delivery use x402 plus receipt-bound headers.',
       contact: {
         name: 'PULL.md Support',
         url: `${baseUrl}/WEBMCP.md`
       }
+    },
+    'x-pullmd-auth-model': {
+      payment_protocol: 'x402',
+      wallet_identity_auth: 'siwe_eip4361',
+      oauth2_supported: false,
+      oidc_supported: false,
+      note:
+        'Protected flows do not use OAuth bearer tokens in this deployment. Use SIWE for wallet identity/auth and x402 plus receipt-bound headers for payment and re-download.'
     },
     servers: [{ url: baseUrl }],
     paths: {

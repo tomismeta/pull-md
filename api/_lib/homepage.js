@@ -58,7 +58,8 @@ function renderHomepageMarkdown(baseUrl) {
     '',
     '- Publishing remains MCP-first: call `get_auth_challenge`, sign the exact SIWE message, then call `publish_listing`.',
     '- Buying remains REST-first: call `GET /api/assets/{id}/download`, handle `402 PAYMENT-REQUIRED`, then retry with `PAYMENT-SIGNATURE`.',
-    '- Re-download remains receipt-first: persist `X-PURCHASE-RECEIPT` and prove wallet control on later downloads.'
+    '- Re-download remains receipt-first: persist `X-PURCHASE-RECEIPT` and prove wallet control on later downloads.',
+    '- OAuth/OIDC discovery metadata is intentionally absent in this deployment: protected flows do not use bearer tokens. Wallet identity uses SIWE (EIP-4361); payment and entitlement delivery use x402 plus receipt-bound headers.'
   ].join('\n');
 }
 

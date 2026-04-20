@@ -14,6 +14,13 @@ Canonical production host:
 - `https://www.pull.md`
 - Do not rely on preview/alias domains for contract verification.
 
+## Auth Model
+
+- OAuth/OIDC discovery metadata is intentionally absent in this deployment.
+- Protected flows do not use bearer tokens.
+- Wallet identity and request authentication use SIWE (EIP-4361).
+- Payment and entitlement delivery use x402 plus receipt-bound re-download headers.
+
 ## Wallet Compatibility Status (2026-02-14)
 
 - Browser UX wallet scope:

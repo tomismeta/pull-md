@@ -49,6 +49,7 @@ test('WEBMCP markdown endpoint is generated from manifest contract', async () =>
   assert.match(body, /GET \/api\/openapi\.json/);
   assert.match(body, /GET \/api\/mcp\/manifest/);
   assert.match(body, /GET \/api\/assets\/\{id\}\/download/);
+  assert.match(body, /OAuth\/OIDC discovery metadata is intentionally absent/i);
   assert.match(body, /## Flow Visualizations/);
   assert.match(body, /### Creator Publish \(MCP\)/);
   assert.match(body, /### Purchase \+ Re-download \(REST\)/);
