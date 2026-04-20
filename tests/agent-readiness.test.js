@@ -3,9 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import crypto from 'crypto';
 
-import homeHandler from '../api/home.js';
-import robotsHandler from '../api/robots.txt.js';
-import sitemapHandler from '../api/sitemap.xml.js';
+import manifestHandler from '../api/mcp/manifest.js';
 
 function runRequest(handler, { method = 'GET', headers = {}, query = {} } = {}) {
   return new Promise((resolve, reject) => {
@@ -43,9 +41,10 @@ function runRequest(handler, { method = 'GET', headers = {}, query = {} } = {}) 
 }
 
 test('homepage returns HTML by default with discovery Link headers', async () => {
-  const res = await runRequest(homeHandler, {
+  const res = await runRequest(manifestHandler, {
     method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https', accept: 'text/html' }
+    headers: { host: 'pull.md', 'x-forwarded-proto': 'https', accept: 'text/html' },
+    query: { view: 'home' }
   });
   assert.equal(res.statusCode, 200);
   assert.match(String(res.headers['content-type'] || ''), /text\/html/i);
@@ -56,9 +55,10 @@ test('homepage returns HTML by default with discovery Link headers', async () =>
 });
 
 test('homepage returns markdown when requested by agents', async () => {
-  const res = await runRequest(homeHandler, {
+  const res = await runRequest(manifestHandler, {
     method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https', accept: 'text/markdown, text/html;q=0.8' }
+    headers: { host: 'pull.md', 'x-forwarded-proto': 'https', accept: 'text/markdown, text/html;q=0.8' },
+    query: { view: 'home' }
   });
   assert.equal(res.statusCode, 200);
   assert.match(String(res.headers['content-type'] || ''), /text\/markdown/i);
@@ -69,13 +69,7 @@ test('homepage returns markdown when requested by agents', async () => {
 });
 
 test('robots.txt publishes crawler policy, sitemap, and AI preferences', async () => {
-  const res = await runRequest(robotsHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(res.statusCode, 200);
-  assert.match(String(res.headers['content-type'] || ''), /text\/plain/i);
-  const body = String(res.body || '');
+  const body = fs.readFileSync(new URL('../public/robots.txt', import.meta.url), 'utf8');
   assert.match(body, /User-agent: GPTBot/);
   assert.match(body, /User-agent: Claude-Web/);
   assert.match(body, /User-agent: OAI-SearchBot/);
@@ -84,13 +78,7 @@ test('robots.txt publishes crawler policy, sitemap, and AI preferences', async (
 });
 
 test('sitemap.xml includes core discovery documents', async () => {
-  const res = await runRequest(sitemapHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(res.statusCode, 200);
-  assert.match(String(res.headers['content-type'] || ''), /application\/xml/i);
-  const body = String(res.body || '');
+  const body = fs.readFileSync(new URL('../public/sitemap.xml', import.meta.url), 'utf8');
   assert.match(body, /<urlset/);
   assert.match(body, /https:\/\/pull\.md\/<\/loc>/);
   assert.match(body, /https:\/\/pull\.md\/WEBMCP\.md/);

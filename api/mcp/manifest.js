@@ -1,6 +1,7 @@
 import { getMcpToolsForManifest } from '../_lib/mcp_tools.js';
 import { getMcpServerMetadata } from '../_lib/mcp_sdk.js';
 import { setDiscoveryHeaders } from '../_lib/discovery.js';
+import { handleHomepageRequest } from '../_lib/homepage.js';
 
 function enabledAssetTypes() {
   const raw = String(process.env.ENABLED_MARKDOWN_ASSET_TYPES || 'soul,skill')
@@ -11,6 +12,14 @@ function enabledAssetTypes() {
 }
 
 export default function handler(req, res) {
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'www.pull.md').trim();
+  const proto = String(req.headers['x-forwarded-proto'] || 'https').trim();
+  const baseUrl = `${proto}://${host}`;
+
+  if (String(req.query?.view || '').trim().toLowerCase() === 'home') {
+    return handleHomepageRequest({ req, res, baseUrl });
+  }
+
   const allowedOrigins = [
     'https://pullmd.vercel.app',
     'https://pullmd.io',
@@ -32,10 +41,6 @@ export default function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-
-  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'www.pull.md').trim();
-  const proto = String(req.headers['x-forwarded-proto'] || 'https').trim();
-  const baseUrl = `${proto}://${host}`;
 
   const tools = getMcpToolsForManifest();
   const mcpMetadata = getMcpServerMetadata();

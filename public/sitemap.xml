@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://pull.md/</loc>
+  </url>
+  <url>
+    <loc>https://pull.md/security.html</loc>
+  </url>
+  <url>
+    <loc>https://pull.md/WEBMCP.md</loc>
+  </url>
+  <url>
+    <loc>https://pull.md/.well-known/api-catalog</loc>
+  </url>
+  <url>
+    <loc>https://pull.md/.well-known/mcp/server-card.json</loc>
+  </url>
+  <url>
+    <loc>https://pull.md/.well-known/agent-skills/index.json</loc>
+  </url>
+  <url>
+    <loc>https://pull.md/api/openapi.json</loc>
+  </url>
+  <url>
+    <loc>https://pull.md/api/mcp/manifest</loc>
+  </url>
+  <url>
+    <loc>https://pull.md/api/assets</loc>
+  </url>
+</urlset>
