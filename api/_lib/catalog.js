@@ -2,6 +2,12 @@ import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  defaultFileNameForAssetType,
+  normalizeAssetType,
+  normalizeMarkdownFileName
+} from './asset_metadata.js';
+import { hasPrimaryDatabase } from './db.js';
 import { listPublishedCatalogEntries } from './marketplace.js';
 
 export const SOUL_CATALOG = {
@@ -107,13 +113,6 @@ function bundledCatalogValues() {
   return includeBundledSouls() ? Object.values(SOUL_CATALOG) : [];
 }
 
-function normalizeAssetType(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-');
-}
-
 function canonicalSharePath(value, id) {
   const fallback = `/asset.html?id=${encodeURIComponent(String(id || ''))}`;
   const raw = String(value || '').trim();
@@ -122,30 +121,6 @@ function canonicalSharePath(value, id) {
     return raw.replace(/^\/soul\.html\?/i, '/asset.html?');
   }
   return raw;
-}
-
-function defaultFileNameForAssetType(assetType) {
-  const normalized = normalizeAssetType(assetType);
-  const mapping = {
-    soul: 'SOUL.md',
-    skill: 'SKILL.md',
-    playbook: 'PLAYBOOK.md',
-    policy: 'POLICY.md',
-    prompt: 'PROMPT.md',
-    guide: 'GUIDE.md',
-    workflow: 'WORKFLOW.md',
-    knowledge: 'KNOWLEDGE.md'
-  };
-  return mapping[normalized] || 'ASSET.md';
-}
-
-function normalizeMarkdownFileName(value, fallback) {
-  const candidate = String(value || '').trim();
-  if (!candidate) return fallback;
-  if (candidate.includes('/') || candidate.includes('\\')) return fallback;
-  if (!/\.md$/i.test(candidate)) return fallback;
-  if (!/^[A-Za-z0-9._-]+$/.test(candidate)) return fallback;
-  return candidate;
 }
 
 function normalizeCatalogAsset(asset) {
@@ -172,8 +147,7 @@ function getMarketplaceDraftsDir() {
 }
 
 function hasMarketplaceDatabaseConfigured() {
-  const keys = ['MARKETPLACE_DATABASE_URL', 'DATABASE_URL', 'POSTGRES_URL'];
-  return keys.some((key) => Boolean(String(process.env[key] || '').trim()));
+  return hasPrimaryDatabase();
 }
 
 function isStrictPublishedCatalogMode() {

@@ -8,6 +8,7 @@ import {
   setMarkdownDocumentHeaders
 } from './agent_ready.js';
 import { buildDiscoveryLinkHeader } from './discovery.js';
+import { buildDiscoveryUrls } from './public_contract.js';
 
 const INDEX_HTML_PATH = path.join(process.cwd(), 'public', 'index.html');
 let homepageHtmlPromise = null;
@@ -20,6 +21,7 @@ function loadHomepageHtml() {
 }
 
 function renderHomepageMarkdown(baseUrl) {
+  const discovery = buildDiscoveryUrls(baseUrl);
   return [
     '---',
     'title: PULL.md',
@@ -33,22 +35,22 @@ function renderHomepageMarkdown(baseUrl) {
     '## Quickstart',
     '',
     '- MCP transport: `POST /mcp`',
-    '- REST discovery: `GET /.well-known/api-catalog`',
-    '- OpenAPI: `GET /api/openapi.json`',
-    '- MCP manifest: `GET /api/mcp/manifest`',
-    '- Public catalog: `GET /api/assets`',
-    '- Purchase + re-download: `GET /api/assets/{id}/download`',
+    `- REST discovery: \`GET ${discovery.api_catalog.replace(baseUrl, '')}\``,
+    `- OpenAPI: \`GET ${discovery.openapi.replace(baseUrl, '')}\``,
+    `- MCP manifest: \`GET ${discovery.mcp_manifest.replace(baseUrl, '')}\``,
+    `- Public catalog: \`GET ${discovery.public_catalog.replace(baseUrl, '')}\``,
+    `- Purchase + re-download: \`GET ${discovery.canonical_purchase_endpoint_pattern.replace(baseUrl, '')}\``,
     '- x402 paywall contract: `402 PAYMENT-REQUIRED` -> retry with `PAYMENT-SIGNATURE`',
-    '- MCP server card: `GET /.well-known/mcp/server-card.json`',
-    '- Agent skills index: `GET /.well-known/agent-skills/index.json`',
+    `- MCP server card: \`GET ${discovery.mcp_server_card.replace(baseUrl, '')}\``,
+    `- Agent skills index: \`GET ${discovery.agent_skills.replace(baseUrl, '')}\``,
     '',
     '## Discovery',
     '',
     `- Base URL: ${baseUrl}`,
-    `- API catalog: ${baseUrl}/.well-known/api-catalog`,
-    `- OpenAPI: ${baseUrl}/api/openapi.json`,
-    `- MCP manifest: ${baseUrl}/api/mcp/manifest`,
-    `- WebMCP markdown contract: ${baseUrl}/WEBMCP.md`,
+    `- API catalog: ${discovery.api_catalog}`,
+    `- OpenAPI: ${discovery.openapi}`,
+    `- MCP manifest: ${discovery.mcp_manifest}`,
+    `- WebMCP markdown contract: ${discovery.webmcp_markdown}`,
     '',
     '## Commerce',
     '',
@@ -66,7 +68,7 @@ function renderHomepageMarkdown(baseUrl) {
     '',
     '- Publishing remains MCP-first: call `get_auth_challenge`, sign the exact SIWE message, then call `publish_listing`.',
     '- Buying remains REST-first: call `GET /api/assets/{id}/download`, handle `402 PAYMENT-REQUIRED`, then retry with `PAYMENT-SIGNATURE`.',
-    '- Re-download remains receipt-first: persist `X-PURCHASE-RECEIPT` and prove wallet control on later downloads.',
+    '- Re-download remains entitlement-first: persist `X-PURCHASE-RECEIPT` as secret proof and retain `X-BLOCKCHAIN-TRANSACTION` as a secondary recovery pointer, then prove wallet control on later downloads.',
     '- OAuth/OIDC discovery metadata is intentionally absent in this deployment: protected flows do not use bearer tokens. Wallet identity uses SIWE (EIP-4361); payment and entitlement delivery use x402 plus receipt-bound headers.'
   ].join('\n');
 }

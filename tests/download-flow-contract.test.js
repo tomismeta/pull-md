@@ -55,6 +55,29 @@ test('classifyRedownloadHeaders supports session recovery mode', () => {
   assert.equal(result.hasSessionRecoveryHeaders, true);
 });
 
+test('classifyRedownloadHeaders supports blockchain transaction recovery reference', () => {
+  const result = classifyRedownloadHeaders({
+    headers: {
+      'x-wallet-address': WALLET,
+      'x-blockchain-transaction': '0x' + '12'.repeat(32)
+    }
+  });
+  assert.equal(result.mode, 'transaction_reference');
+  assert.equal(result.hasAnyValidEntitlementHeaders, true);
+  assert.equal(result.hasTransactionRedownloadHeaders, true);
+});
+
+test('classifyRedownloadHeaders accepts assetId alias for receipt cookie lookup', () => {
+  const result = classifyRedownloadHeaders({
+    headers: {
+      'x-wallet-address': WALLET
+    },
+    assetId: 'the-rock-v1',
+    cookieHeader: 'pullmd_receipt_the-rock-v1=receipt-cookie-token'
+  });
+  assert.equal(result.receiptCookie, 'receipt-cookie-token');
+});
+
 test('classifyRedownloadHeaders supports signed recovery mode', () => {
   const result = classifyRedownloadHeaders({
     headers: {

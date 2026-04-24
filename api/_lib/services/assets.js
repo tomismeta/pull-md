@@ -3,20 +3,14 @@ import {
   getAssetResolved,
   listAssetsResolved
 } from '../catalog.js';
+import {
+  defaultFileNameForAssetType,
+  enabledAssetTypes,
+  isEnabledAssetType
+} from '../asset_metadata.js';
+import { buildPublicAssetsMeta } from '../public_contract.js';
 import { buildSiweAuthMessage, getSellerAddress, verifyPurchaseReceipt } from '../payments.js';
 import { AppError } from '../errors.js';
-
-function enabledAssetTypes() {
-  const raw = String(process.env.ENABLED_MARKDOWN_ASSET_TYPES || 'soul,skill')
-    .split(',')
-    .map((item) => String(item || '').trim().toLowerCase())
-    .filter(Boolean);
-  return new Set(raw.length ? raw : ['soul', 'skill']);
-}
-
-function isEnabledAssetType(value) {
-  return enabledAssetTypes().has(String(value || '').trim().toLowerCase());
-}
 
 function matchesAssetType(item, assetType) {
   const target = String(assetType || '').trim().toLowerCase();
@@ -81,9 +75,9 @@ export function buildMcpListAssetsResponse(assets) {
       security_scan_policy:
         'Publish/edit triggers markdown security scanning. In advisory mode findings are returned but publish can continue; in enforce mode critical findings block publish/edit.',
       reauth_flow:
-        'Strict headless agent: X-CLIENT-MODE: agent + X-WALLET-ADDRESS + X-PURCHASE-RECEIPT + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP. Human recovery: X-WALLET-ADDRESS + X-REDOWNLOAD-SESSION (or signed fallback).',
+        'Strict headless agent: X-CLIENT-MODE: agent + X-WALLET-ADDRESS + (X-PURCHASE-RECEIPT or X-BLOCKCHAIN-TRANSACTION) + X-REDOWNLOAD-SIGNATURE + X-REDOWNLOAD-TIMESTAMP. Human recovery: X-WALLET-ADDRESS + X-REDOWNLOAD-SESSION (or signed fallback).',
       receipt_handling:
-        'Persist X-PURCHASE-RECEIPT securely per wallet+asset. Treat it as sensitive proof material and do not log/share plaintext values.'
+        'Persist X-PURCHASE-RECEIPT securely per wallet+asset. Also retain X-BLOCKCHAIN-TRANSACTION or PAYMENT-RESPONSE.transaction as a non-secret recovery pointer. Do not log/share plaintext receipt values.'
     }
   };
 }
@@ -92,23 +86,7 @@ export function buildPublicAssetsResponse(assets) {
   return {
     assets,
     count: assets.length,
-    meta: {
-      discovery: 'public_catalog',
-      commerce_site: true,
-      payment_protocol: 'x402',
-      api_catalog: '/.well-known/api-catalog',
-      service_desc: '/api/openapi.json',
-      mcp_manifest: '/api/mcp/manifest',
-      mcp_endpoint: '/mcp',
-      mcp_list_tool: 'list_assets',
-      enabled_asset_types: [...enabledAssetTypes()],
-      purchase_flow: 'GET /api/assets/{id}/download -> 402 PAYMENT-REQUIRED -> retry with PAYMENT-SIGNATURE',
-      canonical_purchase_endpoint_pattern: '/api/assets/{id}/download',
-      paywall_status_code: 402,
-      payment_headers: ['PAYMENT-REQUIRED', 'PAYMENT-SIGNATURE', 'PAYMENT-RESPONSE'],
-      purchase_endpoint_field: 'purchase_endpoint',
-      payment_protocol_field: 'payment_protocol'
-    }
+    meta: buildPublicAssetsMeta()
   };
 }
 
@@ -134,7 +112,7 @@ export async function resolveAssetDetails(id) {
     throw new AppError(404, {
       error: 'Asset not found',
       reason: 'asset_type_not_enabled',
-      enabled_asset_types: [...enabledAssetTypes()]
+      enabled_asset_types: enabledAssetTypes()
     });
   }
 
@@ -147,7 +125,8 @@ export function buildMcpAssetDetailsResponse({ assetId, asset, summary, sellerAd
   const id = String(assetId || summary?.id || effectiveAsset.id || '').trim();
   const normalizedSummary = normalizeScanState(summary || {});
   const fileName =
-    String(normalizedSummary?.file_name || effectiveAsset.fileName || effectiveAsset.file_name || '').trim() || 'SOUL.md';
+    String(normalizedSummary?.file_name || effectiveAsset.fileName || effectiveAsset.file_name || '').trim() ||
+    defaultFileNameForAssetType(normalizedSummary?.asset_type || effectiveAsset.assetType || effectiveAsset.asset_type);
   return {
     asset: {
       ...normalizedSummary,
@@ -171,6 +150,13 @@ export function buildMcpAssetDetailsResponse({ assetId, asset, summary, sellerAd
           'X-REDOWNLOAD-SIGNATURE',
           'X-REDOWNLOAD-TIMESTAMP'
         ],
+        strict_agent_redownload_transaction: [
+          'X-CLIENT-MODE',
+          'X-WALLET-ADDRESS',
+          'X-BLOCKCHAIN-TRANSACTION',
+          'X-REDOWNLOAD-SIGNATURE',
+          'X-REDOWNLOAD-TIMESTAMP'
+        ],
         redownload_session_recovery: ['X-WALLET-ADDRESS', 'X-REDOWNLOAD-SESSION'],
         redownload_signed_recovery: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP'],
         redownload_session_bootstrap: ['X-WALLET-ADDRESS', 'X-AUTH-SIGNATURE', 'X-AUTH-TIMESTAMP']
@@ -180,9 +166,9 @@ export function buildMcpAssetDetailsResponse({ assetId, asset, summary, sellerAd
         header: 'X-CLIENT-MODE',
         value: 'agent',
         note:
-          'Strict headless mode requires receipt + wallet signature challenge for re-download. Session/auth recovery headers are not used.',
+          'Strict headless mode requires receipt or blockchain transaction reference plus wallet signature challenge for re-download. Session/auth recovery headers are not used.',
         receipt_security:
-          'Store X-PURCHASE-RECEIPT securely and never expose it in logs, analytics, prompts, or shared transcripts.'
+          'Store X-PURCHASE-RECEIPT securely and never expose it in logs, analytics, prompts, or shared transcripts. X-BLOCKCHAIN-TRANSACTION is safe to retain as a non-secret recovery pointer, but it is not a standalone proof.'
       },
       payment_payload_contract: {
         top_level_required: ['x402Version', 'scheme', 'network', 'accepted', 'payload'],
@@ -197,7 +183,7 @@ export function buildMcpAssetDetailsResponse({ assetId, asset, summary, sellerAd
         accepted_must_match: 'accepted must exactly equal PAYMENT-REQUIRED.accepts[0]',
         wallet_hint: 'Send X-WALLET-ADDRESS on paywall and paid retry requests for strict wallet binding and deterministic retries.',
         receipt_persistence_hint:
-          'After successful purchase, persist X-PURCHASE-RECEIPT in secure storage. This wallet-scoped proof is required for strict no-repay re-download.',
+          'After successful purchase, persist X-PURCHASE-RECEIPT in secure storage. Also retain the settlement transaction hash from PAYMENT-RESPONSE.transaction or X-BLOCKCHAIN-TRANSACTION for recovery. The receipt is secret proof; the transaction hash is a secondary public pointer.',
         method_rules: {
           eip3009: {
             typed_data_primary_type: 'TransferWithAuthorization',
@@ -226,7 +212,7 @@ export function buildMcpAssetDetailsResponse({ assetId, asset, summary, sellerAd
       auth_message_examples: {
         redownload: buildSiweAuthMessage({
           wallet: '0x<your-wallet>',
-          soulId: id,
+          assetId: id,
           action: 'redownload',
           timestamp: Date.now(),
           domain: 'www.pull.md',
@@ -234,7 +220,7 @@ export function buildMcpAssetDetailsResponse({ assetId, asset, summary, sellerAd
         }),
         session: buildSiweAuthMessage({
           wallet: '0x<your-wallet>',
-          soulId: '*',
+          assetId: '*',
           action: 'session',
           timestamp: Date.now(),
           domain: 'www.pull.md',
@@ -297,7 +283,7 @@ export async function checkReceiptEntitlements({ walletAddress, proofs }) {
       const check = verifyPurchaseReceipt({
         receipt,
         wallet,
-        soulId: assetId
+        assetId
       });
 
       return {

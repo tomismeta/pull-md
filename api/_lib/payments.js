@@ -1,22 +1,12 @@
 import crypto from 'crypto';
 import { ethers } from 'ethers';
+import {
+  buildSiweAuthMessage as buildSharedSiweAuthMessage,
+  buildSiweAuthMessageCandidates as buildSharedSiweAuthMessageCandidates,
+  parseAuthTimestamp as parseSharedAuthTimestamp,
+  resolveSiweIdentity as resolveSharedSiweIdentity
+} from './siwe.js';
 
-const SIWE_STATEMENT = 'Authenticate wallet ownership for PULL.md. No token transfer or approval.';
-function resolveSiweDomain() {
-  const configured = String(process.env.SIWE_DOMAIN || '').trim();
-  if (!configured) return 'www.pull.md';
-  if (configured.toLowerCase().includes('pullmd')) return 'www.pull.md';
-  return configured;
-}
-function resolveSiweUri(domain) {
-  const configured = String(process.env.SIWE_URI || '').trim();
-  if (!configured) return `https://${domain}`;
-  if (configured.toLowerCase().includes('pullmd')) return `https://${domain}`;
-  return configured;
-}
-const SIWE_DOMAIN = resolveSiweDomain();
-const SIWE_URI = resolveSiweUri(SIWE_DOMAIN);
-const SIWE_CHAIN_ID = Number(process.env.SIWE_CHAIN_ID || '8453');
 const EIP1271_MAGIC_VALUE = '0x1626ba7e';
 const EIP1271_MAGIC_VALUE_BYTES = '0x20c13b0b';
 const EIP1271_IFACE_32 = new ethers.Interface(['function isValidSignature(bytes32,bytes) view returns (bytes4)']);
@@ -26,25 +16,11 @@ const walletTypeCache = new Map();
 const WALLET_TYPE_CACHE_TTL_MS = Number(process.env.WALLET_TYPE_CACHE_TTL_MS || '300000');
 
 export function resolveSiweIdentity({ host, proto } = {}) {
-  const rawHost = String(host || '').trim().toLowerCase();
-  const rawProto = String(proto || '').trim().toLowerCase();
-  const isLocalHost =
-    rawHost.includes('localhost') ||
-    rawHost.startsWith('127.0.0.1') ||
-    rawHost.startsWith('0.0.0.0') ||
-    rawHost.endsWith('.local');
+  return resolveSharedSiweIdentity({ host, proto });
+}
 
-  const configuredDomain = resolveSiweDomain();
-  const domain = isLocalHost && rawHost ? rawHost : configuredDomain;
-
-  const configuredUri = resolveSiweUri(domain);
-  const configuredLooksLegacy = String(configuredUri || '').toLowerCase().includes('pullmd');
-  if (!configuredLooksLegacy) {
-    return { domain, uri: configuredUri };
-  }
-
-  const protocol = isLocalHost && rawProto === 'http' ? 'http' : 'https';
-  return { domain, uri: `${protocol}://${domain}` };
+export function buildSiweAuthMessage(args = {}) {
+  return buildSharedSiweAuthMessage(args);
 }
 
 function authRpcUrl() {
@@ -96,11 +72,11 @@ export function setCors(res, origin) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type, PAYMENT-SIGNATURE, X-CLIENT-MODE, X-WALLET-ADDRESS, X-ASSET-TRANSFER-METHOD, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SESSION, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP, X-REVIEWER, X-MODERATOR-ADDRESS, X-MODERATOR-SIGNATURE, X-MODERATOR-TIMESTAMP'
+    'Content-Type, PAYMENT-SIGNATURE, X-CLIENT-MODE, X-WALLET-ADDRESS, X-ASSET-TRANSFER-METHOD, X-AUTH-SIGNATURE, X-AUTH-TIMESTAMP, X-PURCHASE-RECEIPT, X-BLOCKCHAIN-TRANSACTION, X-SETTLEMENT-TRANSACTION, X-REDOWNLOAD-SESSION, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP, X-REVIEWER, X-MODERATOR-ADDRESS, X-MODERATOR-SIGNATURE, X-MODERATOR-TIMESTAMP'
   );
   res.setHeader(
     'Access-Control-Expose-Headers',
-    'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PURCHASE-RECEIPT, X-PURCHASE-RECEIPT-HINT, X-REDOWNLOAD-SESSION'
+    'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PURCHASE-RECEIPT, X-PURCHASE-RECEIPT-HINT, X-BLOCKCHAIN-TRANSACTION, X-REDOWNLOAD-SESSION'
   );
 }
 
@@ -118,7 +94,7 @@ export async function verifyWalletAuth({ wallet, soulId, action, timestamp, sign
     return { ok: false, error: 'Invalid wallet address' };
   }
 
-  const ts = parseAuthTimestamp(timestamp);
+  const ts = parseSharedAuthTimestamp(timestamp);
   if (!Number.isFinite(ts)) {
     return { ok: false, error: 'Invalid auth timestamp' };
   }
@@ -129,7 +105,14 @@ export async function verifyWalletAuth({ wallet, soulId, action, timestamp, sign
     return { ok: false, error: 'Authentication message expired' };
   }
 
-  const siweCandidates = buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp: ts, domain, uri });
+  const siweCandidates = buildSharedSiweAuthMessageCandidates({
+    wallet,
+    assetId: soulId,
+    action,
+    timestamp: ts,
+    domain,
+    uri
+  });
   const authDebug = {
     mode: 'siwe-only',
     tried_variants: siweCandidates.map((candidate) => candidate.variant),
@@ -219,89 +202,6 @@ async function call1271({ provider, to, iface, fn, args }) {
   }
 }
 
-function buildSiweAuthMessageCandidates({ wallet, soulId, action, timestamp, domain, uri }) {
-  const normalizedTimestamps = buildTimestampCandidates(timestamp);
-  const rawWallet = String(wallet || '').trim();
-  const walletLower = rawWallet.toLowerCase();
-  const checksummed = safeChecksumAddress(rawWallet);
-  const walletVariants = [walletLower, checksummed].filter(Boolean);
-  const uniqueWallets = [...new Set(walletVariants)];
-  const candidates = [];
-  for (const ts of normalizedTimestamps) {
-    for (const walletVariant of uniqueWallets) {
-      const walletVariantLabel = walletVariant === walletLower ? 'siwe-lowercase' : 'siwe-checksummed';
-      const tsLabel = ts === Number(timestamp) ? 'ts-ms' : 'ts-sec';
-      const baseVariant = `${walletVariantLabel}-${tsLabel}`;
-      const baseMessage = buildSiweAuthMessage({ wallet: walletVariant, soulId, action, timestamp: ts, domain, uri });
-      candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
-      candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
-      const crlf = baseMessage.replace(/\n/g, '\r\n');
-      candidates.push({ variant: `${baseVariant}-crlf`, message: crlf });
-      candidates.push({ variant: `${baseVariant}-crlf-trailing`, message: `${crlf}\r\n` });
-    }
-  }
-  return candidates;
-}
-
-function parseAuthTimestamp(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  const raw = String(value || '').trim();
-  if (!raw) return Number.NaN;
-  const numeric = Number(raw);
-  if (Number.isFinite(numeric)) return numeric;
-  const iso = Date.parse(raw);
-  if (Number.isFinite(iso)) return iso;
-  return Number.NaN;
-}
-
-function buildTimestampCandidates(ts) {
-  const base = Number(ts);
-  if (!Number.isFinite(base)) return [];
-  const sec = Math.floor(base / 1000) * 1000;
-  return [...new Set([base, sec])];
-}
-
-function buildSiweNonce({ soulId, action, timestamp }) {
-  const seed = `${String(soulId || '*')}|${String(action || '')}|${String(timestamp || '')}`;
-  return crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
-}
-
-export function buildSiweAuthMessage({ wallet, soulId, action, timestamp, domain, uri }) {
-  const address = String(wallet || '').trim().toLowerCase();
-  const ts = Number(timestamp);
-  const issuedAt = new Date(ts).toISOString();
-  const expiresAt = new Date(ts + 5 * 60 * 1000).toISOString();
-  const nonce = buildSiweNonce({ soulId, action, timestamp: ts });
-  const requestId = `${String(action || 'auth').trim()}:${String(soulId || '*').trim()}`;
-  const normalizedDomain = String(domain || SIWE_DOMAIN).trim() || SIWE_DOMAIN;
-  const normalizedUri = String(uri || `https://${normalizedDomain}`).trim() || `https://${normalizedDomain}`;
-  return [
-    `${normalizedDomain} wants you to sign in with your Ethereum account:`,
-    address,
-    '',
-    SIWE_STATEMENT,
-    '',
-    `URI: ${normalizedUri}`,
-    'Version: 1',
-    `Chain ID: ${Number.isFinite(SIWE_CHAIN_ID) ? SIWE_CHAIN_ID : 8453}`,
-    `Nonce: ${nonce}`,
-    `Issued At: ${issuedAt}`,
-    `Expiration Time: ${expiresAt}`,
-    `Request ID: ${requestId}`,
-    'Resources:',
-    `- urn:pullmd:action:${String(action || '').trim()}`,
-    `- urn:pullmd:asset:${String(soulId || '*').trim()}`
-  ].join('\n');
-}
-
-function safeChecksumAddress(address) {
-  try {
-    return ethers.getAddress(address);
-  } catch (_) {
-    return null;
-  }
-}
-
 function base64UrlEncode(input) {
   return Buffer.from(input)
     .toString('base64')
@@ -345,15 +245,17 @@ function purchaseReceiptTtlSeconds() {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 31536000;
 }
 
-export function createPurchaseReceipt({ wallet, soulId, transaction }) {
+export function createPurchaseReceipt({ wallet, assetId, soulId, transaction }) {
   const secret = receiptSecret();
   if (!secret) {
     throw new Error('Server configuration error: PURCHASE_RECEIPT_SECRET is required');
   }
+  const resolvedAssetId = String(assetId || soulId || '').trim();
 
   const payload = JSON.stringify({
     wallet: wallet.toLowerCase(),
-    soulId,
+    assetId: resolvedAssetId,
+    soulId: resolvedAssetId,
     transaction,
     iat: Date.now()
   });
@@ -363,11 +265,12 @@ export function createPurchaseReceipt({ wallet, soulId, transaction }) {
   return `${payloadB64}.${sigB64}`;
 }
 
-export function verifyPurchaseReceipt({ receipt, wallet, soulId }) {
+export function verifyPurchaseReceipt({ receipt, wallet, assetId, soulId }) {
   const secrets = receiptSecrets();
   if (secrets.length === 0) {
     return { ok: false, error: 'Server configuration error: PURCHASE_RECEIPT_SECRET is required' };
   }
+  const resolvedAssetId = String(assetId || soulId || '').trim();
 
   if (!receipt || typeof receipt !== 'string' || !receipt.includes('.')) {
     return { ok: false, error: 'Missing purchase receipt' };
@@ -398,8 +301,8 @@ export function verifyPurchaseReceipt({ receipt, wallet, soulId }) {
   if (payload.wallet !== wallet.toLowerCase()) {
     return { ok: false, error: 'Purchase receipt wallet mismatch' };
   }
-  if (payload.soulId !== soulId) {
-    return { ok: false, error: 'Purchase receipt soul mismatch' };
+  if (payload.assetId !== resolvedAssetId && payload.soulId !== resolvedAssetId) {
+    return { ok: false, error: 'Purchase receipt asset mismatch' };
   }
 
   return { ok: true, transaction: payload.transaction || null };
@@ -483,18 +386,18 @@ export function buildRedownloadSessionSetCookie({ token, reqHost }) {
   return `pullmd_redownload_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttl}${secure}`;
 }
 
-export function purchaseReceiptCookieName(soulId) {
-  const safeSoulId = String(soulId || '')
+export function purchaseReceiptCookieName(assetIdOrSoulId) {
+  const safeAssetId = String(assetIdOrSoulId || '')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, '');
-  return `pullmd_receipt_${safeSoulId || 'unknown'}`;
+  return `pullmd_receipt_${safeAssetId || 'unknown'}`;
 }
 
-export function buildPurchaseReceiptSetCookie({ soulId, receipt, reqHost }) {
+export function buildPurchaseReceiptSetCookie({ assetId, soulId, receipt, reqHost }) {
   const ttl = purchaseReceiptTtlSeconds();
   const host = String(reqHost || '').toLowerCase();
   const secure = host.includes('localhost') ? '' : '; Secure';
-  const name = purchaseReceiptCookieName(soulId);
+  const name = purchaseReceiptCookieName(assetId || soulId);
   return `${name}=${encodeURIComponent(String(receipt || ''))}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttl}${secure}`;
 }

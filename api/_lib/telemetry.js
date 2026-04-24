@@ -1,9 +1,8 @@
 import crypto from 'crypto';
-import { Pool } from 'pg';
 
+import { assertRelationsExist, getPrimaryDatabaseUrl, getSharedDbPool, qualifyPgRelation, resetSharedDbPool } from './db.js';
 import { AppError } from './errors.js';
 
-const DB_CONN_ENV_KEYS = ['MARKETPLACE_DATABASE_URL', 'DATABASE_URL', 'POSTGRES_URL'];
 const DEFAULT_TELEMETRY_SCHEMA = 'telemetry';
 const METADATA_MAX_BYTES_RAW = Number(process.env.TELEMETRY_METADATA_MAX_BYTES || '12288');
 const METADATA_MAX_BYTES =
@@ -17,7 +16,6 @@ const WALLET_RE = /^0x[a-f0-9]{40}$/i;
 const PG_IDENTIFIER_RE = /^[a-z_][a-z0-9_]*$/i;
 const TELEMETRY_DISABLED_VALUES = new Set(['0', 'false', 'off', 'no', 'disabled']);
 
-let dbPool = null;
 let dbSchemaReadyPromise = null;
 let dbSchemaReadyForDsn = null;
 
@@ -78,11 +76,7 @@ function hashWallet(wallet) {
 }
 
 function getTelemetryDatabaseUrl() {
-  for (const key of DB_CONN_ENV_KEYS) {
-    const value = String(process.env[key] || '').trim();
-    if (value) return value;
-  }
-  return '';
+  return getPrimaryDatabaseUrl();
 }
 
 function quoteIdentifier(value) {
@@ -107,13 +101,6 @@ function telemetryTableRef() {
   return `${quoteIdentifier(schema)}.${quoteIdentifier('marketplace_telemetry_events')}`;
 }
 
-function telemetryIndexName(suffix) {
-  const schema = telemetrySchemaName().replace(/[^a-z0-9_]/g, '').slice(0, 24);
-  const normalizedSuffix = String(suffix || '').replace(/[^a-z0-9_]/gi, '').toLowerCase();
-  const raw = `${schema}_marketplace_telemetry_${normalizedSuffix}`;
-  return quoteIdentifier(raw.slice(0, 63));
-}
-
 export function isTelemetryEnabled() {
   const raw = String(process.env.TELEMETRY_ENABLED || '').trim().toLowerCase();
   if (!raw) return true;
@@ -124,50 +111,25 @@ function telemetryConfigured() {
   return Boolean(getTelemetryDatabaseUrl());
 }
 
-function sanitizeDbConnectionString(connectionString) {
-  const raw = String(connectionString || '').trim();
-  if (!raw) return raw;
-  try {
-    const parsed = new URL(raw);
-    parsed.searchParams.delete('sslmode');
-    return parsed.toString();
-  } catch (_) {
-    return raw;
-  }
-}
-
 function getTelemetryDbPool() {
   const rawConnectionString = getTelemetryDatabaseUrl();
   if (!rawConnectionString) return null;
-  if (dbPool) return dbPool;
-  const connectionString = sanitizeDbConnectionString(rawConnectionString);
-
-  const sslHint = String(process.env.TELEMETRY_DB_SSL || '').trim().toLowerCase();
-  const needsSsl =
-    sslHint === '1' ||
-    sslHint === 'true' ||
-    /sslmode=require/i.test(rawConnectionString) ||
-    /render\.com|neon\.tech|supabase\.co|railway\.app/i.test(rawConnectionString);
-
-  dbPool = new Pool({
-    connectionString,
-    ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+  return getSharedDbPool({
+    name: 'telemetry',
+    connectionString: rawConnectionString,
+    sslEnv: 'TELEMETRY_DB_SSL',
+    insecureSslEnv: 'TELEMETRY_DB_SSL_INSECURE',
+    caCertEnv: 'TELEMETRY_DB_CA_CERT',
     connectionTimeoutMillis: telemetryDbTimeoutMs(),
     idleTimeoutMillis: 30000,
     max: 3
   });
-  return dbPool;
 }
 
 async function resetTelemetryDbPool() {
-  const activePool = dbPool;
-  dbPool = null;
   dbSchemaReadyPromise = null;
   dbSchemaReadyForDsn = null;
-  if (!activePool) return;
-  try {
-    await activePool.end();
-  } catch (_) {}
+  await resetSharedDbPool('telemetry', getTelemetryDatabaseUrl());
 }
 
 async function ensureTelemetrySchema(attempt = 0) {
@@ -183,77 +145,12 @@ async function ensureTelemetrySchema(attempt = 0) {
 
   dbSchemaReadyForDsn = schemaReadyKey;
   dbSchemaReadyPromise = (async () => {
-    const tableRef = telemetryTableRef();
-    await pool.query(`CREATE SCHEMA IF NOT EXISTS ${quoteIdentifier(schema)};`);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS ${tableRef} (
-        id BIGSERIAL PRIMARY KEY,
-        occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        event_type TEXT NOT NULL,
-        source TEXT,
-        route TEXT,
-        http_method TEXT,
-        rpc_method TEXT,
-        tool_name TEXT,
-        action TEXT,
-        success BOOLEAN,
-        status_code INTEGER,
-        error_code TEXT,
-        error_message TEXT,
-        asset_id TEXT,
-        asset_type TEXT,
-        wallet_hash TEXT,
-        wallet_preview TEXT,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb
-      );
-    `);
-    // Harden against schema drift from older deployments.
-    await pool.query(`
-      ALTER TABLE ${tableRef}
-      ADD COLUMN IF NOT EXISTS source TEXT,
-      ADD COLUMN IF NOT EXISTS route TEXT,
-      ADD COLUMN IF NOT EXISTS http_method TEXT,
-      ADD COLUMN IF NOT EXISTS rpc_method TEXT,
-      ADD COLUMN IF NOT EXISTS tool_name TEXT,
-      ADD COLUMN IF NOT EXISTS action TEXT,
-      ADD COLUMN IF NOT EXISTS success BOOLEAN,
-      ADD COLUMN IF NOT EXISTS status_code INTEGER,
-      ADD COLUMN IF NOT EXISTS error_code TEXT,
-      ADD COLUMN IF NOT EXISTS error_message TEXT,
-      ADD COLUMN IF NOT EXISTS asset_id TEXT,
-      ADD COLUMN IF NOT EXISTS asset_type TEXT,
-      ADD COLUMN IF NOT EXISTS wallet_hash TEXT,
-      ADD COLUMN IF NOT EXISTS wallet_preview TEXT,
-      ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
-    `);
-    await pool.query(`UPDATE ${tableRef} SET metadata='{}'::jsonb WHERE metadata IS NULL;`);
-    await pool.query(`ALTER TABLE ${tableRef} ALTER COLUMN metadata SET DEFAULT '{}'::jsonb;`);
-    await pool.query(`ALTER TABLE ${tableRef} ALTER COLUMN metadata SET NOT NULL;`);
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS ${telemetryIndexName('occurred_at')}
-      ON ${tableRef} (occurred_at DESC);
-    `);
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS ${telemetryIndexName('event_type')}
-      ON ${tableRef} (event_type);
-    `);
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS ${telemetryIndexName('tool_name')}
-      ON ${tableRef} (tool_name);
-    `);
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS ${telemetryIndexName('route')}
-      ON ${tableRef} (route);
-    `);
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS ${telemetryIndexName('asset_id')}
-      ON ${tableRef} (asset_id);
-    `);
-
-    // User-requested cleanup: drop old public table instead of migrating rows.
-    if (schema !== 'public') {
-      await pool.query(`DROP TABLE IF EXISTS public.marketplace_telemetry_events;`).catch(() => {});
-    }
+    await assertRelationsExist({
+      pool,
+      cacheKey: `telemetry::${schemaReadyKey}`,
+      component: 'telemetry',
+      relations: [qualifyPgRelation(schema, 'marketplace_telemetry_events')]
+    });
   })();
 
   try {

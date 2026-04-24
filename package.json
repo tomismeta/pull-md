@@ -8,6 +8,7 @@
     "deploy": "vercel --prod",
     "test": "node --test tests/*.test.js",
     "test:all": "npm run test && node --check public/js/app.js && node --check public/js/create.js && node --check public/js/admin.js && node --check public/js/lib/webmcp.js",
+    "db:migrate": "node scripts/migrate-db.js",
     "db:cutover-neon": "node scripts/cutover-neon.js"
   },
   "dependencies": {

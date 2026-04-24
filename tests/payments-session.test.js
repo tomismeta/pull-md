@@ -76,7 +76,7 @@ test('wallet session auth SIWE signature verifies with action=session', async ()
   const timestamp = Date.now();
   const message = buildSiweAuthMessage({
     wallet: wallet.address,
-    soulId: '*',
+    assetId: '*',
     action: 'session',
     timestamp
   });
@@ -93,6 +93,20 @@ test('wallet session auth SIWE signature verifies with action=session', async ()
   assert.equal(checked.ok, true);
   assert.equal(checked.wallet, wallet.address.toLowerCase());
   assert.equal(checked.auth_format, 'siwe');
+});
+
+test('buildSiweAuthMessage accepts assetId alias for redownload flows', () => {
+  const wallet = ethers.Wallet.createRandom();
+  const timestamp = Date.now();
+  const message = buildSiweAuthMessage({
+    wallet: wallet.address,
+    assetId: 'sassy-starter-v1',
+    action: 'redownload',
+    timestamp
+  });
+
+  assert.match(message, /Request ID: redownload:sassy-starter-v1/);
+  assert.match(message, /- urn:pullmd:asset:sassy-starter-v1/);
 });
 
 test('redownload auth plain message is rejected (SIWE-only)', async () => {
@@ -199,5 +213,22 @@ test('purchase receipt verifies with legacy secret fallback', () => {
     else process.env.PURCHASE_RECEIPT_SECRET = originalSecret;
     if (originalPrevious === undefined) delete process.env.PURCHASE_RECEIPT_SECRET_PREVIOUS;
     else process.env.PURCHASE_RECEIPT_SECRET_PREVIOUS = originalPrevious;
+  }
+});
+
+test('purchase receipt verifies with assetId alias', () => {
+  const originalSecret = process.env.PURCHASE_RECEIPT_SECRET;
+  process.env.PURCHASE_RECEIPT_SECRET = 'asset-id-secret';
+  try {
+    const wallet = ethers.Wallet.createRandom().address.toLowerCase();
+    const assetId = 'sassy-starter-v1';
+    const receipt = createPurchaseReceipt({ wallet, assetId, transaction: '0xtest' });
+
+    const checked = verifyPurchaseReceipt({ receipt, wallet, assetId });
+    assert.equal(checked.ok, true);
+    assert.equal(checked.transaction, '0xtest');
+  } finally {
+    if (originalSecret === undefined) delete process.env.PURCHASE_RECEIPT_SECRET;
+    else process.env.PURCHASE_RECEIPT_SECRET = originalSecret;
   }
 });

@@ -2,42 +2,34 @@ import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ethers } from 'ethers';
-import { Pool } from 'pg';
+import {
+  defaultFileNameForAssetType,
+  enabledAssetTypes,
+  isEnabledAssetType,
+  isValidMarkdownFileName,
+  normalizeAssetType,
+  normalizeMarkdownFileName
+} from './asset_metadata.js';
+import { assertRelationsExist, getPrimaryDatabaseUrl, getSharedDbPool, qualifyPgRelation } from './db.js';
 import { scanMarkdownAssetContent } from './services/content_scanner.js';
 import { getLatestAssetScan, getLatestAssetScanReport, persistAssetScanReport } from './services/scan_store.js';
+import {
+  buildSiweAuthMessage,
+  buildSiweAuthMessageCandidates,
+  parseAuthTimestamp
+} from './siwe.js';
 
 const ASSET_PROFILES = new Set(['synthetic', 'organic', 'hybrid']);
-const ASSET_TYPES = new Set(['soul', 'skill']);
 const MAX_CONTENT_MD_BYTES = 64 * 1024;
 const MAX_TAGS = 12;
 const CREATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
 const MODERATOR_AUTH_DRIFT_MS = 5 * 60 * 1000;
-const SIWE_STATEMENT = 'Authenticate wallet ownership for PULL.md. No token transfer or approval.';
-function resolveSiweDomain() {
-  const configured = String(process.env.SIWE_DOMAIN || '').trim();
-  if (!configured) return 'www.pull.md';
-  if (configured.toLowerCase().includes('pullmd')) return 'www.pull.md';
-  return configured;
-}
-function resolveSiweUri(domain) {
-  const configured = String(process.env.SIWE_URI || '').trim();
-  if (!configured) return `https://${domain}`;
-  if (configured.toLowerCase().includes('pullmd')) return `https://${domain}`;
-  return configured;
-}
-const SIWE_DOMAIN = resolveSiweDomain();
-const SIWE_URI = resolveSiweUri(SIWE_DOMAIN);
-const SIWE_CHAIN_ID = Number(process.env.SIWE_CHAIN_ID || '8453');
 const REVIEW_AUDIT_FILE = 'review-audit.jsonl';
 const PUBLISHED_CATALOG_FILE = 'published-catalog.json';
 const DEFAULT_MODERATOR_WALLETS = ['0x7F46aCB709cd8DF5879F84915CA431fB740989E4'];
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-const DB_CONN_ENV_KEYS = ['MARKETPLACE_DATABASE_URL', 'DATABASE_URL', 'POSTGRES_URL'];
-const DB_FAILURE_COOLDOWN_MS = Number(process.env.MARKETPLACE_DB_FAILURE_COOLDOWN_MS || '60000');
-let dbPool = null;
 let dbSchemaReadyPromise = null;
 let dbSchemaReadyForDsn = null;
-let dbDisabledUntilMs = 0;
 
 function asString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -62,36 +54,6 @@ function normalizeUsdPriceToMicroUsdc(value) {
   const micro = Math.round(value * 1_000_000);
   if (micro <= 0) return null;
   return String(micro);
-}
-
-function normalizeAssetType(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-');
-}
-
-function defaultFileNameForAssetType(assetType) {
-  const normalized = normalizeAssetType(assetType);
-  const mapping = {
-    soul: 'SOUL.md',
-    skill: 'SKILL.md'
-  };
-  return mapping[normalized] || 'ASSET.md';
-}
-
-function isValidMarkdownFileName(value) {
-  const candidate = String(value || '').trim();
-  if (!candidate) return false;
-  if (candidate.includes('/') || candidate.includes('\\')) return false;
-  if (!/\.md$/i.test(candidate)) return false;
-  return /^[A-Za-z0-9._-]+$/.test(candidate);
-}
-
-function normalizeMarkdownFileName(value, fallback = 'ASSET.md') {
-  const candidate = String(value || '').trim();
-  if (isValidMarkdownFileName(candidate)) return candidate;
-  return fallback;
 }
 
 function validateEthAddress(value) {
@@ -207,59 +169,31 @@ function getMarketplaceDraftsDir() {
 }
 
 function getMarketplaceDatabaseUrl() {
-  for (const key of DB_CONN_ENV_KEYS) {
-    const value = String(process.env[key] || '').trim();
-    if (value) return value;
-  }
-  return '';
+  return getPrimaryDatabaseUrl();
 }
 
-function isStrictDatabaseMode() {
-  return Boolean(process.env.VERCEL) && Boolean(getMarketplaceDatabaseUrl());
+function marketplaceStorageMode() {
+  if (getMarketplaceDatabaseUrl()) return 'database';
+  if (process.env.VERCEL) return 'unconfigured';
+  return 'file';
 }
 
 function isMarketplaceDbEnabled() {
-  if (isStrictDatabaseMode()) return true;
-  if (Date.now() < dbDisabledUntilMs) return false;
-  return Boolean(getMarketplaceDatabaseUrl());
-}
-
-function markDbFailure() {
-  if (isStrictDatabaseMode()) return;
-  const cooldown = Number.isFinite(DB_FAILURE_COOLDOWN_MS) && DB_FAILURE_COOLDOWN_MS > 0 ? DB_FAILURE_COOLDOWN_MS : 60000;
-  dbDisabledUntilMs = Date.now() + cooldown;
-}
-
-function sanitizeDbConnectionString(connectionString) {
-  const raw = String(connectionString || '').trim();
-  if (!raw) return raw;
-  try {
-    const parsed = new URL(raw);
-    parsed.searchParams.delete('sslmode');
-    return parsed.toString();
-  } catch (_) {
-    return raw;
-  }
+  return marketplaceStorageMode() === 'database';
 }
 
 function getMarketplaceDbPool() {
-  const rawConnectionString = getMarketplaceDatabaseUrl();
-  if (!rawConnectionString) return null;
-  if (dbPool) return dbPool;
-  const connectionString = sanitizeDbConnectionString(rawConnectionString);
-
-  const sslHint = String(process.env.MARKETPLACE_DB_SSL || '').trim().toLowerCase();
-  const needsSsl =
-    sslHint === '1' ||
-    sslHint === 'true' ||
-    /sslmode=require/i.test(rawConnectionString) ||
-    /render\.com|neon\.tech|supabase\.co|railway\.app/i.test(rawConnectionString);
-
-  dbPool = new Pool({
-    connectionString,
-    ssl: needsSsl ? { rejectUnauthorized: false } : undefined
+  if (!isMarketplaceDbEnabled()) return null;
+  return getSharedDbPool({
+    name: 'marketplace',
+    connectionString: getMarketplaceDatabaseUrl(),
+    sslEnv: 'MARKETPLACE_DB_SSL',
+    insecureSslEnv: 'MARKETPLACE_DB_SSL_INSECURE',
+    caCertEnv: 'MARKETPLACE_DB_CA_CERT',
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
+    max: 5
   });
-  return dbPool;
 }
 
 async function ensureMarketplaceDbSchema() {
@@ -273,72 +207,16 @@ async function ensureMarketplaceDbSchema() {
 
   dbSchemaReadyForDsn = dsn;
   dbSchemaReadyPromise = (async () => {
-    // One-time hard-cut migration from legacy soul_* table names.
-    await pool.query(`
-      DO $$
-      BEGIN
-        IF to_regclass('public.asset_marketplace_drafts') IS NULL
-           AND to_regclass('public.soul_marketplace_drafts') IS NOT NULL THEN
-          ALTER TABLE public.soul_marketplace_drafts RENAME TO asset_marketplace_drafts;
-        END IF;
-
-        IF to_regclass('public.asset_marketplace_audit') IS NULL
-           AND to_regclass('public.soul_marketplace_audit') IS NOT NULL THEN
-          ALTER TABLE public.soul_marketplace_audit RENAME TO asset_marketplace_audit;
-        END IF;
-
-        IF to_regclass('public.asset_catalog_entries') IS NULL
-           AND to_regclass('public.soul_catalog_entries') IS NOT NULL THEN
-          ALTER TABLE public.soul_catalog_entries RENAME TO asset_catalog_entries;
-        END IF;
-
-        IF to_regclass('public.idx_asset_marketplace_drafts_status_updated') IS NULL
-           AND to_regclass('public.idx_soul_marketplace_drafts_status_updated') IS NOT NULL THEN
-          ALTER INDEX public.idx_soul_marketplace_drafts_status_updated
-            RENAME TO idx_asset_marketplace_drafts_status_updated;
-        END IF;
-      END $$;
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS asset_marketplace_drafts (
-        wallet_address TEXT NOT NULL,
-        draft_id TEXT NOT NULL,
-        status TEXT NOT NULL,
-        moderation JSONB,
-        normalized JSONB NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL,
-        published_at TIMESTAMPTZ,
-        PRIMARY KEY (wallet_address, draft_id)
-      );
-    `);
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_asset_marketplace_drafts_status_updated
-      ON asset_marketplace_drafts (status, updated_at DESC);
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS asset_marketplace_audit (
-        id BIGSERIAL PRIMARY KEY,
-        at TIMESTAMPTZ NOT NULL,
-        event TEXT NOT NULL,
-        wallet_address TEXT NOT NULL,
-        draft_id TEXT,
-        actor TEXT,
-        decision TEXT,
-        status_before TEXT,
-        status_after TEXT,
-        notes TEXT,
-        payload JSONB
-      );
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS asset_catalog_entries (
-        id TEXT PRIMARY KEY,
-        entry JSONB NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `);
+    await assertRelationsExist({
+      pool,
+      cacheKey: `marketplace::${dsn}`,
+      component: 'marketplace',
+      relations: [
+        qualifyPgRelation('public', 'asset_marketplace_drafts'),
+        qualifyPgRelation('public', 'asset_marketplace_audit'),
+        qualifyPgRelation('public', 'asset_catalog_entries')
+      ]
+    });
   })();
 
   try {
@@ -355,50 +233,37 @@ function walletFilePath(walletAddress) {
   return path.join(getMarketplaceDraftsDir(), `${wallet}.json`);
 }
 
-function safeChecksumAddress(address) {
-  try {
-    return ethers.getAddress(String(address || '').trim());
-  } catch (_) {
-    return null;
-  }
-}
-
-
 async function ensureDraftStore() {
-  if (isMarketplaceDbEnabled()) return;
+  if (marketplaceStorageMode() !== 'file') return;
   await fs.mkdir(getMarketplaceDraftsDir(), { recursive: true });
 }
 
 async function loadWalletDraftFile(walletAddress) {
   const wallet = String(walletAddress || '').toLowerCase();
   if (isMarketplaceDbEnabled()) {
-    try {
-      await ensureMarketplaceDbSchema();
-      const pool = getMarketplaceDbPool();
-      const { rows } = await pool.query(
-        `
-          SELECT draft_id, status, moderation, normalized, created_at, updated_at, published_at
-          FROM asset_marketplace_drafts
-          WHERE wallet_address = $1
-          ORDER BY updated_at DESC
-        `,
-        [wallet]
-      );
-      return {
-        wallet,
-        drafts: rows.map((row) => ({
-          draft_id: row.draft_id,
-          status: row.status || 'draft',
-          moderation: row.moderation || null,
-          normalized: row.normalized || {},
-          created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
-          updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
-          published_at: row.published_at ? new Date(row.published_at).toISOString() : null
-        }))
-      };
-    } catch (_) {
-      markDbFailure();
-    }
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    const { rows } = await pool.query(
+      `
+        SELECT draft_id, status, moderation, normalized, created_at, updated_at, published_at
+        FROM asset_marketplace_drafts
+        WHERE wallet_address = $1
+        ORDER BY updated_at DESC
+      `,
+      [wallet]
+    );
+    return {
+      wallet,
+      drafts: rows.map((row) => ({
+        draft_id: row.draft_id,
+        status: row.status || 'draft',
+        moderation: row.moderation || null,
+        normalized: row.normalized || {},
+        created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+        updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+        published_at: row.published_at ? new Date(row.published_at).toISOString() : null
+      }))
+    };
   }
 
   await ensureDraftStore();
@@ -419,50 +284,64 @@ async function saveWalletDraftFile(walletAddress, payload) {
   const wallet = String(walletAddress || '').toLowerCase();
   const drafts = Array.isArray(payload?.drafts) ? payload.drafts : [];
   if (isMarketplaceDbEnabled()) {
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    const client = await pool.connect();
+    const updatedAtIso = new Date().toISOString();
+    const draftIds = drafts
+      .map((draft) => String(draft?.draft_id || '').trim())
+      .filter(Boolean);
     try {
-      await ensureMarketplaceDbSchema();
-      const pool = getMarketplaceDbPool();
-      const client = await pool.connect();
-      const updatedAtIso = new Date().toISOString();
-      try {
-        await client.query('BEGIN');
+      await client.query('BEGIN');
+      if (draftIds.length > 0) {
+        await client.query(
+          'DELETE FROM asset_marketplace_drafts WHERE wallet_address = $1 AND NOT (draft_id = ANY($2::text[]))',
+          [wallet, draftIds]
+        );
+      } else {
         await client.query('DELETE FROM asset_marketplace_drafts WHERE wallet_address = $1', [wallet]);
-        for (const draft of drafts) {
-          const createdAtIso = draft?.created_at ? new Date(draft.created_at).toISOString() : updatedAtIso;
-          const draftUpdatedAtIso = draft?.updated_at ? new Date(draft.updated_at).toISOString() : updatedAtIso;
-          const publishedAtIso = draft?.published_at ? new Date(draft.published_at).toISOString() : null;
-          await client.query(
-            `
-              INSERT INTO asset_marketplace_drafts (
-                wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
-              ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz)
-            `,
-            [
-              wallet,
-              String(draft?.draft_id || ''),
-              String(draft?.status || 'draft'),
-              JSON.stringify(draft?.moderation || null),
-              JSON.stringify(draft?.normalized || {}),
-              createdAtIso,
-              draftUpdatedAtIso,
-              publishedAtIso
-            ]
-          );
-        }
-        await client.query('COMMIT');
-        return {
-          wallet,
-          updated_at: updatedAtIso,
-          drafts
-        };
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
       }
-    } catch (_) {
-      markDbFailure();
+      for (const draft of drafts) {
+        const createdAtIso = draft?.created_at ? new Date(draft.created_at).toISOString() : updatedAtIso;
+        const draftUpdatedAtIso = draft?.updated_at ? new Date(draft.updated_at).toISOString() : updatedAtIso;
+        const publishedAtIso = draft?.published_at ? new Date(draft.published_at).toISOString() : null;
+        await client.query(
+          `
+            INSERT INTO asset_marketplace_drafts (
+              wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
+            ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz, $8::timestamptz)
+            ON CONFLICT (wallet_address, draft_id)
+            DO UPDATE SET
+              status = EXCLUDED.status,
+              moderation = EXCLUDED.moderation,
+              normalized = EXCLUDED.normalized,
+              created_at = EXCLUDED.created_at,
+              updated_at = EXCLUDED.updated_at,
+              published_at = EXCLUDED.published_at
+          `,
+          [
+            wallet,
+            String(draft?.draft_id || ''),
+            String(draft?.status || 'draft'),
+            JSON.stringify(draft?.moderation || null),
+            JSON.stringify(draft?.normalized || {}),
+            createdAtIso,
+            draftUpdatedAtIso,
+            publishedAtIso
+          ]
+        );
+      }
+      await client.query('COMMIT');
+      return {
+        wallet,
+        updated_at: updatedAtIso,
+        drafts
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -503,12 +382,8 @@ async function appendReviewAudit(entry) {
       );
       return;
     } catch (error) {
-      // Audit logging should never downgrade primary catalog reads/writes to non-durable fallback in production.
-      if (isStrictDatabaseMode()) {
-        console.error('appendReviewAudit db write failed:', error);
-        return;
-      }
-      markDbFailure();
+      console.error('appendReviewAudit db write failed:', error);
+      return;
     }
   }
 
@@ -550,24 +425,19 @@ function normalizeVisibility(value) {
 
 async function loadPublishedCatalog() {
   if (isMarketplaceDbEnabled()) {
-    try {
-      await ensureMarketplaceDbSchema();
-      const pool = getMarketplaceDbPool();
-      const { rows } = await pool.query(
-        `
-          SELECT entry
-          FROM asset_catalog_entries
-          ORDER BY updated_at DESC, id ASC
-        `
-      );
-      const entries = rows
-        .map((row) => row.entry)
-        .filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string');
-      return { schema_version: 'published-catalog-v1', entries };
-    } catch (error) {
-      if (isStrictDatabaseMode()) throw error;
-      markDbFailure();
-    }
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    const { rows } = await pool.query(
+      `
+        SELECT entry
+        FROM asset_catalog_entries
+        ORDER BY updated_at DESC, id ASC
+      `
+    );
+    const entries = rows
+      .map((row) => row.entry)
+      .filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string');
+    return { schema_version: 'published-catalog-v1', entries };
   }
 
   await ensureDraftStore();
@@ -587,38 +457,42 @@ async function loadPublishedCatalog() {
 async function savePublishedCatalog(payload) {
   const entries = Array.isArray(payload?.entries) ? payload.entries : [];
   if (isMarketplaceDbEnabled()) {
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    const client = await pool.connect();
+    const entryIds = entries
+      .filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string')
+      .map((entry) => entry.id);
     try {
-      await ensureMarketplaceDbSchema();
-      const pool = getMarketplaceDbPool();
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
+      await client.query('BEGIN');
+      if (entryIds.length > 0) {
+        await client.query('DELETE FROM asset_catalog_entries WHERE NOT (id = ANY($1::text[]))', [entryIds]);
+      } else {
         await client.query('DELETE FROM asset_catalog_entries');
-        for (const entry of entries) {
-          if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string') continue;
-          await client.query(
-            `
-              INSERT INTO asset_catalog_entries (id, entry, updated_at)
-              VALUES ($1, $2::jsonb, NOW())
-            `,
-            [entry.id, JSON.stringify(entry)]
-          );
-        }
-        await client.query('COMMIT');
-        return {
-          schema_version: 'published-catalog-v1',
-          updated_at: new Date().toISOString(),
-          entries
-        };
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
       }
+      for (const entry of entries) {
+        if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string') continue;
+        await client.query(
+          `
+            INSERT INTO asset_catalog_entries (id, entry, updated_at)
+            VALUES ($1, $2::jsonb, NOW())
+            ON CONFLICT (id)
+            DO UPDATE SET entry = EXCLUDED.entry, updated_at = NOW()
+          `,
+          [entry.id, JSON.stringify(entry)]
+        );
+      }
+      await client.query('COMMIT');
+      return {
+        schema_version: 'published-catalog-v1',
+        updated_at: new Date().toISOString(),
+        entries
+      };
     } catch (error) {
-      if (isStrictDatabaseMode()) throw error;
-      markDbFailure();
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -706,23 +580,18 @@ async function upsertPublishedCatalogEntry({ walletAddress, draft }) {
   };
 
   if (isMarketplaceDbEnabled()) {
-    try {
-      await ensureMarketplaceDbSchema();
-      const pool = getMarketplaceDbPool();
-      await pool.query(
-        `
-          INSERT INTO asset_catalog_entries (id, entry, updated_at)
-          VALUES ($1, $2::jsonb, NOW())
-          ON CONFLICT (id)
-          DO UPDATE SET entry = EXCLUDED.entry, updated_at = NOW()
-        `,
-        [id, JSON.stringify(nextEntry)]
-      );
-      return;
-    } catch (error) {
-      if (isStrictDatabaseMode()) throw error;
-      markDbFailure();
-    }
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    await pool.query(
+      `
+        INSERT INTO asset_catalog_entries (id, entry, updated_at)
+        VALUES ($1, $2::jsonb, NOW())
+        ON CONFLICT (id)
+        DO UPDATE SET entry = EXCLUDED.entry, updated_at = NOW()
+      `,
+      [id, JSON.stringify(nextEntry)]
+    );
+    return;
   }
 
   const idx = catalog.entries.findIndex((entry) => entry?.id === id);
@@ -839,34 +708,30 @@ async function enrichEntryWithScan(entry) {
 
 async function loadAllWalletDraftStores() {
   if (isMarketplaceDbEnabled()) {
-    try {
-      await ensureMarketplaceDbSchema();
-      const pool = getMarketplaceDbPool();
-      const { rows } = await pool.query(`
-        SELECT wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
-        FROM asset_marketplace_drafts
-        ORDER BY wallet_address ASC, updated_at DESC
-      `);
-      const storesByWallet = new Map();
-      for (const row of rows) {
-        const wallet = String(row.wallet_address || '').toLowerCase();
-        if (!storesByWallet.has(wallet)) {
-          storesByWallet.set(wallet, { wallet, drafts: [] });
-        }
-        storesByWallet.get(wallet).drafts.push({
-          draft_id: row.draft_id,
-          status: row.status || 'draft',
-          moderation: row.moderation || null,
-          normalized: row.normalized || {},
-          created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
-          updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
-          published_at: row.published_at ? new Date(row.published_at).toISOString() : null
-        });
+    await ensureMarketplaceDbSchema();
+    const pool = getMarketplaceDbPool();
+    const { rows } = await pool.query(`
+      SELECT wallet_address, draft_id, status, moderation, normalized, created_at, updated_at, published_at
+      FROM asset_marketplace_drafts
+      ORDER BY wallet_address ASC, updated_at DESC
+    `);
+    const storesByWallet = new Map();
+    for (const row of rows) {
+      const wallet = String(row.wallet_address || '').toLowerCase();
+      if (!storesByWallet.has(wallet)) {
+        storesByWallet.set(wallet, { wallet, drafts: [] });
       }
-      return [...storesByWallet.values()];
-    } catch (_) {
-      markDbFailure();
+      storesByWallet.get(wallet).drafts.push({
+        draft_id: row.draft_id,
+        status: row.status || 'draft',
+        moderation: row.moderation || null,
+        normalized: row.normalized || {},
+        created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+        updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+        published_at: row.published_at ? new Date(row.published_at).toISOString() : null
+      });
     }
+    return [...storesByWallet.values()];
   }
 
   await ensureDraftStore();
@@ -886,115 +751,26 @@ async function loadAllWalletDraftStores() {
   return stores;
 }
 
-function buildSiweNonce({ scope, action, timestamp }) {
-  const seed = `${String(scope || '*')}|${String(action || '')}|${String(timestamp || '')}`;
-  return crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
-}
-
-function parseAuthTimestamp(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  const raw = String(value || '').trim();
-  if (!raw) return Number.NaN;
-  const numeric = Number(raw);
-  if (Number.isFinite(numeric)) return numeric;
-  const iso = Date.parse(raw);
-  if (Number.isFinite(iso)) return iso;
-  return Number.NaN;
-}
-
-function buildTimestampCandidates(timestamp) {
-  const base = Number(timestamp);
-  if (!Number.isFinite(base)) return [];
-  const sec = Math.floor(base / 1000) * 1000;
-  return [...new Set([base, sec])];
-}
-
-function buildSiweAuthMessage({ wallet, action, timestamp, scope, domain, uri }) {
-  const ts = Number(timestamp);
-  const address = String(wallet || '').trim().toLowerCase();
-  const issuedAt = new Date(ts).toISOString();
-  const expiresAt = new Date(ts + 5 * 60 * 1000).toISOString();
-  const nonce = buildSiweNonce({ scope, action, timestamp: ts });
-  const requestId = `${String(action || '').trim()}:${String(scope || '*').trim()}`;
-  const normalizedDomain = String(domain || SIWE_DOMAIN).trim() || SIWE_DOMAIN;
-  const normalizedUri = String(uri || `https://${normalizedDomain}`).trim() || `https://${normalizedDomain}`;
-  return [
-    `${normalizedDomain} wants you to sign in with your Ethereum account:`,
-    address,
-    '',
-    SIWE_STATEMENT,
-    '',
-    `URI: ${normalizedUri}`,
-    'Version: 1',
-    `Chain ID: ${Number.isFinite(SIWE_CHAIN_ID) ? SIWE_CHAIN_ID : 8453}`,
-    `Nonce: ${nonce}`,
-    `Issued At: ${issuedAt}`,
-    `Expiration Time: ${expiresAt}`,
-    `Request ID: ${requestId}`,
-    'Resources:',
-    `- urn:pullmd:action:${String(action || '').trim()}`,
-    `- urn:pullmd:scope:${String(scope || '*').trim()}`
-  ].join('\n');
-}
-
 function buildCreatorSiweMessageCandidates({ wallet, action, timestamp, domain, uri }) {
-  const raw = asString(wallet);
-  const lower = raw.toLowerCase();
-  const checksummed = safeChecksumAddress(raw);
-  const wallets = [...new Set([lower, checksummed].filter(Boolean))];
-  const timestamps = buildTimestampCandidates(timestamp);
-  const candidates = [];
-  for (const ts of timestamps) {
-    for (const walletVariant of wallets) {
-      const walletVariantLabel = walletVariant === lower ? 'siwe-lowercase' : 'siwe-checksummed';
-      const tsLabel = ts === Number(timestamp) ? 'ts-ms' : 'ts-sec';
-      const baseVariant = `${walletVariantLabel}-${tsLabel}`;
-      const baseMessage = buildSiweAuthMessage({
-        wallet: walletVariant,
-        action,
-        timestamp: ts,
-        scope: 'creator',
-        domain,
-        uri
-      });
-      candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
-      candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
-      const crlf = baseMessage.replace(/\n/g, '\r\n');
-      candidates.push({ variant: `${baseVariant}-crlf`, message: crlf });
-      candidates.push({ variant: `${baseVariant}-crlf-trailing`, message: `${crlf}\r\n` });
-    }
-  }
-  return candidates;
+  return buildSiweAuthMessageCandidates({
+    wallet,
+    assetId: 'creator',
+    action,
+    timestamp,
+    domain,
+    uri
+  });
 }
 
 function buildModeratorSiweMessageCandidates({ wallet, action, timestamp, domain, uri }) {
-  const raw = asString(wallet);
-  const lower = raw.toLowerCase();
-  const checksummed = safeChecksumAddress(raw);
-  const wallets = [...new Set([lower, checksummed].filter(Boolean))];
-  const timestamps = buildTimestampCandidates(timestamp);
-  const candidates = [];
-  for (const ts of timestamps) {
-    for (const walletVariant of wallets) {
-      const walletVariantLabel = walletVariant === lower ? 'siwe-lowercase' : 'siwe-checksummed';
-      const tsLabel = ts === Number(timestamp) ? 'ts-ms' : 'ts-sec';
-      const baseVariant = `${walletVariantLabel}-${tsLabel}`;
-      const baseMessage = buildSiweAuthMessage({
-        wallet: walletVariant,
-        action,
-        timestamp: ts,
-        scope: 'moderator',
-        domain,
-        uri
-      });
-      candidates.push({ variant: `${baseVariant}-lf`, message: baseMessage });
-      candidates.push({ variant: `${baseVariant}-lf-trailing`, message: `${baseMessage}\n` });
-      const crlf = baseMessage.replace(/\n/g, '\r\n');
-      candidates.push({ variant: `${baseVariant}-crlf`, message: crlf });
-      candidates.push({ variant: `${baseVariant}-crlf-trailing`, message: `${crlf}\r\n` });
-    }
-  }
-  return candidates;
+  return buildSiweAuthMessageCandidates({
+    wallet,
+    assetId: 'moderator',
+    action,
+    timestamp,
+    domain,
+    uri
+  });
 }
 
 export async function listPublishedCatalogEntries() {
@@ -1039,8 +815,8 @@ export function getMarketplaceDraftTemplate() {
   return {
     schema_version: 'marketplace-publish-v1',
     asset_type: 'soul',
-    file_name: 'SOUL.md',
-    name: 'Example Soul',
+    file_name: defaultFileNameForAssetType('soul'),
+    name: 'Example Asset',
     description: 'Short summary buyers see before purchase.',
     price_usdc: 0.49,
     content_markdown: `# SOUL.md
@@ -1057,10 +833,10 @@ export function getMarketplaceDraftTemplate() {
 ## Communication
 - Specify tone, brevity, formatting, and interaction style.
 
-## Continuity
-- Define memory expectations, handoff behavior, and long-term consistency rules.`,
+    ## Continuity
+    - Define memory expectations, handoff behavior, and long-term consistency rules.`,
     notes: {
-      enabled_asset_types: ['soul', 'skill'],
+      enabled_asset_types: enabledAssetTypes(),
       auto_fields: [
         'asset_id (derived from name)',
         'seller_address (set to connected creator wallet)',
@@ -1075,9 +851,9 @@ export function getMarketplaceDraftTemplate() {
 export function buildCreatorAuthMessage({ wallet, action, timestamp, domain, uri }) {
   return buildSiweAuthMessage({
     wallet: String(wallet || '').toLowerCase(),
+    assetId: 'creator',
     action,
     timestamp,
-    scope: 'creator',
     domain,
     uri
   });
@@ -1191,15 +967,16 @@ export function validateMarketplaceDraft(input, options = {}) {
       message: 'listing.asset_id must be kebab-case alphanumeric (example-asset-v1).'
     });
   }
-  if (!ASSET_TYPES.has(assetType)) {
+  const allowedAssetTypes = enabledAssetTypes();
+  if (!isEnabledAssetType(assetType)) {
     addFieldError({
       errors,
       fieldErrors,
       field: 'listing.asset_type',
-      expected: `one of: ${[...ASSET_TYPES].join(' | ')}`,
+      expected: `one of: ${allowedAssetTypes.join(' | ')}`,
       received: listing.asset_type,
       fix: 'Set listing.asset_type to a supported markdown asset type.',
-      message: `listing.asset_type must be one of: ${[...ASSET_TYPES].join(', ')}.`
+      message: `listing.asset_type must be one of: ${allowedAssetTypes.join(', ')}.`
     });
   }
   if (!isValidMarkdownFileName(fileName)) {
@@ -1511,9 +1288,9 @@ export function listModeratorWallets() {
 export function buildModeratorAuthMessage({ wallet, action, timestamp, domain, uri }) {
   return buildSiweAuthMessage({
     wallet: String(wallet || '').toLowerCase(),
+    assetId: 'moderator',
     action: String(action || '').trim(),
     timestamp,
-    scope: 'moderator',
     domain,
     uri
   });
