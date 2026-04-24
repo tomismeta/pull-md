@@ -12,8 +12,8 @@ const CONFIG = {
   }
 };
 
-const X402_FETCH_SDK_VERSION = '2.3.0';
-const X402_EVM_SDK_VERSION = '2.3.1';
+const X402_FETCH_SDK_VERSION = '2.10.0';
+const X402_EVM_SDK_VERSION = '2.10.0';
 const EXPECTED_SELLER_ADDRESS = null;
 const WALLET_SESSION_KEY = 'pullmd_wallet_session_v1';
 const RECEIPT_PREFIX = 'pullmd.receipt.';
@@ -729,6 +729,14 @@ async function downloadOwnedSoul(soulId, fileName = null) {
   return getPurchaseFlowController().downloadOwnedSoul(soulId, fileName);
 }
 
+async function purchaseAsset(assetId, fileName = null) {
+  return purchaseSoul(assetId, fileName);
+}
+
+async function downloadOwnedAsset(assetId, fileName = null) {
+  return downloadOwnedSoul(assetId, fileName);
+}
+
 function readSettlementTx(response) {
   return getSettlementUiHelper().readSettlementTx(response);
 }
@@ -1145,6 +1153,8 @@ window.connectEmblem = connectEmblem;
 window.disconnectWallet = disconnectWallet;
 window.purchaseSoul = purchaseSoul;
 window.downloadOwnedSoul = downloadOwnedSoul;
+window.purchaseAsset = purchaseAsset;
+window.downloadOwnedAsset = downloadOwnedAsset;
 getAppBootstrapHelper().bindBeforeUnload(() => {
   getPurchaseFlowController().revokeActiveSuccessDownloadUrl();
 });

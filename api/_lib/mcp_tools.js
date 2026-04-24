@@ -9,6 +9,7 @@ import { executeCreatorMarketplaceAction } from './services/creator_marketplace.
 import { AppError } from './errors.js';
 import { buildCreatorAuthMessage, buildModeratorAuthMessage, getMarketplaceDraftTemplate } from './marketplace.js';
 import { buildSiweAuthMessage, resolveSiweIdentity } from './payments.js';
+import { buildSiweChallengeFields, parseSiweField } from './siwe.js';
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
 
@@ -34,11 +35,6 @@ function ensureWalletAddress(value) {
     });
   }
   return wallet;
-}
-
-function parseSiweField(message, label) {
-  const match = String(message || '').match(new RegExp(`^${label}:\\s*([^\\n\\r]+)`, 'm'));
-  return match?.[1]?.trim() || null;
 }
 
 function mapCreatorActionToTool(action) {
@@ -180,7 +176,7 @@ function buildAuthChallengePayload(args = {}, context = {}) {
     };
   } else if (flow === 'session') {
     action = 'session';
-    authMessage = buildSiweAuthMessage({ wallet, soulId: '*', action, timestamp: timestampMs, domain: siweDomain, uri: siweUri });
+    authMessage = buildSiweAuthMessage({ wallet, assetId: '*', action, timestamp: timestampMs, domain: siweDomain, uri: siweUri });
     submitVia = {
       endpoint: '/api/auth/session',
       method: 'GET',
@@ -200,21 +196,22 @@ function buildAuthChallengePayload(args = {}, context = {}) {
         flow_hint: 'flow=redownload requires asset_id.'
       });
     }
-    authMessage = buildSiweAuthMessage({ wallet, soulId: assetId, action, timestamp: timestampMs, domain: siweDomain, uri: siweUri });
+    authMessage = buildSiweAuthMessage({ wallet, assetId, action, timestamp: timestampMs, domain: siweDomain, uri: siweUri });
     submitVia = {
       endpoint: `/api/assets/${encodeURIComponent(assetId)}/download`,
       method: 'GET',
       required_headers: [
         'X-CLIENT-MODE',
         'X-WALLET-ADDRESS',
-        'X-PURCHASE-RECEIPT',
         'X-REDOWNLOAD-SIGNATURE',
         'X-REDOWNLOAD-TIMESTAMP'
       ],
+      one_of: [['X-PURCHASE-RECEIPT'], ['X-BLOCKCHAIN-TRANSACTION']],
       headers_template: {
         'X-CLIENT-MODE': 'agent',
         'X-WALLET-ADDRESS': wallet,
         'X-PURCHASE-RECEIPT': '<receipt_token>',
+        'X-BLOCKCHAIN-TRANSACTION': '0x<settlement_tx_hash>',
         'X-REDOWNLOAD-SIGNATURE': '0x<signature_hex>',
         'X-REDOWNLOAD-TIMESTAMP': '<Date.parse(Issued At)>'
       }
@@ -228,11 +225,15 @@ function buildAuthChallengePayload(args = {}, context = {}) {
     });
   }
 
-  const issuedAt = parseSiweField(authMessage, 'Issued At') || new Date(timestampMs).toISOString();
-  const expiresAt = parseSiweField(authMessage, 'Expiration Time') || new Date(timestampMs + 300000).toISOString();
   const nonce = parseSiweField(authMessage, 'Nonce');
   const requestId = parseSiweField(authMessage, 'Request ID');
-  const authTimestampMs = Date.parse(issuedAt);
+  const challengeFields = buildSiweChallengeFields({
+    wallet,
+    assetId: flow === 'redownload' ? assetId : flow,
+    action,
+    siweIdentity,
+    timestampMs
+  });
 
   return {
     ok: true,
@@ -244,9 +245,9 @@ function buildAuthChallengePayload(args = {}, context = {}) {
     auth_message_template: authMessage,
     nonce,
     request_id: requestId,
-    issued_at: issuedAt,
-    expiration_time: expiresAt,
-    auth_timestamp_ms: Number.isFinite(authTimestampMs) ? authTimestampMs : timestampMs,
+    issued_at: challengeFields.issued_at,
+    expiration_time: challengeFields.expiration_time,
+    auth_timestamp_ms: challengeFields.auth_timestamp_ms,
     timestamp_requirement:
       'Use auth_timestamp = Date.parse(Issued At) from this same auth_message_template. Do not use Date.now().',
     common_mistakes: [

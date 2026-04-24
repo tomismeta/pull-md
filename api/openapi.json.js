@@ -1,6 +1,10 @@
 import { openApiContentType, resolveBaseUrl, setDiscoveryHeaders } from './_lib/discovery.js';
+import { buildAuthContract, buildCommerceContract, buildDiscoveryUrls } from './_lib/public_contract.js';
 
 function buildOpenApiDocument(baseUrl) {
+  const discovery = buildDiscoveryUrls(baseUrl);
+  const auth = buildAuthContract();
+  const commerce = buildCommerceContract();
   return {
     openapi: '3.1.0',
     info: {
@@ -15,28 +19,14 @@ function buildOpenApiDocument(baseUrl) {
       }
     },
     'x-pullmd-auth-model': {
-      payment_protocol: 'x402',
-      wallet_identity_auth: 'siwe_eip4361',
-      oauth2_supported: false,
-      oidc_supported: false,
+      payment_protocol: auth.payment_protocol,
+      wallet_identity_auth: auth.identity_auth,
+      oauth2_supported: auth.oauth2_supported,
+      oidc_supported: auth.oidc_supported,
       note:
         'Protected flows do not use OAuth bearer tokens in this deployment. Use SIWE for wallet identity/auth and x402 plus receipt-bound headers for payment and re-download.'
     },
-    'x-pullmd-commerce': {
-      commerce_site: true,
-      payment_protocols: ['x402'],
-      public_catalog_endpoint: '/api/assets',
-      canonical_purchase_endpoint_pattern: '/api/assets/{id}/download',
-      paywall_status_code: 402,
-      payment_headers: {
-        required_response_header: 'PAYMENT-REQUIRED',
-        required_request_header: 'PAYMENT-SIGNATURE',
-        settlement_response_header: 'PAYMENT-RESPONSE'
-      },
-      asset_discovery_fields: ['purchase_endpoint', 'payment_protocol'],
-      facilitator_discovery:
-        'Paid routes declare x402 Bazaar discovery metadata when the active facilitator supports Bazaar resource indexing.'
-    },
+    'x-pullmd-commerce': commerce,
     servers: [{ url: baseUrl }],
     paths: {
       '/api/assets': {
@@ -97,7 +87,7 @@ function buildOpenApiDocument(baseUrl) {
             payment_response_header: 'PAYMENT-RESPONSE',
             paywall_status_code: 402,
             bazaar_discovery_declared: true,
-            docs: `${baseUrl}/WEBMCP.md`
+              docs: discovery.webmcp_markdown
           }
         }
       },

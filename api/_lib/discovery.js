@@ -1,3 +1,5 @@
+import { buildDiscoveryLinkEntries, buildDiscoveryUrls } from './public_contract.js';
+
 const API_CATALOG_PROFILE_URI = 'https://www.rfc-editor.org/info/rfc9727';
 const OPENAPI_CONTENT_TYPE = 'application/vnd.oai.openapi+json;version=3.1';
 
@@ -14,36 +16,6 @@ export function resolveBaseUrl(headers = {}) {
   return `${proto}://${host}`;
 }
 
-function discoveryLinkEntries(baseUrl) {
-  return [
-    {
-      href: `${baseUrl}/.well-known/api-catalog`,
-      rel: 'api-catalog',
-      type: 'application/linkset+json'
-    },
-    {
-      href: `${baseUrl}/api/openapi.json`,
-      rel: 'service-desc',
-      type: OPENAPI_CONTENT_TYPE
-    },
-    {
-      href: `${baseUrl}/WEBMCP.md`,
-      rel: 'service-doc',
-      type: 'text/markdown'
-    },
-    {
-      href: `${baseUrl}/api/mcp/manifest`,
-      rel: 'service-meta',
-      type: 'application/json'
-    },
-    {
-      href: `${baseUrl}/api/assets`,
-      rel: 'item',
-      type: 'application/json'
-    }
-  ];
-}
-
 function serializeLinkEntry(entry) {
   const href = String(entry?.href || '').trim();
   const rel = String(entry?.rel || '').trim();
@@ -55,7 +27,7 @@ function serializeLinkEntry(entry) {
 }
 
 export function buildDiscoveryLinkHeader(baseUrl) {
-  return discoveryLinkEntries(baseUrl)
+  return buildDiscoveryLinkEntries(baseUrl)
     .map((entry) => serializeLinkEntry(entry))
     .filter(Boolean)
     .join(', ');
@@ -72,7 +44,7 @@ export function setDiscoveryHeaders(res, req) {
 
 export function buildApiCatalogHeadLinkHeader(baseUrl) {
   const entries = [
-    ...discoveryLinkEntries(baseUrl),
+    ...buildDiscoveryLinkEntries(baseUrl),
     { href: `${baseUrl}/mcp`, rel: 'item' }
   ];
   return entries
@@ -82,29 +54,30 @@ export function buildApiCatalogHeadLinkHeader(baseUrl) {
 }
 
 export function buildApiCatalogDocument(baseUrl) {
+  const routes = buildDiscoveryUrls(baseUrl);
   return {
     linkset: [
       {
-        anchor: `${baseUrl}/.well-known/api-catalog`,
-        item: [{ href: `${baseUrl}/mcp` }, { href: `${baseUrl}/api/assets` }]
+        anchor: routes.api_catalog,
+        item: [{ href: `${baseUrl}/mcp` }, { href: routes.public_catalog }]
       },
       {
         anchor: `${baseUrl}/mcp`,
-        'service-desc': [{ href: `${baseUrl}/api/mcp/manifest`, type: 'application/json' }],
-        'service-doc': [{ href: `${baseUrl}/WEBMCP.md`, type: 'text/markdown' }],
-        'service-meta': [{ href: `${baseUrl}/api/mcp/manifest`, type: 'application/json' }]
+        'service-desc': [{ href: routes.mcp_manifest, type: 'application/json' }],
+        'service-doc': [{ href: routes.webmcp_markdown, type: 'text/markdown' }],
+        'service-meta': [{ href: routes.mcp_manifest, type: 'application/json' }]
       },
       {
-        anchor: `${baseUrl}/api/assets`,
-        'service-desc': [{ href: `${baseUrl}/api/openapi.json`, type: OPENAPI_CONTENT_TYPE }],
-        'service-doc': [{ href: `${baseUrl}/WEBMCP.md`, type: 'text/markdown' }],
-        'service-meta': [{ href: `${baseUrl}/api/mcp/manifest`, type: 'application/json' }]
+        anchor: routes.public_catalog,
+        'service-desc': [{ href: routes.openapi, type: OPENAPI_CONTENT_TYPE }],
+        'service-doc': [{ href: routes.webmcp_markdown, type: 'text/markdown' }],
+        'service-meta': [{ href: routes.mcp_manifest, type: 'application/json' }]
       },
       {
-        anchor: `${baseUrl}/api/assets/{id}/download`,
-        'service-desc': [{ href: `${baseUrl}/api/openapi.json`, type: OPENAPI_CONTENT_TYPE }],
-        'service-doc': [{ href: `${baseUrl}/WEBMCP.md`, type: 'text/markdown' }],
-        'service-meta': [{ href: `${baseUrl}/api/mcp/manifest`, type: 'application/json' }]
+        anchor: routes.canonical_purchase_endpoint_pattern,
+        'service-desc': [{ href: routes.openapi, type: OPENAPI_CONTENT_TYPE }],
+        'service-doc': [{ href: routes.webmcp_markdown, type: 'text/markdown' }],
+        'service-meta': [{ href: routes.mcp_manifest, type: 'application/json' }]
       }
     ]
   };

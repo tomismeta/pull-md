@@ -135,14 +135,19 @@ const MCP_PROMPTS = [
   },
   {
     name: 'redownload_asset',
-    description: 'Strict no-repay re-download flow using receipt + wallet signature',
+    description: 'Strict no-repay re-download flow using receipt or blockchain transaction + wallet signature',
     arguments: [
       { name: 'asset_id', required: true, description: 'Asset identifier' },
       { name: 'wallet_address', required: true, description: 'Buyer wallet address' },
       {
         name: 'purchase_receipt',
-        required: true,
+        required: false,
         description: 'Saved X-PURCHASE-RECEIPT value (persist securely and do not expose in logs)'
+      },
+      {
+        name: 'blockchain_transaction',
+        required: false,
+        description: 'Original settlement transaction hash from PAYMENT-RESPONSE or X-BLOCKCHAIN-TRANSACTION'
       }
     ]
   },
@@ -188,7 +193,8 @@ export function getMcpPrompt(name, args = {}) {
               '2) Read 402 PAYMENT-REQUIRED and sign per payment_signing_instructions.',
               '3) Retry GET /api/assets/{id}/download with PAYMENT-SIGNATURE.',
               '4) Persist X-PURCHASE-RECEIPT from successful 200 response.',
-              '5) Treat X-PURCHASE-RECEIPT as wallet-scoped secret proof for re-download. Do not print, publish, or share it.',
+              '5) Retain the settlement transaction hash from PAYMENT-RESPONSE or X-BLOCKCHAIN-TRANSACTION as a non-secret recovery pointer.',
+              '6) Treat X-PURCHASE-RECEIPT as wallet-scoped secret proof for re-download. Do not print, publish, or share it.',
               'Download endpoint: /api/assets/{id}/download.'
             ].join('\n')
           }
@@ -211,8 +217,8 @@ export function getMcpPrompt(name, args = {}) {
               `Re-download asset ${assetId} with wallet ${wallet} without repaying.`,
               '1) Get SIWE template from get_auth_challenge(flow=redownload).',
               '2) Sign exact SIWE message text.',
-              '3) Send GET /api/assets/{id}/download with X-CLIENT-MODE, X-WALLET-ADDRESS, X-PURCHASE-RECEIPT, X-REDOWNLOAD-SIGNATURE, X-REDOWNLOAD-TIMESTAMP.',
-              '4) Keep X-PURCHASE-RECEIPT in secure storage; it is required proof for strict no-repay re-download.'
+              '3) Send GET /api/assets/{id}/download with X-CLIENT-MODE, X-WALLET-ADDRESS, and either X-PURCHASE-RECEIPT or X-BLOCKCHAIN-TRANSACTION, plus X-REDOWNLOAD-SIGNATURE and X-REDOWNLOAD-TIMESTAMP.',
+              '4) Keep X-PURCHASE-RECEIPT in secure storage; it remains the strongest proof. X-BLOCKCHAIN-TRANSACTION is a secondary recovery pointer and must match the recorded entitlement.'
             ].join('\n')
           }
         }
