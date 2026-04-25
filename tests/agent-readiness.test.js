@@ -4,6 +4,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 
 import manifestHandler from '../api/mcp/manifest.js';
+import sitemapHandler from '../api/sitemap.xml.js';
 
 function runRequest(handler, { method = 'GET', headers = {}, query = {} } = {}) {
   return new Promise((resolve, reject) => {
@@ -52,6 +53,7 @@ test('homepage returns HTML by default with discovery Link headers', async () =>
   assert.match(String(res.headers.link || ''), /rel="alternate"; type="text\/markdown"/);
   assert.equal(String(res.headers.vary || ''), 'Accept');
   assert.match(String(res.body || ''), /<!DOCTYPE html>/i);
+  assert.match(String(res.body || ''), /<link rel="canonical" href="https:\/\/pull\.md\/">/i);
 });
 
 test('homepage returns markdown when requested by agents', async () => {
@@ -78,12 +80,26 @@ test('robots.txt publishes crawler policy, sitemap, and AI preferences', async (
   assert.match(body, /Sitemap: https:\/\/pull\.md\/sitemap\.xml/);
 });
 
-test('sitemap.xml includes core discovery documents', async () => {
-  const body = fs.readFileSync(new URL('../public/sitemap.xml', import.meta.url), 'utf8');
-  assert.match(body, /<urlset/);
-  assert.match(body, /https:\/\/pull\.md\/<\/loc>/);
-  assert.match(body, /https:\/\/pull\.md\/WEBMCP\.md/);
-  assert.match(body, /https:\/\/pull\.md\/\.well-known\/mcp\/server-card\.json/);
+test('sitemap.xml includes core discovery documents and canonical asset pages', async () => {
+  const originalBundledSouls = process.env.ENABLE_BUNDLED_SOULS;
+  process.env.ENABLE_BUNDLED_SOULS = '1';
+  const res = await runRequest(sitemapHandler, {
+    method: 'GET',
+    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
+  });
+  try {
+    assert.equal(res.statusCode, 200);
+    assert.match(String(res.headers['content-type'] || ''), /application\/xml/i);
+    const body = String(res.body || '');
+    assert.match(body, /<urlset/);
+    assert.match(body, /https:\/\/pull\.md\/<\/loc>/);
+    assert.match(body, /https:\/\/pull\.md\/WEBMCP\.md/);
+    assert.match(body, /https:\/\/pull\.md\/\.well-known\/mcp\/server-card\.json/);
+    assert.match(body, /https:\/\/pull\.md\/assets\/meta-starter-v1/);
+  } finally {
+    if (originalBundledSouls === undefined) delete process.env.ENABLE_BUNDLED_SOULS;
+    else process.env.ENABLE_BUNDLED_SOULS = originalBundledSouls;
+  }
 });
 
 test('static MCP server card exposes the HTTP transport and capabilities', () => {

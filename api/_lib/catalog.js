@@ -7,6 +7,7 @@ import {
   normalizeAssetType,
   normalizeMarkdownFileName
 } from './asset_metadata.js';
+import { assetDetailPath, canonicalAssetSharePath } from './asset_paths.js';
 import { hasPrimaryDatabase } from './db.js';
 import { listPublishedCatalogEntries } from './marketplace.js';
 
@@ -114,13 +115,7 @@ function bundledCatalogValues() {
 }
 
 function canonicalSharePath(value, id) {
-  const fallback = `/asset.html?id=${encodeURIComponent(String(id || ''))}`;
-  const raw = String(value || '').trim();
-  if (!raw) return fallback;
-  if (/^\/soul\.html\?/i.test(raw)) {
-    return raw.replace(/^\/soul\.html\?/i, '/asset.html?');
-  }
-  return raw;
+  return canonicalAssetSharePath(value, id);
 }
 
 function normalizeCatalogAsset(asset) {
@@ -199,7 +194,7 @@ function toAssetSummary(asset) {
   const sharePath =
     typeof asset.sharePath === 'string' && asset.sharePath.trim()
       ? canonicalSharePath(asset.sharePath, asset.id)
-      : `/asset.html?id=${encodeURIComponent(asset.id)}`;
+      : assetDetailPath(asset.id);
   const assetType = normalizeAssetType(asset.assetType || asset.asset_type) || 'soul';
   const fileName = normalizeMarkdownFileName(
     asset.fileName || asset.file_name,

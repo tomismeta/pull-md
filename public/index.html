@@ -4,20 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PULL.md — Markdown Asset Commerce for Agents and Humans</title>
-  <meta name="description" content="Markdown-native marketplace for SOUL.md and SKILL.md assets. Built for agents and humans equally.">
+  <meta name="description" content="Markdown-native marketplace for portable AI assets: souls, skills, playbooks, prompts, workflows, guides, policies, and knowledge packs.">
   <meta property="og:title" content="PULL.md — Markdown Marketplace for Agents and Humans">
-  <meta property="og:description" content="Markdown-native marketplace for SOUL.md and SKILL.md assets with MCP + x402.">
+  <meta property="og:description" content="Markdown asset commerce with MCP discovery, x402 settlement, and first-class asset pages.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://www.pull.md/">
-  <meta property="og:image" content="https://www.pull.md/graphics/pullmd-social-card.png">
+  <meta property="og:url" content="__PULLMD_CANONICAL_URL__">
+  <meta property="og:image" content="__PULLMD_SOCIAL_IMAGE_URL__">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="PULL.md — Markdown Marketplace for Agents and Humans">
-  <meta name="twitter:description" content="MCP-first discovery, canonical x402 settlement, wallet-proof re-downloads.">
-  <meta name="twitter:image" content="https://www.pull.md/graphics/pullmd-social-card.png">
+  <meta name="twitter:description" content="MCP-first discovery, canonical x402 settlement, wallet-proof re-downloads, and shareable markdown asset pages.">
+  <meta name="twitter:image" content="__PULLMD_SOCIAL_IMAGE_URL__">
 
   <meta name="mcp:version" content="1.0">
   <meta name="mcp:endpoint" content="/mcp">
   <meta name="mcp:manifest" content="/api/mcp/manifest">
+  <link rel="canonical" href="__PULLMD_CANONICAL_URL__">
   <link rel="alternate" href="/" type="text/markdown">
   <link rel="api-catalog" href="/.well-known/api-catalog" type="application/linkset+json">
   <link rel="service-desc" href="/api/openapi.json" type="application/vnd.oai.openapi+json;version=3.1">
@@ -93,7 +94,7 @@
           <p class="hero-subtitle">
             PULL.md is built on markdown principles: readable source, portable files, and clean diffs.
             Agents and humans use the same catalog, the same x402 payment path, and the same wallet-proof re-download model.
-            Listings are scanned on publish and moderation edits, with a visible scan indicator on each card.
+            Souls, skills, playbooks, prompts, workflows, guides, policies, and knowledge assets all fit the same portable contract.
           </p>
           <div class="hero-actions">
             <a href="#assets" class="btn btn-primary btn-lg">Explore Listings</a>
@@ -127,7 +128,7 @@
         <div class="workflow-grid">
           <article class="workflow-card">
             <h3>1. Choose a Markdown Asset</h3>
-            <p>Browse SOUL.md and SKILL.md listings and select what your workflow needs.</p>
+            <p>Browse shareable markdown assets and select the exact operating artifact your workflow needs.</p>
           </article>
           <article class="workflow-card">
             <h3>2. Pay Through x402</h3>
@@ -145,12 +146,10 @@
       <div class="container">
         <div class="section-head">
           <h2>Available Listings</h2>
-          <p>Filter by markdown file type. Current marketplace scope is SOUL.md and SKILL.md.</p>
+          <p>Filter the live catalog by markdown artifact type. PULL.md supports souls, skills, playbooks, policies, prompts, guides, workflows, and knowledge assets.</p>
         </div>
         <div class="listing-filters" id="assetTypeFilters" role="group" aria-label="Filter listings by markdown type">
           <button class="filter-pill active" type="button" data-asset-type="all">All Markdown</button>
-          <button class="filter-pill" type="button" data-asset-type="soul">SOUL.md</button>
-          <button class="filter-pill" type="button" data-asset-type="skill">SKILL.md</button>
           <label class="listing-search" for="assetSearchInput" aria-label="Search listings">
             <span class="listing-search-label">Search</span>
             <input id="assetSearchInput" type="search" autocomplete="off" placeholder="Name, creator, type, keyword">

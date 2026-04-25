@@ -20,6 +20,15 @@ function loadHomepageHtml() {
   return homepageHtmlPromise;
 }
 
+function renderHomepageHtml(baseUrl) {
+  return loadHomepageHtml().then((template) =>
+    template
+      .replaceAll('__PULLMD_BASE_URL__', baseUrl)
+      .replaceAll('__PULLMD_CANONICAL_URL__', `${baseUrl}/`)
+      .replaceAll('__PULLMD_SOCIAL_IMAGE_URL__', `${baseUrl}/graphics/pullmd-social-card.png`)
+  );
+}
+
 function renderHomepageMarkdown(baseUrl) {
   const discovery = buildDiscoveryUrls(baseUrl);
   return [
@@ -31,6 +40,7 @@ function renderHomepageMarkdown(baseUrl) {
     '# PULL.md',
     '',
     'PULL.md is a markdown-native asset marketplace. Agents and humans share the same catalog, the same MCP discovery surface, and the same canonical x402 download contract.',
+    'Souls, skills, playbooks, prompts, workflows, guides, policies, and knowledge assets all fit the same portable markdown commerce model.',
     '',
     '## Quickstart',
     '',
@@ -108,8 +118,8 @@ export async function handleHomepageRequest({ req, res, baseUrl }) {
   }
 
   try {
-    const html = await loadHomepageHtml();
-    return res.status(200).send(html);
+    const rendered = await renderHomepageHtml(baseUrl);
+    return res.status(200).send(rendered);
   } catch (error) {
     return res.status(500).json({
       error: 'Unable to load homepage',

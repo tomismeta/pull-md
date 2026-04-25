@@ -1,19 +1,11 @@
 import { buildDiscoveryLinkEntries, buildDiscoveryUrls } from './public_contract.js';
+import { resolveSiteContext } from './site_url.js';
 
 const API_CATALOG_PROFILE_URI = 'https://www.rfc-editor.org/info/rfc9727';
 const OPENAPI_CONTENT_TYPE = 'application/vnd.oai.openapi+json;version=3.1';
 
-function forwardedHeaderValue(raw) {
-  const value = String(raw || '').trim();
-  if (!value) return '';
-  const first = value.split(',')[0];
-  return String(first || '').trim();
-}
-
 export function resolveBaseUrl(headers = {}) {
-  const host = forwardedHeaderValue(headers['x-forwarded-host']) || String(headers.host || 'pull.md').trim();
-  const proto = forwardedHeaderValue(headers['x-forwarded-proto']) || 'https';
-  return `${proto}://${host}`;
+  return resolveSiteContext(headers).baseUrl;
 }
 
 function serializeLinkEntry(entry) {

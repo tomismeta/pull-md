@@ -111,3 +111,13 @@ test('core endpoints include discovery Link headers', async () => {
   assert.equal(manifestRes.statusCode, 200);
   assert.match(String(manifestRes.headers.link || ''), /rel="service-meta"/);
 });
+
+test('production www host canonicalizes discovery surfaces to apex pull.md', async () => {
+  const res = await runRequest(apiCatalogHandler, {
+    method: 'GET',
+    headers: { host: 'www.pull.md', 'x-forwarded-proto': 'https' }
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.linkset?.[0]?.anchor, 'https://pull.md/.well-known/api-catalog');
+  assert.match(String(res.headers.link || ''), /<https:\/\/pull\.md\/api\/openapi\.json>/);
+});

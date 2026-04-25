@@ -4,6 +4,9 @@
     "api/mcp/manifest.js": {
       "includeFiles": "public/index.html"
     },
+    "api/asset-page.js": {
+      "includeFiles": "public/asset.html"
+    },
     "api/assets/[id]/download.js": {
       "includeFiles": "souls/**/*.md"
     }
@@ -29,6 +32,18 @@
     {
       "src": "/api/assets/([^/]+)/download",
       "dest": "/api/assets/[id]/download.js?id=$1"
+    },
+    {
+      "src": "/assets/([^/]+)",
+      "dest": "/api/asset-page.js?id=$1"
+    },
+    {
+      "src": "/asset\\.html",
+      "dest": "/api/asset-page.js"
+    },
+    {
+      "src": "/sitemap\\.xml",
+      "dest": "/api/sitemap.xml.js"
     },
     {
       "src": "/\\.well-known/api-catalog",

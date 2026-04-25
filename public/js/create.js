@@ -10,6 +10,58 @@ const STATE = {
   connecting: false
 };
 
+const ASSET_TYPE_FILE_NAMES = Object.freeze({
+  soul: 'SOUL.md',
+  skill: 'SKILL.md',
+  playbook: 'PLAYBOOK.md',
+  policy: 'POLICY.md',
+  prompt: 'PROMPT.md',
+  guide: 'GUIDE.md',
+  workflow: 'WORKFLOW.md',
+  knowledge: 'KNOWLEDGE.md'
+});
+
+function normalizeAssetType(value) {
+  return String(value || 'soul').trim().toLowerCase();
+}
+
+function defaultFileNameForAssetType(assetType) {
+  return ASSET_TYPE_FILE_NAMES[normalizeAssetType(assetType)] || 'ASSET.md';
+}
+
+function defaultTemplateForAssetType(assetType) {
+  const fileName = defaultFileNameForAssetType(assetType);
+  return `# ${fileName}
+
+## Purpose
+- Define what this markdown asset is for and when to use it.
+
+## Operating Pattern
+- Describe the workflow, rules, or behaviors this asset should drive.
+
+## Inputs
+- Clarify the information this asset expects.
+
+## Outputs
+- Clarify the format, tone, and artifacts this asset should produce.
+
+## Boundaries
+- State what this asset should not do and when to refuse.`;
+}
+
+function populateAssetTypeOptions(assetTypes = []) {
+  const select = document.getElementById('assetType');
+  if (!(select instanceof HTMLSelectElement)) return;
+  const types = Array.isArray(assetTypes) && assetTypes.length
+    ? assetTypes.map((value) => normalizeAssetType(value)).filter(Boolean)
+    : Object.keys(ASSET_TYPE_FILE_NAMES);
+  const current = normalizeAssetType(select.value || 'soul');
+  select.innerHTML = types
+    .map((type) => `<option value="${type}">${defaultFileNameForAssetType(type)}</option>`)
+    .join('');
+  select.value = types.includes(current) ? current : (types[0] || 'soul');
+}
+
 function getToastHelper() {
   const helper = window?.PullMdToast;
   if (!helper || typeof helper.show !== 'function') {
@@ -298,9 +350,9 @@ function collectListing() {
   const name = document.getElementById('name')?.value.trim() || '';
   const description = document.getElementById('description')?.value.trim() || '';
   const price = Number(document.getElementById('priceUsdc')?.value);
-  const assetType = String(document.getElementById('assetType')?.value || 'soul').trim().toLowerCase();
+  const assetType = normalizeAssetType(document.getElementById('assetType')?.value || 'soul');
   const contentMarkdown = document.getElementById('soulMarkdown')?.value || '';
-  const fileName = assetType === 'skill' ? 'SKILL.md' : 'SOUL.md';
+  const fileName = defaultFileNameForAssetType(assetType);
   return {
     asset_type: assetType,
     file_name: fileName,
@@ -313,56 +365,11 @@ function collectListing() {
 
 function applyTemplate(template) {
   const payload = template && typeof template === 'object' ? template : {};
-  const assetType = String(payload.asset_type || document.getElementById('assetType')?.value || 'soul')
-    .trim()
-    .toLowerCase();
-  const normalizedType = assetType === 'skill' ? 'skill' : 'soul';
-  const fileName = normalizedType === 'skill' ? 'SKILL.md' : 'SOUL.md';
+  const normalizedType = normalizeAssetType(payload.asset_type || document.getElementById('assetType')?.value || 'soul');
+  const fileName = defaultFileNameForAssetType(normalizedType);
   const rawTemplateBody = normalizeTemplateMarkdown(payload.content_markdown || '').trim();
-  const soulTemplate = `# SOUL.md
-
-## Core Principles
-- Define your non-negotiable values and decision rules.
-
-## Operating Pattern
-- Describe how this markdown asset plans, executes, and iterates.
-
-## Boundaries
-- Clarify what this asset should not do and when to refuse.
-
-## Communication
-- Specify tone, brevity, formatting, and interaction style.
-
-## Continuity
-- Define memory expectations, handoff behavior, and long-term consistency rules.`;
-  const skillTemplate = `# SKILL.md
-
-## Skill Scaffolding
-
-### 1. Operating Principle 1 
-
-### 2. Operating Principle 2
-
-### 3. Operating Principle 3
-
-## Task Management
-1. 
-2. 
-3. 
-
-## Core Principles
-- **One**: 
-- **Two**: 
-- **Three**: `;
-
-  const transformedBody =
-    normalizedType === 'skill'
-      ? skillTemplate
-      : rawTemplateBody || soulTemplate;
-  const textareaPlaceholder =
-    normalizedType === 'skill'
-      ? '# SKILL.md\n\n## Skill Scaffolding\n\n### 1. Operating Principle 1\n...'
-      : '# SOUL.md\n\n## Core Principles\n...';
+  const transformedBody = rawTemplateBody || defaultTemplateForAssetType(normalizedType);
+  const textareaPlaceholder = `# ${fileName}\n\n## Purpose\n...`;
 
   document.getElementById('assetType').value = normalizedType;
   document.getElementById('name').value = payload.name || '';
@@ -406,6 +413,7 @@ async function api(action, { method = 'GET', body, headers = {} } = {}) {
 
 async function loadTemplate() {
   const payload = await api('get_listing_template');
+  populateAssetTypeOptions(payload?.template?.notes?.enabled_asset_types);
   const selectedType = String(document.getElementById('assetType')?.value || 'soul').toLowerCase();
   const template = { ...(payload?.template || {}), asset_type: selectedType };
   applyTemplate(template);
@@ -633,6 +641,7 @@ function initMobileNav() {
 function initDefaults() {
   initProviderDiscovery();
   initMobileNav();
+  populateAssetTypeOptions();
   setWalletButton();
   setOutput('No publish response yet.');
   renderPublishedList([]);

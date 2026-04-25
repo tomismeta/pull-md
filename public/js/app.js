@@ -845,22 +845,22 @@ function bindAssetTypeFilters() {
   const register = () => {
     const root = document.getElementById('assetTypeFilters');
     if (!root) return;
-    const buttons = [...root.querySelectorAll('.filter-pill[data-asset-type]')];
-    if (!buttons.length) return;
     const applyState = () => {
-      buttons.forEach((button) => {
+      [...root.querySelectorAll('.filter-pill[data-asset-type]')].forEach((button) => {
         const value = String(button.getAttribute('data-asset-type') || '').toLowerCase();
         button.classList.toggle('active', value === currentAssetTypeFilter);
       });
     };
-    buttons.forEach((button) => {
-      button.addEventListener('click', async () => {
-        const next = String(button.getAttribute('data-asset-type') || 'all').toLowerCase();
-        if (!next || next === currentAssetTypeFilter) return;
-        currentAssetTypeFilter = next;
-        applyState();
-        await loadAssets();
-      });
+    root.addEventListener('click', async (event) => {
+      const button = event.target instanceof Element
+        ? event.target.closest('.filter-pill[data-asset-type]')
+        : null;
+      if (!(button instanceof HTMLElement) || !root.contains(button)) return;
+      const next = String(button.getAttribute('data-asset-type') || 'all').toLowerCase();
+      if (!next || next === currentAssetTypeFilter) return;
+      currentAssetTypeFilter = next;
+      applyState();
+      await loadAssets();
     });
     applyState();
   };

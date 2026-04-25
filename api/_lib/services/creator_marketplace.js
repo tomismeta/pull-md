@@ -19,6 +19,7 @@ import { AppError } from '../errors.js';
 import { getTelemetryDashboard, normalizeTelemetryWindowHours, recordTelemetryEvent } from '../telemetry.js';
 import { resolveSiweIdentity, verifyRedownloadSessionToken } from '../payments.js';
 import { getContentScannerConfig } from './content_scanner.js';
+import { resolveSiteContext } from '../site_url.js';
 
 const ETH_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
@@ -33,9 +34,7 @@ const DEPRECATED_ACTIONS = new Set([
 ]);
 
 function resolveBaseUrl(headers = {}) {
-  const host = String(headers['x-forwarded-host'] || headers.host || 'www.pull.md').trim();
-  const proto = String(headers['x-forwarded-proto'] || 'https').trim();
-  return `${proto}://${host}`;
+  return resolveSiteContext(headers).baseUrl;
 }
 
 function resolveSiweContext(headers = {}) {

@@ -10,11 +10,10 @@ import {
   buildFacilitatorCapabilities,
   buildMarketplaceProfile
 } from '../_lib/public_contract.js';
+import { resolveSiteContext } from '../_lib/site_url.js';
 
 export default function handler(req, res) {
-  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'www.pull.md').trim();
-  const proto = String(req.headers['x-forwarded-proto'] || 'https').trim();
-  const baseUrl = `${proto}://${host}`;
+  const { baseUrl } = resolveSiteContext(req.headers || {});
 
   if (String(req.query?.view || '').trim().toLowerCase() === 'home') {
     return handleHomepageRequest({ req, res, baseUrl });

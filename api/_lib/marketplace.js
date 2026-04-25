@@ -10,6 +10,7 @@ import {
   normalizeAssetType,
   normalizeMarkdownFileName
 } from './asset_metadata.js';
+import { assetDetailPath, canonicalAssetSharePath } from './asset_paths.js';
 import { assertRelationsExist, getPrimaryDatabaseUrl, getSharedDbPool, qualifyPgRelation } from './db.js';
 import { scanMarkdownAssetContent } from './services/content_scanner.js';
 import { getLatestAssetScan, getLatestAssetScanReport, persistAssetScanReport } from './services/scan_store.js';
@@ -401,7 +402,7 @@ function derivePreview(markdown) {
 }
 
 function sharePathForAsset(assetId) {
-  return `/asset.html?id=${encodeURIComponent(String(assetId || ''))}`;
+  return assetDetailPath(assetId);
 }
 
 function sharePathForSoul(assetId) {
@@ -409,13 +410,7 @@ function sharePathForSoul(assetId) {
 }
 
 function canonicalSharePath(value, id) {
-  const fallback = sharePathForAsset(id);
-  const raw = asString(value);
-  if (!raw) return fallback;
-  if (/^\/soul\.html\?/i.test(raw)) {
-    return raw.replace(/^\/soul\.html\?/i, '/asset.html?');
-  }
-  return raw;
+  return canonicalAssetSharePath(value, id);
 }
 
 function normalizeVisibility(value) {
