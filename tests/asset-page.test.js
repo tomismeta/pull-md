@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import assetPageHandler from '../api/asset-page.js';
+import manifestHandler from '../api/mcp/manifest.js';
 
 function runRequest(handler, { method = 'GET', headers = {}, query = {}, url = '' } = {}) {
   return new Promise((resolve, reject) => {
@@ -41,10 +41,10 @@ function runRequest(handler, { method = 'GET', headers = {}, query = {}, url = '
 test('asset detail page serves canonical HTML metadata for asset routes', async () => {
   const originalBundledSouls = process.env.ENABLE_BUNDLED_SOULS;
   process.env.ENABLE_BUNDLED_SOULS = '1';
-  const res = await runRequest(assetPageHandler, {
+  const res = await runRequest(manifestHandler, {
     method: 'GET',
     headers: { host: 'pull.md', 'x-forwarded-proto': 'https' },
-    query: { id: 'meta-starter-v1' }
+    query: { view: 'asset', id: 'meta-starter-v1' }
   });
   try {
     assert.equal(res.statusCode, 200);
@@ -62,9 +62,10 @@ test('asset detail page serves canonical HTML metadata for asset routes', async 
 test('legacy asset.html query route remains compatible through the same renderer', async () => {
   const originalBundledSouls = process.env.ENABLE_BUNDLED_SOULS;
   process.env.ENABLE_BUNDLED_SOULS = '1';
-  const res = await runRequest(assetPageHandler, {
+  const res = await runRequest(manifestHandler, {
     method: 'GET',
     headers: { host: 'pull.md', 'x-forwarded-proto': 'https' },
+    query: { view: 'asset' },
     url: '/asset.html?id=meta-starter-v1'
   });
   try {

@@ -4,7 +4,6 @@ import fs from 'fs';
 import crypto from 'crypto';
 
 import manifestHandler from '../api/mcp/manifest.js';
-import sitemapHandler from '../api/sitemap.xml.js';
 
 function runRequest(handler, { method = 'GET', headers = {}, query = {} } = {}) {
   return new Promise((resolve, reject) => {
@@ -83,9 +82,10 @@ test('robots.txt publishes crawler policy, sitemap, and AI preferences', async (
 test('sitemap.xml includes core discovery documents and canonical asset pages', async () => {
   const originalBundledSouls = process.env.ENABLE_BUNDLED_SOULS;
   process.env.ENABLE_BUNDLED_SOULS = '1';
-  const res = await runRequest(sitemapHandler, {
+  const res = await runRequest(manifestHandler, {
     method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
+    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' },
+    query: { view: 'sitemap' }
   });
   try {
     assert.equal(res.statusCode, 200);

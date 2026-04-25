@@ -1,11 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 
-import { assetIdFromRequest, assetDetailPath } from './_lib/asset_paths.js';
-import { defaultFileNameForAssetType, normalizeAssetType } from './_lib/asset_metadata.js';
-import { setDiscoveryHeaders } from './_lib/discovery.js';
-import { resolveAssetDetails } from './_lib/services/assets.js';
-import { resolveSiteContext } from './_lib/site_url.js';
+import { assetIdFromRequest, assetDetailPath } from './asset_paths.js';
+import { defaultFileNameForAssetType, normalizeAssetType } from './asset_metadata.js';
+import { resolveAssetDetails } from './services/assets.js';
 
 const ASSET_TEMPLATE_PATH = path.join(process.cwd(), 'public', 'asset.html');
 let assetTemplatePromise = null;
@@ -120,8 +118,7 @@ function renderAssetHtml(template, model) {
     .replaceAll('__PULLMD_ASSET_BUTTON_LABEL__', escapeHtml(model.purchaseButtonLabel));
 }
 
-export default async function handler(req, res) {
-  setDiscoveryHeaders(res, req);
+export async function handleAssetPageRequest({ req, res, baseUrl }) {
   const method = String(req.method || 'GET').toUpperCase();
   if (method === 'OPTIONS') {
     res.setHeader('Allow', 'GET, HEAD, OPTIONS');
@@ -136,7 +133,6 @@ export default async function handler(req, res) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=900, stale-while-revalidate=86400');
 
-  const { baseUrl } = resolveSiteContext(req.headers || {});
   const assetId = assetIdFromRequest(req);
 
   try {

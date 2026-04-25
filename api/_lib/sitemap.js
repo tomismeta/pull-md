@@ -1,6 +1,5 @@
-import { assetDetailPath } from './_lib/asset_paths.js';
-import { listAssetsCatalog } from './_lib/services/assets.js';
-import { resolveSiteContext } from './_lib/site_url.js';
+import { assetDetailPath } from './asset_paths.js';
+import { listAssetsCatalog } from './services/assets.js';
 
 function escapeXml(value) {
   return String(value || '')
@@ -18,7 +17,7 @@ function renderSitemap(urls = []) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`;
 }
 
-export default async function handler(req, res) {
+export async function handleSitemapRequest({ req, res, baseUrl }) {
   const method = String(req.method || 'GET').toUpperCase();
   if (method === 'OPTIONS') {
     res.setHeader('Allow', 'GET, HEAD, OPTIONS');
@@ -30,7 +29,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { baseUrl } = resolveSiteContext(req.headers || {});
   const assets = await listAssetsCatalog({});
   const urls = [
     `${baseUrl}/`,

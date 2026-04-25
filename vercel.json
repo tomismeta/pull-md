@@ -2,10 +2,7 @@
   "version": 2,
   "functions": {
     "api/mcp/manifest.js": {
-      "includeFiles": "public/index.html"
-    },
-    "api/asset-page.js": {
-      "includeFiles": "public/asset.html"
+      "includeFiles": "public/*.html"
     },
     "api/assets/[id]/download.js": {
       "includeFiles": "souls/**/*.md"
@@ -35,15 +32,15 @@
     },
     {
       "src": "/assets/([^/]+)",
-      "dest": "/api/asset-page.js?id=$1"
+      "dest": "/api/mcp/manifest.js?view=asset&id=$1"
     },
     {
       "src": "/asset\\.html",
-      "dest": "/api/asset-page.js"
+      "dest": "/api/mcp/manifest.js?view=asset"
     },
     {
       "src": "/sitemap\\.xml",
-      "dest": "/api/sitemap.xml.js"
+      "dest": "/api/mcp/manifest.js?view=sitemap"
     },
     {
       "src": "/\\.well-known/api-catalog",
