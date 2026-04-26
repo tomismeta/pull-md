@@ -3,11 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Asset — PULL.md</title>
-  <meta name="description" content="PULL.md listing details and x402 purchase access.">
+  <title>__PULLMD_META_TITLE__</title>
+  <meta name="description" content="__PULLMD_META_DESCRIPTION__">
+  <meta property="og:title" content="__PULLMD_META_TITLE__">
+  <meta property="og:description" content="__PULLMD_META_DESCRIPTION__">
+  <meta property="og:type" content="product">
+  <meta property="og:url" content="__PULLMD_CANONICAL_URL__">
+  <meta property="og:image" content="__PULLMD_SOCIAL_IMAGE_URL__">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="__PULLMD_META_TITLE__">
+  <meta name="twitter:description" content="__PULLMD_META_DESCRIPTION__">
+  <meta name="twitter:image" content="__PULLMD_SOCIAL_IMAGE_URL__">
   <meta name="mcp:version" content="1.0">
   <meta name="mcp:endpoint" content="/mcp">
   <meta name="mcp:manifest" content="/api/mcp/manifest">
+  <link rel="canonical" href="__PULLMD_CANONICAL_URL__">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
   <link rel="shortcut icon" href="/favicon.ico">
@@ -53,16 +63,16 @@
       <div class="soul-hero">
         <div class="soul-header-content">
           <div class="soul-lineage">
-            <span class="badge badge-hybrid" id="assetDetailType">Hybrid</span>
-            <span class="lineage-text" id="assetDetailLineage">Creator listing</span>
+            <span class="badge badge-__PULLMD_ASSET_TYPE_CLASS__" id="assetDetailType">__PULLMD_ASSET_TYPE_LABEL__</span>
+            <span class="lineage-text" id="assetDetailLineage">__PULLMD_ASSET_LINEAGE__</span>
           </div>
           <div class="soul-title-row">
             <span class="title-hash hash-tone-blue" id="assetDetailHash">#</span>
-            <h1 class="soul-title" id="assetDetailName">Loading asset...</h1>
+            <h1 class="soul-title" id="assetDetailName">__PULLMD_ASSET_NAME__</h1>
           </div>
-          <p class="soul-description" id="assetDetailDescription">Fetching listing details.</p>
+          <p class="soul-description" id="assetDetailDescription">__PULLMD_ASSET_DESCRIPTION__</p>
           <div class="soul-tags" id="assetDetailTags">
-            <span class="tag">loading</span>
+            __PULLMD_ASSET_TAGS__
           </div>
         </div>
       </div>
@@ -74,7 +84,7 @@
             <div class="file-item">
               <span class="file-icon">MD</span>
               <div class="file-info">
-              <span class="file-name" id="assetDetailFileName">ASSET.md</span>
+              <span class="file-name" id="assetDetailFileName">__PULLMD_ASSET_FILENAME__</span>
                 <span class="file-desc">Delivered only after successful payment or entitlement verification</span>
               </div>
             </div>
@@ -82,7 +92,7 @@
 
           <div class="preview-section">
             <h4>Preview</h4>
-            <blockquote class="preview-quote" id="assetDetailPreview">Preview unavailable.</blockquote>
+            <blockquote class="preview-quote" id="assetDetailPreview">__PULLMD_ASSET_PREVIEW__</blockquote>
           </div>
         </div>
 
@@ -98,17 +108,17 @@
               style="display: none;"
             ><span aria-hidden="true">✓</span></a>
             <div class="price-display">
-              <span class="price" id="assetDetailPrice">$0.00</span>
+              <span class="price" id="assetDetailPrice">__PULLMD_ASSET_PRICE__</span>
               <span class="currency">USDC</span>
             </div>
             <div class="network-badge">
               <span class="dot dot-blue"></span>
               <span>Base Network</span>
             </div>
-            <button class="btn btn-primary btn-lg btn-full" id="buyBtn" data-soul-id="">
-              Purchase Asset
+            <button class="btn btn-primary btn-lg btn-full" id="buyBtn" data-soul-id="__PULLMD_ASSET_ID__">
+              __PULLMD_ASSET_BUTTON_LABEL__
             </button>
-            <p class="purchase-note" id="assetDetailPurchaseNote">Delivered instantly through canonical x402 settlement.</p>
+            <p class="purchase-note" id="assetDetailPurchaseNote">__PULLMD_ASSET_PURCHASE_NOTE__</p>
           </div>
 
           <div class="purchase-card success-card" id="successCard" style="display: none;">

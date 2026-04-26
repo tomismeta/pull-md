@@ -8,6 +8,7 @@ import {
   enabledAssetTypes,
   isEnabledAssetType
 } from '../asset_metadata.js';
+import { canonicalProductionBaseUrl, canonicalProductionHost } from '../site_url.js';
 import { buildPublicAssetsMeta } from '../public_contract.js';
 import { buildSiweAuthMessage, getSellerAddress, verifyPurchaseReceipt } from '../payments.js';
 import { AppError } from '../errors.js';
@@ -215,16 +216,16 @@ export function buildMcpAssetDetailsResponse({ assetId, asset, summary, sellerAd
           assetId: id,
           action: 'redownload',
           timestamp: Date.now(),
-          domain: 'www.pull.md',
-          uri: 'https://www.pull.md'
+          domain: canonicalProductionHost(),
+          uri: canonicalProductionBaseUrl()
         }),
         session: buildSiweAuthMessage({
           wallet: '0x<your-wallet>',
           assetId: '*',
           action: 'session',
           timestamp: Date.now(),
-          domain: 'www.pull.md',
-          uri: 'https://www.pull.md'
+          domain: canonicalProductionHost(),
+          uri: canonicalProductionBaseUrl()
         })
       },
       auth_timestamp_note:

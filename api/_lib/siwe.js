@@ -1,13 +1,14 @@
 import crypto from 'crypto';
 import { ethers } from 'ethers';
+import { canonicalProductionHost } from './site_url.js';
 
 const SIWE_STATEMENT = 'Authenticate wallet ownership for PULL.md. No token transfer or approval.';
 const SIWE_CHAIN_ID = Number(process.env.SIWE_CHAIN_ID || '8453');
 
 function configuredSiweDomain() {
   const configured = String(process.env.SIWE_DOMAIN || '').trim();
-  if (!configured) return 'www.pull.md';
-  if (configured.toLowerCase().includes('pullmd')) return 'www.pull.md';
+  if (!configured) return canonicalProductionHost();
+  if (configured.toLowerCase().includes('pullmd')) return canonicalProductionHost();
   return configured;
 }
 

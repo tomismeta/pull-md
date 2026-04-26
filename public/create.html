@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PULL.md Creator Portal</title>
-  <meta name="description" content="Publish SOUL.md and SKILL.md assets instantly with wallet authentication on PULL.md.">
+  <meta name="description" content="Publish markdown assets instantly with wallet authentication on PULL.md.">
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
@@ -49,7 +49,7 @@
       <div class="container">
         <div class="agent-api-card creator-header-card">
           <h1>Publish Markdown Asset</h1>
-          <p>Immediate publish only. No drafts. No approval queue. Publish and share in one step.</p>
+          <p>Immediate publish only. No drafts. No approval queue. Publish souls, skills, playbooks, prompts, workflows, guides, policies, and knowledge assets in one step.</p>
         </div>
       </div>
     </section>
@@ -66,10 +66,16 @@
             <select id="assetType" class="creator-input">
               <option value="soul">SOUL.md</option>
               <option value="skill">SKILL.md</option>
+              <option value="playbook">PLAYBOOK.md</option>
+              <option value="policy">POLICY.md</option>
+              <option value="prompt">PROMPT.md</option>
+              <option value="guide">GUIDE.md</option>
+              <option value="workflow">WORKFLOW.md</option>
+              <option value="knowledge">KNOWLEDGE.md</option>
             </select>
           </label>
           <label>Description<textarea id="description" class="creator-textarea" rows="3" placeholder="Short summary shown to buyers."></textarea></label>
-          <label>Markdown Content<textarea id="soulMarkdown" class="creator-textarea" rows="14" placeholder="# SOUL.md&#10;&#10;## Core Principles&#10;..."></textarea></label>
+          <label>Markdown Content<textarea id="soulMarkdown" class="creator-textarea" rows="14" placeholder="# ASSET.md&#10;&#10;## Overview&#10;..."></textarea></label>
           <div class="creator-action-row">
             <button id="loadTemplateBtn" class="btn btn-ghost">Use Markdown Template</button>
             <button id="publishBtn" class="btn btn-primary">Publish Now</button>

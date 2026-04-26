@@ -4,11 +4,20 @@
   function assetIdFromLocation(locationLike = globalScope.location) {
     const search = String(locationLike?.search || '');
     const params = new URLSearchParams(search);
-    return params.get('id') || '';
+    const queryId = params.get('id');
+    if (queryId) return queryId;
+    const path = String(locationLike?.pathname || '').trim();
+    const match = path.match(/^\/assets\/([^/?#]+)/i);
+    if (!match?.[1]) return '';
+    try {
+      return decodeURIComponent(match[1]);
+    } catch (_) {
+      return match[1];
+    }
   }
 
   function assetListingHref(soulId) {
-    return `/asset.html?id=${encodeURIComponent(String(soulId || ''))}`;
+    return `/assets/${encodeURIComponent(String(soulId || ''))}`;
   }
 
   function formatCreatorLabel(raw, shortenAddress = (value) => String(value || '-')) {
@@ -58,6 +67,22 @@
 
     const subtitle = document.getElementById('assetDetailDescription');
     if (subtitle) subtitle.textContent = String(soul.description || 'No description available.');
+
+    const canonicalUrl = `${window.location.origin}${assetListingHref(String(soul.id || ''))}`;
+    const canonicalLink = document.querySelector('link[rel="canonical"]');
+    if (canonicalLink) canonicalLink.setAttribute('href', canonicalUrl);
+    const metaUpdates = [
+      ['meta[name="description"]', String(soul.description || 'PULL.md listing details.')],
+      ['meta[property="og:title"]', `${String(soul.name || soul.id || 'Asset')} — PULL.md`],
+      ['meta[property="og:description"]', String(soul.description || 'PULL.md listing details.')],
+      ['meta[property="og:url"]', canonicalUrl],
+      ['meta[name="twitter:title"]', `${String(soul.name || soul.id || 'Asset')} — PULL.md`],
+      ['meta[name="twitter:description"]', String(soul.description || 'PULL.md listing details.')]
+    ];
+    metaUpdates.forEach(([selector, content]) => {
+      const el = document.querySelector(selector);
+      if (el) el.setAttribute('content', content);
+    });
 
     const preview = document.getElementById('assetDetailPreview');
     if (preview) preview.textContent = String(soul.preview?.excerpt || soul.description || 'No preview available.');

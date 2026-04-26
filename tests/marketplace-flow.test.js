@@ -75,7 +75,7 @@ test('immediate publish + visibility removal flow', async () => {
     assert.equal(publish.listing.asset_id, 'creator-alpha-v1');
     assert.equal(publish.listing.visibility, 'public');
     assert.equal(publish.listing.price_micro_usdc, '310000');
-    assert.ok(String(publish.listing.share_path).startsWith('/asset.html?id='));
+    assert.ok(String(publish.listing.share_path).startsWith('/assets/'));
 
     const publishedPublic = await listPublishedListingSummaries({ includeHidden: false });
     assert.equal(publishedPublic.some((item) => item.asset_id === 'creator-alpha-v1'), true);
@@ -337,6 +337,7 @@ test('catalog fallback reads Vercel draft directory when MARKETPLACE_DRAFTS_DIR 
     const { listSoulsResolved, getSoulResolved, loadSoulContent } = await import(`../api/_lib/catalog.js?test=${Date.now()}`);
     const listed = (await listSoulsResolved()).find((item) => item.id === 'vercel-catalog-soul-v1');
     assert.ok(listed);
+    assert.equal(listed.share_path, '/assets/vercel-catalog-soul-v1');
     const soul = await getSoulResolved('vercel-catalog-soul-v1');
     assert.ok(soul);
     const content = await loadSoulContent('vercel-catalog-soul-v1', { soul });

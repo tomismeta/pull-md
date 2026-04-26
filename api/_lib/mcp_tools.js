@@ -10,6 +10,7 @@ import { AppError } from './errors.js';
 import { buildCreatorAuthMessage, buildModeratorAuthMessage, getMarketplaceDraftTemplate } from './marketplace.js';
 import { buildSiweAuthMessage, resolveSiweIdentity } from './payments.js';
 import { buildSiweChallengeFields, parseSiweField } from './siwe.js';
+import { canonicalProductionHost, resolveSiteContext } from './site_url.js';
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
 
@@ -70,8 +71,9 @@ function normalizeModeratorAction(action) {
 
 function buildAuthChallengePayload(args = {}, context = {}) {
   const parsed = ensureObject(args);
-  const host = String(context?.headers?.['x-forwarded-host'] || context?.headers?.host || 'www.pull.md').trim();
-  const proto = String(context?.headers?.['x-forwarded-proto'] || 'https').trim();
+  const site = resolveSiteContext(context?.headers || {});
+  const host = site.host || canonicalProductionHost();
+  const proto = site.proto || 'https';
   const siweIdentity = resolveSiweIdentity({ host, proto });
   const siweDomain = siweIdentity.domain;
   const siweUri = siweIdentity.uri;
@@ -261,10 +263,12 @@ function buildAuthChallengePayload(args = {}, context = {}) {
 }
 
 function toolCallHeadersFromArgs(context, args, authShape = 'none') {
+  const site = resolveSiteContext(context?.headers || {});
+  const host = site.host || canonicalProductionHost();
   const baseHeaders = {
-    host: context?.headers?.host || 'www.pull.md',
-    'x-forwarded-host': context?.headers?.['x-forwarded-host'] || context?.headers?.host || 'www.pull.md',
-    'x-forwarded-proto': context?.headers?.['x-forwarded-proto'] || 'https'
+    host,
+    'x-forwarded-host': host,
+    'x-forwarded-proto': site.proto || 'https'
   };
   const parsedArgs = ensureObject(args);
 
@@ -296,7 +300,10 @@ const MCP_TOOL_REGISTRY = [
       type: 'object',
       properties: {
         category: { type: 'string', description: 'Optional category filter' },
-        asset_type: { type: 'string', description: 'Optional asset type filter (soul, skill)' }
+        asset_type: {
+          type: 'string',
+          description: 'Optional asset type filter (for example soul, skill, playbook, prompt, workflow)'
+        }
       },
       additionalProperties: false
     },

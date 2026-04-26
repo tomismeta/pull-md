@@ -8,6 +8,41 @@
       .trim();
   }
 
+  function fileLabelForAssetType(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return 'ASSET.md';
+    return `${normalized.replace(/[^a-z0-9]+/g, '_').toUpperCase().replaceAll('_', '')}.md`;
+  }
+
+  function renderAssetTypeFilters({
+    assetTypes = [],
+    selectedAssetType = 'all',
+    containerId = 'assetTypeFilters'
+  } = {}) {
+    const root = document.getElementById(containerId);
+    if (!root) return;
+    const enabledTypes = Array.isArray(assetTypes)
+      ? assetTypes.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
+      : [];
+    const buttons = ['all', ...enabledTypes];
+    const searchLabel = root.querySelector('.listing-search');
+    root.querySelectorAll('.filter-pill[data-asset-type]').forEach((button) => button.remove());
+    const fragment = document.createDocumentFragment();
+    buttons.forEach((type) => {
+      const button = document.createElement('button');
+      button.className = `filter-pill${type === selectedAssetType ? ' active' : ''}`;
+      button.type = 'button';
+      button.setAttribute('data-asset-type', type);
+      button.textContent = type === 'all' ? 'All Markdown' : fileLabelForAssetType(type);
+      fragment.appendChild(button);
+    });
+    if (searchLabel) {
+      root.insertBefore(fragment, searchLabel);
+      return;
+    }
+    root.appendChild(fragment);
+  }
+
   function filterSoulsByQuery(souls = [], searchQuery = '') {
     const normalized = normalizeSearchText(searchQuery);
     if (!normalized) return Array.isArray(souls) ? souls : [];
@@ -239,6 +274,11 @@ async function loadAssets({
       if (!response.ok) throw new Error('Failed to load asset catalog');
       const payload = await response.json();
       const assets = payload.assets || payload.souls || [];
+      renderAssetTypeFilters({
+        assetTypes: payload?.meta?.enabled_asset_types,
+        selectedAssetType: normalizedType,
+        containerId: 'assetTypeFilters'
+      });
       if (typeof setSoulCatalogCache === 'function') {
         setSoulCatalogCache(assets);
       }
@@ -273,6 +313,7 @@ async function loadAssets({
     hydrateAssetDetailPage,
     renderOwnedSouls,
     loadAssets,
+    renderAssetTypeFilters,
     filterSoulsByQuery,
     renderCatalogGrid
   };

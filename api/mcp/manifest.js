@@ -1,7 +1,9 @@
 import { getMcpToolsForManifest } from '../_lib/mcp_tools.js';
 import { getMcpServerMetadata } from '../_lib/mcp_sdk.js';
 import { setDiscoveryHeaders } from '../_lib/discovery.js';
+import { handleAssetPageRequest } from '../_lib/asset_page.js';
 import { handleHomepageRequest } from '../_lib/homepage.js';
+import { handleSitemapRequest } from '../_lib/sitemap.js';
 import {
   buildAuthContract,
   buildCommerceContract,
@@ -10,14 +12,20 @@ import {
   buildFacilitatorCapabilities,
   buildMarketplaceProfile
 } from '../_lib/public_contract.js';
+import { resolveSiteContext } from '../_lib/site_url.js';
 
 export default function handler(req, res) {
-  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'www.pull.md').trim();
-  const proto = String(req.headers['x-forwarded-proto'] || 'https').trim();
-  const baseUrl = `${proto}://${host}`;
+  const { baseUrl } = resolveSiteContext(req.headers || {});
 
-  if (String(req.query?.view || '').trim().toLowerCase() === 'home') {
+  const view = String(req.query?.view || '').trim().toLowerCase();
+  if (view === 'home') {
     return handleHomepageRequest({ req, res, baseUrl });
+  }
+  if (view === 'asset') {
+    return handleAssetPageRequest({ req, res, baseUrl });
+  }
+  if (view === 'sitemap') {
+    return handleSitemapRequest({ req, res, baseUrl });
   }
 
   const allowedOrigins = [

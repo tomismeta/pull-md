@@ -6,11 +6,10 @@ import {
 } from './services/assets.js';
 import fs from 'fs/promises';
 import path from 'path';
+import { resolveSiteContext } from './site_url.js';
 
 function baseUrlFromHeaders(headers = {}) {
-  const host = String(headers['x-forwarded-host'] || headers.host || 'www.pull.md').trim();
-  const proto = String(headers['x-forwarded-proto'] || 'https').trim();
-  return `${proto}://${host}`;
+  return resolveSiteContext(headers).baseUrl;
 }
 
 function asJson(value) {
