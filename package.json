@@ -15,13 +15,13 @@
   },
   "dependencies": {
     "@braintree/sanitize-url": "^7.1.2",
-    "@coinbase/cdp-sdk": "^1.49.2",
+    "@coinbase/cdp-sdk": "^1.50.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@x402/core": "^2.12.0",
-    "@x402/evm": "^2.12.0",
-    "@x402/extensions": "^2.12.0",
-    "@x402/fetch": "^2.12.0",
-    "@x402/next": "^2.12.0",
+    "@x402/core": "^2.13.0",
+    "@x402/evm": "^2.13.0",
+    "@x402/extensions": "^2.13.0",
+    "@x402/fetch": "^2.13.0",
+    "@x402/next": "^2.13.0",
     "confusables": "^1.1.1",
     "ethers": "^6.16.0",
     "ipaddr.js": "^2.4.0",
@@ -29,12 +29,12 @@
     "quick-lru": "^7.3.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
-    "tldts": "^7.0.30",
+    "tldts": "^7.1.0",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "vercel": "^54.1.0"
+    "vercel": "^54.4.1"
   },
   "overrides": {
     "axios": "1.16.1",
@@ -45,7 +45,9 @@
     "express-rate-limit": "8.5.2",
     "next": "16.2.6",
     "postcss": "8.5.14",
+    "qs": "6.15.2",
     "path-to-regexp": "8.4.2",
+    "ws": "8.21.0",
     "fast-uri": "3.1.2",
     "ip-address": "10.2.0",
     "smol-toml": "1.6.1",
