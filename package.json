@@ -29,12 +29,12 @@
     "quick-lru": "^7.3.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
-    "tldts": "^7.4.5",
+    "tldts": "^7.4.7",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "vercel": "^54.18.1"
+    "vercel": "^54.21.1"
   },
   "overrides": {
     "axios": "1.16.1",
