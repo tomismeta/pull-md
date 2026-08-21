@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 
-import mcpHandler from '../api/mcp/index.js';
+import mcpHandler from '../api/retired.js';
 
 function runMcpRequest({ method = 'POST', headers = {}, body = null } = {}) {
   return new Promise((resolve, reject) => {

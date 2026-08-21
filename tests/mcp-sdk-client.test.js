@@ -5,7 +5,7 @@ import http from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-import mcpHandler from '../api/mcp/index.js';
+import mcpHandler from '../api/retired.js';
 
 async function connectWithOfficialClient() {
   const server = http.createServer((req, res) => {

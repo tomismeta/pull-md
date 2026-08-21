@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import webmcpMarkdownHandler from '../api/mcp/webmcp_markdown.js';
+import webmcpMarkdownHandler from '../api/retired.js';
 
 function runRequest() {
   return new Promise((resolve, reject) => {

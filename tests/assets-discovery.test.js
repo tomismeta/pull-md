@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import assetsHandler from '../api/assets/index.js';
+import assetsHandler from '../api/retired.js';
 
 function runAssetsRequest({ method = 'GET', headers = {}, query = {} } = {}) {
   return new Promise((resolve, reject) => {

@@ -1,11 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import assetsHandler from '../api/assets/index.js';
-import mcpHandler from '../api/mcp/index.js';
-import manifestHandler from '../api/mcp/manifest.js';
-import openApiHandler from '../api/openapi.json.js';
-import apiCatalogHandler from '../api/well-known/api-catalog.js';
+import retiredHandler from '../api/retired.js';
 
 function runRequest(handler, { method = 'GET', path = '/' } = {}) {
   return new Promise((resolve, reject) => {
@@ -49,15 +45,15 @@ function runRequest(handler, { method = 'GET', path = '/' } = {}) {
 
 test('all former MCP and REST discovery handlers fail closed with 410', async () => {
   const endpoints = [
-    [apiCatalogHandler, '/.well-known/api-catalog'],
-    [openApiHandler, '/api/openapi.json'],
-    [assetsHandler, '/api/assets'],
-    [mcpHandler, '/mcp'],
-    [manifestHandler, '/api/mcp/manifest']
+    '/.well-known/api-catalog',
+    '/api/openapi.json',
+    '/api/assets',
+    '/mcp',
+    '/api/mcp/manifest'
   ];
 
   const responses = await Promise.all(
-    endpoints.map(([handler, path]) => runRequest(handler, { path }))
+    endpoints.map((path) => runRequest(retiredHandler, { path }))
   );
 
   for (const res of responses) {
@@ -69,7 +65,7 @@ test('all former MCP and REST discovery handlers fail closed with 410', async ()
 });
 
 test('retired discovery handlers answer preflight without advertising active methods', async () => {
-  const res = await runRequest(openApiHandler, { method: 'OPTIONS', path: '/api/openapi.json' });
+  const res = await runRequest(retiredHandler, { method: 'OPTIONS', path: '/api/openapi.json' });
   assert.equal(res.statusCode, 204);
   assert.equal(res.body, null);
   assert.equal(res.headers['x-pullmd-retired'], 'true');

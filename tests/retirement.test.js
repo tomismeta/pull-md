@@ -5,7 +5,6 @@ import { promises as fsPromises } from 'fs';
 import os from 'os';
 import path from 'path';
 
-import assetsHandler from '../api/assets/index.js';
 import downloadHandler from '../api/assets/[id]/download.js';
 import {
   REDOWNLOAD_GRACE_END_AT,
@@ -13,7 +12,6 @@ import {
   buildRetirementProblem,
   evaluateRetiredDownloadAccess
 } from '../api/_lib/retirement.js';
-import mcpHandler from '../api/mcp/index.js';
 import manifestHandler from '../api/mcp/manifest.js';
 import { createPurchaseReceipt } from '../api/_lib/payments.js';
 import retiredHandler from '../api/retired.js';
@@ -75,13 +73,13 @@ test('retirement problem is a stable HTTP 410 contract', async () => {
 
 test('MCP, catalog, and manifest handlers are retired', async () => {
   const requests = await Promise.all([
-    runRequest(mcpHandler, {
+    runRequest(retiredHandler, {
       method: 'POST',
       headers: { host: 'pull.md', 'x-forwarded-proto': 'https' },
       body: { jsonrpc: '2.0', id: 1, method: 'initialize' },
       url: '/mcp'
     }),
-    runRequest(assetsHandler, {
+    runRequest(retiredHandler, {
       headers: { host: 'pull.md', 'x-forwarded-proto': 'https' },
       url: '/api/assets'
     }),
@@ -119,12 +117,17 @@ test('download endpoint refuses new quotes and paid retries before loading payme
   const priorBundled = process.env.ENABLE_BUNDLED_SOULS;
   process.env.ENABLE_BUNDLED_SOULS = '1';
   try {
-    for (const extraHeaders of [{}, { 'payment-signature': 'not-a-settlement' }]) {
+    const scenarios = [
+      { assetId: 'meta-starter-v1', extraHeaders: {} },
+      { assetId: 'meta-starter-v1', extraHeaders: { 'payment-signature': 'not-a-settlement' } },
+      { assetId: 'not-a-real-asset', extraHeaders: {} }
+    ];
+    for (const { assetId, extraHeaders } of scenarios) {
       const res = await runRequest(downloadHandler, {
         method: 'GET',
         headers: { host: 'pull.md', 'x-forwarded-proto': 'https', ...extraHeaders },
-        query: { id: 'meta-starter-v1' },
-        url: '/api/assets/meta-starter-v1/download'
+        query: { id: assetId },
+        url: `/api/assets/${assetId}/download`
       });
       assert.equal(res.statusCode, 410);
       assert.equal(res.body?.code, 'service_retired');
@@ -204,6 +207,28 @@ test('Vercel routing sends all public API and discovery surfaces to retirement h
     routes.find((route) => route.src === '/api/assets/([^/]+)/download')?.dest,
     '/api/assets/[id]/download.js?id=$1'
   );
+});
+
+test('retirement deployment contains only three serverless entrypoints', () => {
+  const apiRoot = path.resolve(new URL('../api/', import.meta.url).pathname);
+  const files = [];
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name === '_lib') continue;
+      const fullPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(fullPath);
+      else if (entry.isFile() && entry.name.endsWith('.js')) {
+        files.push(path.relative(apiRoot, fullPath).split(path.sep).join('/'));
+      }
+    }
+  };
+  walk(apiRoot);
+
+  assert.deepEqual(files.sort(), [
+    'assets/[id]/download.js',
+    'mcp/manifest.js',
+    'retired.js'
+  ]);
 });
 
 test('retirement problem marks recovery unavailable after cutoff', () => {
