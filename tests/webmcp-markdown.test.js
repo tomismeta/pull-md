@@ -3,9 +3,14 @@ import assert from 'node:assert/strict';
 
 import webmcpMarkdownHandler from '../api/mcp/webmcp_markdown.js';
 
-function runRequest({ method = 'GET', headers = {} } = {}) {
-  return new Promise((resolve) => {
-    const req = { method, headers };
+function runRequest() {
+  return new Promise((resolve, reject) => {
+    const req = {
+      method: 'GET',
+      headers: { host: 'pull.md', 'x-forwarded-proto': 'https' },
+      query: {},
+      url: '/WEBMCP.md'
+    };
     const response = {
       statusCode: 200,
       headers: {},
@@ -22,37 +27,20 @@ function runRequest({ method = 'GET', headers = {} } = {}) {
         resolve(this);
         return this;
       },
-      send(payload) {
-        this.body = payload;
-        resolve(this);
-        return this;
-      },
       end(payload) {
         if (payload !== undefined) this.body = payload;
         resolve(this);
         return this;
       }
     };
-    webmcpMarkdownHandler(req, response);
+    Promise.resolve(webmcpMarkdownHandler(req, response)).catch(reject);
   });
 }
 
-test('WEBMCP markdown endpoint is generated from manifest contract', async () => {
+test('former WebMCP contract endpoint returns the retirement problem', async () => {
   const res = await runRequest();
-  assert.equal(res.statusCode, 200);
-  assert.match(String(res.headers['content-type'] || ''), /text\/markdown/i);
-  const body = String(res.body || '');
-  assert.match(body, /^# PULL\.md WebMCP Contract/m);
-  assert.match(body, /GET \/\.well-known\/api-catalog/);
-  assert.match(body, /GET \/\.well-known\/mcp\/server-card\.json/);
-  assert.match(body, /GET \/\.well-known\/agent-skills\/index\.json/);
-  assert.match(body, /GET \/api\/openapi\.json/);
-  assert.match(body, /GET \/api\/mcp\/manifest/);
-  assert.match(body, /GET \/api\/assets\/\{id\}\/download/);
-  assert.match(body, /OAuth\/OIDC discovery metadata is intentionally absent/i);
-  assert.match(body, /## Flow Visualizations/);
-  assert.match(body, /### Creator Publish \(MCP\)/);
-  assert.match(body, /### Purchase \+ Re-download \(REST\)/);
-  assert.doesNotMatch(body, /GET \/api\/souls\/\{id\}\/download/);
-  assert.doesNotMatch(body, /\/api\/mcp\/tools\/purchase_soul/);
+  assert.equal(res.statusCode, 410);
+  assert.match(String(res.headers['content-type'] || ''), /application\/problem\+json/i);
+  assert.equal(res.body?.code, 'service_retired');
+  assert.equal(res.body?.service_status?.mcp, 'retired');
 });

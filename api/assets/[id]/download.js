@@ -17,6 +17,10 @@ import { getSellerAddress, resolveSiweIdentity, setCors, verifyWalletAuth } from
 import { buildSiweChallengeFields } from '../../_lib/siwe.js';
 import { recordTelemetryEvent } from '../../_lib/telemetry.js';
 import { setDiscoveryHeaders } from '../../_lib/discovery.js';
+import {
+  evaluateRetiredDownloadAccess,
+  sendRetirementProblem
+} from '../../_lib/retirement.js';
 
 export {
   classifyClientMode,
@@ -115,20 +119,6 @@ export default async function handler(req, res) {
   }
 
   const delivery = resolveDeliveryMetadata(asset, assetId);
-  const sellerAddress = asset.sellerAddress || getSellerAddress();
-  if (!sellerAddress) {
-    recordDownloadTelemetry({
-      eventType: 'download.config_error',
-      route: telemetryRoute,
-      assetId,
-      assetType: delivery.assetType,
-      success: false,
-      statusCode: 500,
-      errorCode: 'missing_seller_address'
-    });
-    return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required' });
-  }
-
   const { rawMode: clientModeRaw, strictAgentMode } = classifyClientMode({ headers: req.headers, query: req.query });
   const walletHintForQuote = String(req.headers['x-wallet-address'] || req.query?.wallet_address || '').trim();
   const {
@@ -154,6 +144,43 @@ export default async function handler(req, res) {
     cookieHeader: req.headers.cookie,
     assetId
   });
+
+  const retiredAccess = evaluateRetiredDownloadAccess({
+    hasExistingEntitlementProof: hasAnyValidEntitlementHeaders
+  });
+  if (!retiredAccess.allowed) {
+    recordDownloadTelemetry({
+      eventType: 'download.retired',
+      route: telemetryRoute,
+      action: 'retirement_gate',
+      walletAddress: wallet || null,
+      assetId,
+      assetType: delivery.assetType,
+      success: false,
+      statusCode: 410,
+      errorCode: retiredAccess.reason
+    });
+    return sendRetirementProblem({
+      req,
+      res,
+      path: `/api/assets/${encodeURIComponent(String(assetId || ''))}/download`,
+      cacheControl: 'private, no-store, max-age=0'
+    });
+  }
+
+  const sellerAddress = asset.sellerAddress || getSellerAddress();
+  if (!sellerAddress) {
+    recordDownloadTelemetry({
+      eventType: 'download.config_error',
+      route: telemetryRoute,
+      assetId,
+      assetType: delivery.assetType,
+      success: false,
+      statusCode: 500,
+      errorCode: 'missing_seller_address'
+    });
+    return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required' });
+  }
 
   if (legacyPaymentHeader) {
     return res.status(410).json({

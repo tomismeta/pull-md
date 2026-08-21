@@ -3,9 +3,14 @@ import assert from 'node:assert/strict';
 
 import manifestHandler from '../api/mcp/manifest.js';
 
-function runRequest(handler, { method = 'GET', headers = {}, query = {}, url = '' } = {}) {
+function runRequest({ query = {}, url = '' } = {}) {
   return new Promise((resolve, reject) => {
-    const req = { method, headers, query, url };
+    const req = {
+      method: 'GET',
+      headers: { host: 'pull.md', 'x-forwarded-proto': 'https', accept: 'text/html' },
+      query,
+      url
+    };
     const response = {
       statusCode: 200,
       headers: {},
@@ -33,46 +38,28 @@ function runRequest(handler, { method = 'GET', headers = {}, query = {}, url = '
         return this;
       }
     };
-
-    Promise.resolve(handler(req, response)).catch(reject);
+    Promise.resolve(manifestHandler(req, response)).catch(reject);
   });
 }
 
-test('asset detail page serves canonical HTML metadata for asset routes', async () => {
-  const originalBundledSouls = process.env.ENABLE_BUNDLED_SOULS;
-  process.env.ENABLE_BUNDLED_SOULS = '1';
-  const res = await runRequest(manifestHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' },
-    query: { view: 'asset', id: 'meta-starter-v1' }
+test('former canonical asset pages return the human-readable retirement notice', async () => {
+  const res = await runRequest({
+    query: { view: 'asset', id: 'meta-starter-v1' },
+    url: '/assets/meta-starter-v1'
   });
-  try {
-    assert.equal(res.statusCode, 200);
-    assert.match(String(res.headers['content-type'] || ''), /text\/html/i);
-    assert.match(String(res.body || ''), /<link rel="canonical" href="https:\/\/pull\.md\/assets\/meta-starter-v1">/i);
-    assert.match(String(res.body || ''), /<meta property="og:url" content="https:\/\/pull\.md\/assets\/meta-starter-v1">/i);
-    assert.match(String(res.body || ''), />Meta Starter Soul — PULL\.md</i);
-    assert.match(String(res.body || ''), /data-soul-id="meta-starter-v1"/i);
-  } finally {
-    if (originalBundledSouls === undefined) delete process.env.ENABLE_BUNDLED_SOULS;
-    else process.env.ENABLE_BUNDLED_SOULS = originalBundledSouls;
-  }
+  assert.equal(res.statusCode, 410);
+  assert.match(String(res.headers['content-type'] || ''), /text\/html/i);
+  assert.equal(res.headers['x-pullmd-retired'], 'true');
+  assert.match(String(res.body || ''), /PULL\.md has been retired/i);
+  assert.match(String(res.body || ''), /September 21, 2026/i);
+  assert.doesNotMatch(String(res.body || ''), /data-soul-id/i);
 });
 
-test('legacy asset.html query route remains compatible through the same renderer', async () => {
-  const originalBundledSouls = process.env.ENABLE_BUNDLED_SOULS;
-  process.env.ENABLE_BUNDLED_SOULS = '1';
-  const res = await runRequest(manifestHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' },
-    query: { view: 'asset' },
+test('legacy asset.html also returns the retirement notice', async () => {
+  const res = await runRequest({
+    query: { view: 'retired', path: 'asset.html' },
     url: '/asset.html?id=meta-starter-v1'
   });
-  try {
-    assert.equal(res.statusCode, 200);
-    assert.match(String(res.body || ''), /https:\/\/pull\.md\/assets\/meta-starter-v1/i);
-  } finally {
-    if (originalBundledSouls === undefined) delete process.env.ENABLE_BUNDLED_SOULS;
-    else process.env.ENABLE_BUNDLED_SOULS = originalBundledSouls;
-  }
+  assert.equal(res.statusCode, 410);
+  assert.match(String(res.body || ''), /Pulled<br>offline\./i);
 });

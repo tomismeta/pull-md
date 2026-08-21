@@ -3,278 +3,212 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PULL.md — Markdown Asset Commerce for Agents and Humans</title>
-  <meta name="description" content="Markdown-native marketplace for portable AI assets: souls, skills, playbooks, prompts, workflows, guides, policies, and knowledge packs.">
-  <meta property="og:title" content="PULL.md — Markdown Marketplace for Agents and Humans">
-  <meta property="og:description" content="Markdown asset commerce with MCP discovery, x402 settlement, and first-class asset pages.">
+  <title>PULL.md has been retired</title>
+  <meta name="description" content="PULL.md concluded its marketplace experiment on August 21, 2026.">
+  <meta property="og:title" content="PULL.md has been retired">
+  <meta property="og:description" content="The markdown asset marketplace experiment concluded on August 21, 2026.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="__PULLMD_CANONICAL_URL__">
-  <meta property="og:image" content="__PULLMD_SOCIAL_IMAGE_URL__">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="PULL.md — Markdown Marketplace for Agents and Humans">
-  <meta name="twitter:description" content="MCP-first discovery, canonical x402 settlement, wallet-proof re-downloads, and shareable markdown asset pages.">
-  <meta name="twitter:image" content="__PULLMD_SOCIAL_IMAGE_URL__">
-
-  <meta name="mcp:version" content="1.0">
-  <meta name="mcp:endpoint" content="/mcp">
-  <meta name="mcp:manifest" content="/api/mcp/manifest">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="PULL.md has been retired">
+  <meta name="twitter:description" content="The markdown asset marketplace experiment concluded on August 21, 2026.">
   <link rel="canonical" href="__PULLMD_CANONICAL_URL__">
   <link rel="alternate" href="/" type="text/markdown">
-  <link rel="api-catalog" href="/.well-known/api-catalog" type="application/linkset+json">
-  <link rel="service-desc" href="/api/openapi.json" type="application/vnd.oai.openapi+json;version=3.1">
-  <link rel="service-doc" href="/WEBMCP.md" type="text/markdown">
-  <link rel="service-meta" href="/api/mcp/manifest" type="application/json">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
-  <link rel="shortcut icon" href="/favicon.ico">
+  <style>
+    :root {
+      --ink: #151714;
+      --paper: #eee9dc;
+      --signal: #c9462d;
+      --muted: #68695f;
+      --line: rgba(21, 23, 20, 0.22);
+    }
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css">
+    * { box-sizing: border-box; }
 
+    html { color-scheme: light; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 82% 16%, rgba(201, 70, 45, 0.14), transparent 28rem),
+        linear-gradient(rgba(21, 23, 20, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(21, 23, 20, 0.035) 1px, transparent 1px),
+        var(--paper);
+      background-size: auto, 32px 32px, 32px 32px, auto;
+      font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 40px));
+      min-height: 100vh;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    header,
+    footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 78px;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.76rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    footer {
+      border-top: 1px solid var(--line);
+      border-bottom: 0;
+    }
+
+    .brand { font-weight: 700; }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--signal);
+    }
+
+    .status::before {
+      width: 8px;
+      height: 8px;
+      content: "";
+      border-radius: 50%;
+      background: var(--signal);
+      box-shadow: 0 0 0 5px rgba(201, 70, 45, 0.12);
+    }
+
+    .notice {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(290px, 0.6fr);
+      gap: clamp(36px, 7vw, 96px);
+      align-items: center;
+      padding: 72px 0;
+    }
+
+    .eyebrow {
+      margin: 0 0 24px;
+      color: var(--signal);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 760px;
+      margin: 0;
+      font-family: "Iowan Old Style", Baskerville, "Palatino Linotype", serif;
+      font-size: clamp(4.1rem, 10vw, 9.2rem);
+      font-weight: 500;
+      letter-spacing: -0.065em;
+      line-height: 0.82;
+    }
+
+    .lede {
+      max-width: 690px;
+      margin: 40px 0 0;
+      color: var(--muted);
+      font-family: "Iowan Old Style", Baskerville, "Palatino Linotype", serif;
+      font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+      line-height: 1.45;
+    }
+
+    .ledger {
+      border-top: 4px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+    }
+
+    .ledger-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 20px;
+      padding: 17px 0;
+      border-top: 1px solid var(--line);
+      font-size: 0.76rem;
+      line-height: 1.45;
+    }
+
+    .ledger-row:first-child { border-top: 0; }
+    .ledger-row span:last-child { text-align: right; }
+    .off { color: var(--signal); font-weight: 700; }
+
+    .grace {
+      margin-top: 30px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.28);
+      font-size: 0.78rem;
+      line-height: 1.65;
+    }
+
+    .grace strong {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--ink);
+      text-transform: uppercase;
+    }
+
+    a { color: inherit; text-underline-offset: 4px; }
+    a:hover { color: var(--signal); }
+
+    .links { display: flex; gap: 22px; }
+
+    @media (max-width: 780px) {
+      main { width: min(100% - 28px, 1120px); }
+      .notice { grid-template-columns: 1fr; padding: 54px 0; }
+      h1 { font-size: clamp(4rem, 23vw, 7rem); }
+      header, footer { min-height: 68px; }
+      footer { align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; }
+    }
+  </style>
 </head>
 <body>
-  <header class="header">
-    <div class="container">
-      <div class="header-content">
-        <a href="/" class="logo">
-          <span class="logo-mark">#</span>
-          <span>PULL.md</span>
-        </a>
-        <button
-          class="nav-toggle"
-          id="navToggle"
-          type="button"
-          aria-expanded="false"
-          aria-controls="topNav"
-          aria-label="Toggle navigation"
-        >
-          Menu
-        </button>
-        <nav class="nav" id="topNav">
-          <a href="#assets" class="nav-link">Discover</a>
-          <a href="#my-assets" class="nav-link">My Assets</a>
-          <a href="/create.html" class="nav-link">Create</a>
-          <a href="#for-agents" class="nav-link">For Agents</a>
-          <a href="/admin.html" class="nav-link moderator-nav-link" style="display: none;">Moderate</a>
-          <div class="wallet-btn-wrap" id="walletBtnWrap">
-            <button class="wallet-btn" id="walletBtn" onclick="openWalletModal()">
-              <span id="walletText">Connect Wallet</span>
-            </button>
-            <div class="vault-dropdown" id="vaultDropdown">
-              <div class="vault-dropdown-row">
-                <span class="vault-dropdown-label">Vault ID</span>
-                <span class="vault-dropdown-value" id="vaultDropdownVaultId">—</span>
-                <button class="vault-copy-btn" data-copy-target="vaultDropdownVaultId">Copy</button>
-              </div>
-              <div class="vault-dropdown-row">
-                <span class="vault-dropdown-label">EVM</span>
-                <span class="vault-dropdown-value" id="vaultDropdownEvm">—</span>
-                <button class="vault-copy-btn" data-copy-target="vaultDropdownEvm">Copy</button>
-              </div>
-              <div class="vault-dropdown-row">
-                <span class="vault-dropdown-label">Solana</span>
-                <span class="vault-dropdown-value" id="vaultDropdownSolana">—</span>
-                <button class="vault-copy-btn" data-copy-target="vaultDropdownSolana">Copy</button>
-              </div>
-            </div>
-          </div>
-        </nav>
-      </div>
-    </div>
-  </header>
-
   <main>
-    <section class="hero">
-      <div class="container">
-        <div class="hero-shell">
-          <p class="hero-kicker">Markdown-Native Asset Marketplace</p>
-          <h1 class="hero-title">Markdown Marketplace for Agents and Humans</h1>
-          <p class="hero-subtitle">
-            PULL.md is built on markdown principles: readable source, portable files, and clean diffs.
-            Agents and humans use the same catalog, the same x402 payment path, and the same wallet-proof re-download model.
-            Souls, skills, playbooks, prompts, workflows, guides, policies, and knowledge assets all fit the same portable contract.
-          </p>
-          <div class="hero-actions">
-            <a href="#assets" class="btn btn-primary btn-lg">Explore Listings</a>
-            <a href="/create.html" class="btn btn-ghost btn-lg">Publish Asset</a>
-          </div>
-          <div class="hero-inventory" id="liveInventorySummary">
-            <div class="hero-inventory-copy">
-              <strong>Live Inventory</strong>
-              <span>Loading public markdown assets...</span>
-            </div>
-            <a href="#assets" class="btn btn-ghost">Browse All Assets</a>
-          </div>
-          <div class="hero-metrics">
-            <div><strong>x402</strong><span>verifiable payment handshake</span></div>
-            <div><strong>base + usdc</strong><span>mainnet settlement</span></div>
-            <div><strong>mcp-first</strong><span>native JSON-RPC path</span></div>
-            <div><strong>security-scanned</strong><span>layered markdown checks</span></div>
-            <div><strong>instant publish</strong><span>create and share in one step</span></div>
-          </div>
-        </div>
+    <header>
+      <span class="brand"># PULL.md</span>
+      <span class="status">Retired</span>
+    </header>
+
+    <section id="retirement" class="notice" aria-labelledby="retirement-title">
+      <div>
+        <p class="eyebrow">Experiment concluded / August 21, 2026</p>
+        <h1 id="retirement-title">Pulled<br>offline.</h1>
+        <p class="lede">
+          PULL.md explored markdown-native commerce for agents and humans. The marketplace is now closed,
+          and the work is preserved as an open source artifact.
+        </p>
       </div>
+
+      <aside>
+        <div class="ledger" aria-label="Retirement status">
+          <div class="ledger-row"><span>Publishing</span><span class="off">Unavailable</span></div>
+          <div class="ledger-row"><span>MCP + APIs</span><span class="off">410 Gone</span></div>
+          <div class="ledger-row"><span>New purchases</span><span class="off">Unavailable</span></div>
+          <div class="ledger-row"><span>Source</span><span>Archived</span></div>
+        </div>
+
+        <div class="grace">
+          <strong>Entitlement recovery window</strong>
+          Existing receipt holders can use their original download endpoint through September 21, 2026.
+          New payment quotes and settlement retries are disabled.
+        </div>
+      </aside>
     </section>
 
-    <section class="workflow-section">
-      <div class="container">
-        <div class="section-head">
-          <h2>How It Works</h2>
-          <p>Three steps for buyers and creators. Same contract for browser and API clients.</p>
-          <p>SIWE (EIP-4361) handles wallet auth. x402 handles payment and settlement. Security scans run on publish and moderation edits.</p>
-        </div>
-        <div class="workflow-grid">
-          <article class="workflow-card">
-            <h3>1. Choose a Markdown Asset</h3>
-            <p>Browse shareable markdown assets and select the exact operating artifact your workflow needs.</p>
-          </article>
-          <article class="workflow-card">
-            <h3>2. Pay Through x402</h3>
-            <p>Authorize payment on Base with USDC using the canonical x402 handshake.</p>
-          </article>
-          <article class="workflow-card">
-            <h3>3. Download and Reuse</h3>
-            <p>Receive markdown instantly, then re-download later with wallet-proof entitlement.</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="souls-section" id="assets">
-      <div class="container">
-        <div class="section-head">
-          <h2>Available Listings</h2>
-          <p>Filter the live catalog by markdown artifact type. PULL.md supports souls, skills, playbooks, policies, prompts, guides, workflows, and knowledge assets.</p>
-        </div>
-        <div class="listing-filters" id="assetTypeFilters" role="group" aria-label="Filter listings by markdown type">
-          <button class="filter-pill active" type="button" data-asset-type="all">All Markdown</button>
-          <label class="listing-search" for="assetSearchInput" aria-label="Search listings">
-            <span class="listing-search-label">Search</span>
-            <input id="assetSearchInput" type="search" autocomplete="off" placeholder="Name, creator, type, keyword">
-          </label>
-        </div>
-        <div class="souls-grid" id="soulsGrid"></div>
-      </div>
-    </section>
-
-    <section class="souls-section" id="my-assets">
-      <div class="container">
-        <div class="section-head">
-          <h2>My Assets</h2>
-          <p>Connect wallet once to view purchased and created listings, then re-download without repay.</p>
-        </div>
-        <div class="souls-grid" id="ownedSoulsGrid"></div>
-      </div>
-    </section>
-
-    <section class="agent-api-section" id="for-agents">
-      <div class="container">
-        <div class="agent-api-card">
-          <h3>For Agents</h3>
-          <p>MCP handles orchestration. RFC9727 API catalog + OpenAPI expose standards-aligned REST and MCP discovery.</p>
-          <div class="agent-quickstart">
-            <p><strong>Quickstart</strong></p>
-            <code>POST /mcp</code>
-            <code>GET /.well-known/api-catalog</code>
-            <code>GET /api/assets/{id}/download</code>
-          </div>
-          <pre class="hero-code-block">Standards discovery
-GET /.well-known/api-catalog
-GET /api/openapi.json
-
-MCP transport
-POST /mcp
-
-Canonical x402 purchase and re-download
-GET /api/assets/{id}/download
-
-Full contract + metadata
-GET /api/mcp/manifest
-GET /WEBMCP.md</pre>
-          <div class="agent-api-actions">
-            <a href="/.well-known/api-catalog" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Open API Catalog</a>
-            <a href="/api/openapi.json" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Open OpenAPI</a>
-            <a href="/api/mcp/manifest" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Open MCP Manifest</a>
-            <a href="/WEBMCP.md" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">Read WebMCP Contract</a>
-          </div>
-        </div>
-      </div>
-    </section>
+    <footer>
+      <span>Domain retained under owner control</span>
+      <span class="links">
+        <a href="https://github.com/tomismeta/pull-md" rel="noopener noreferrer">Source</a>
+        <a href="https://x.com/tomismeta" rel="noopener noreferrer">Contact</a>
+      </span>
+    </footer>
   </main>
-
-  <footer class="footer">
-    <div class="container">
-      <p>PULL.md · Markdown Asset Commerce · MCP-first + x402 on Base · Shipped by <a href="https://x.com/tomismeta" target="_blank" rel="noopener noreferrer">@tomismeta</a></p>
-    </div>
-  </footer>
-
-  <div class="modal" id="walletModal" style="display: none;">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Connect Wallet</h3>
-        <button class="modal-close" onclick="closeWalletModal()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="wallet-options">
-          <button class="wallet-option" data-wallet-kind="metamask">
-            <span class="wallet-icon">MM</span>
-            <div class="wallet-info">
-              <span class="wallet-name">MetaMask</span>
-              <span class="wallet-desc">Browser extension</span>
-            </div>
-          </button>
-          <button class="wallet-option" data-wallet-kind="rabby">
-            <span class="wallet-icon">RB</span>
-            <div class="wallet-info">
-              <span class="wallet-name">Rabby</span>
-              <span class="wallet-desc">Browser and mobile wallet</span>
-            </div>
-          </button>
-          <button class="wallet-option" data-wallet-kind="bankr">
-            <span class="wallet-icon">BK</span>
-            <div class="wallet-info">
-              <span class="wallet-name">Bankr Wallet</span>
-              <span class="wallet-desc">Agent and human compatible</span>
-            </div>
-          </button>
-          <button class="wallet-option" data-wallet-kind="emblem">
-            <span class="wallet-icon wallet-icon-emblem"><img src="/graphics/ev.jpeg" alt="Emblem Vault" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;"></span>
-            <div class="wallet-info">
-              <span class="wallet-name">Emblem Vault</span>
-              <span class="wallet-desc">Multi-chain vault wallet</span>
-            </div>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="toast-container" id="toastContainer"></div>
-  <script defer src="js/lib/wallet-providers.js"></script>
-  <script defer src="js/lib/wallet-common.js"></script>
-  <script defer src="js/lib/wallet-connect.js"></script>
-  <script defer src="js/lib/sdk-loader.js"></script>
-  <script defer src="js/lib/storage.js"></script>
-  <script defer src="js/lib/wallet-state.js"></script>
-  <script defer src="js/lib/emblem-auth.js"></script>
-  <script defer src="js/lib/siwe-messages.js"></script>
-  <script defer src="js/lib/ui-shell.js"></script>
-  <script defer src="js/lib/toast.js"></script>
-  <script defer src="js/lib/settlement-verify.js"></script>
-  <script defer src="js/lib/settlement-ui.js"></script>
-  <script defer src="js/lib/x402-browser.js"></script>
-  <script defer src="js/lib/redownload-flow.js"></script>
-  <script defer src="js/lib/purchase-flow.js"></script>
-  <script defer src="js/lib/soul-cards.js"></script>
-  <script defer src="js/lib/catalog-ui.js"></script>
-  <script defer src="js/lib/download-delivery.js"></script>
-  <script defer src="js/lib/soul-detail-ui.js"></script>
-  <script defer src="js/lib/seller-guard.js"></script>
-  <script defer src="js/lib/app-bootstrap.js"></script>
-  <script defer src="js/lib/network.js"></script>
-  <script defer src="js/lib/webmcp.js"></script>
-  <script defer src="js/app.js"></script>
 </body>
 </html>

@@ -1,8 +1,22 @@
 # PULL.md
 
-PULL.md is an agent-focused marketplace for purchasing and re-downloading markdown assets.
+> [!IMPORTANT]
+> PULL.md was retired on August 21, 2026. Publishing, MCP, discovery APIs, and new x402 purchases return `410 Gone`.
+> Existing entitlement recovery remains available through September 21, 2026 at the original download endpoint.
+> The Vercel project, domain, and database are retained during the grace period; this repository is the historical source archive.
 
-## Current Implementation
+PULL.md was an agent-focused marketplace for purchasing and re-downloading markdown assets.
+
+## Retirement Contract
+
+- Canonical notice: `GET https://pull.md/`
+- Retired APIs: HTTP `410 Gone` with `application/problem+json`
+- New publishing and payment settlement: disabled
+- Grace-period recovery: `GET /api/assets/{id}/download` with existing entitlement proof only
+- Recovery cutoff: `2026-09-21T23:59:59.000Z`
+- Source archive: `https://github.com/tomismeta/pull-md`
+
+## Historical Implementation
 
 - Strict x402 v2 purchase flow on `GET /api/assets/{id}/download`
 - Required x402 headers for payment flow:

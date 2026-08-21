@@ -3,15 +3,15 @@ import assert from 'node:assert/strict';
 
 import manifestHandler from '../api/mcp/manifest.js';
 
-function runManifestRequest({ method = 'GET', headers = {} } = {}) {
-  return new Promise((resolve) => {
-    const req = { method, headers };
+function runManifestRequest({ method = 'GET', headers = {}, query = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = { method, headers, query, url: '/api/mcp/manifest' };
     const response = {
       statusCode: 200,
       headers: {},
       body: null,
       setHeader(key, value) {
-        this.headers[key.toLowerCase()] = value;
+        this.headers[String(key).toLowerCase()] = value;
       },
       status(code) {
         this.statusCode = code;
@@ -22,44 +22,24 @@ function runManifestRequest({ method = 'GET', headers = {} } = {}) {
         resolve(this);
         return this;
       },
-      end() {
+      end(payload) {
+        if (payload !== undefined) this.body = payload;
         resolve(this);
         return this;
       }
     };
-    manifestHandler(req, response);
+    Promise.resolve(manifestHandler(req, response)).catch(reject);
   });
 }
 
-test('manifest exposes strict agent guardrails and facilitator capability flags', async () => {
-  const res = await runManifestRequest();
-  assert.equal(res.statusCode, 200);
-  const body = res.body;
-  assert.ok(body);
-
-  assert.equal(body.discovery?.api_catalog?.endsWith('/.well-known/api-catalog'), true);
-  assert.equal(body.discovery?.public_catalog?.endsWith('/api/assets'), true);
-  assert.equal(body.discovery?.canonical_purchase_endpoint_pattern?.endsWith('/api/assets/{id}/download'), true);
-  assert.equal(body.discovery?.service_desc?.endsWith('/api/openapi.json'), true);
-  assert.equal(body.discovery?.service_doc?.endsWith('/WEBMCP.md'), true);
-  assert.equal(body.discovery?.service_meta?.endsWith('/api/mcp/manifest'), true);
-  assert.equal(body.commerce?.commerce_site, true);
-  assert.deepEqual(body.commerce?.payment_protocols, ['x402']);
-  assert.equal(body.download_contract?.method, 'GET');
-  assert.equal(body.auth?.oauth2_supported, false);
-  assert.equal(body.auth?.oidc_supported, false);
-  assert.match(String(body.auth?.oauth_discovery_note || ''), /do not use bearer tokens/i);
-  assert.match(String(body.download_contract?.first_request || ''), /X-WALLET-ADDRESS/);
-  assert.equal(body.facilitator_capabilities?.strict_agent_default_transfer_method, 'eip3009');
-  assert.match(String(body.facilitator_capabilities?.note || ''), /permit2/i);
-  assert.ok(body.error_codes?.x402_method_mismatch);
-  assert.equal(body.error_codes?.contract_wallet_not_supported_by_facilitator, undefined);
-  assert.equal(Array.isArray(body.mcp?.methods), true);
-  assert.ok(body.mcp.methods.includes('prompts/list'));
-  assert.ok(body.mcp.methods.includes('resources/list'));
-  assert.ok((body.tools || []).some((tool) => String(tool?.name || '') === 'get_auth_challenge'));
-  assert.equal(
-    Array.isArray(body.tools) && body.tools.every((tool) => String(tool?.endpoint || '') === '/mcp'),
-    true
-  );
+test('MCP manifest returns the permanent retirement contract', async () => {
+  const res = await runManifestRequest({
+    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
+  });
+  assert.equal(res.statusCode, 410);
+  assert.equal(res.body?.code, 'service_retired');
+  assert.equal(res.body?.service_status?.mcp, 'retired');
+  assert.equal(res.body?.redownload_grace?.endpoint_pattern, '/api/assets/{id}/download');
+  assert.equal(res.body?.tools, undefined);
+  assert.equal(res.body?.discovery, undefined);
 });

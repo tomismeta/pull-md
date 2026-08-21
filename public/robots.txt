@@ -1,16 +1,12 @@
 User-agent: *
 Allow: /
-Allow: /.well-known/
-Allow: /WEBMCP.md
-Allow: /api/openapi.json
-Allow: /api/mcp/manifest
-Allow: /api/assets
-Disallow: /api/assets/
+Disallow: /api/
+Disallow: /mcp
+Disallow: /.well-known/
+Disallow: /assets/
 Disallow: /admin.html
 Disallow: /create.html
-Disallow: /api/auth/
-Disallow: /api/moderation
-Disallow: /api/ui/
+Disallow: /asset.html
 
 User-agent: GPTBot
 Disallow: /
@@ -20,31 +16,17 @@ Disallow: /
 
 User-agent: OAI-SearchBot
 Allow: /
-Allow: /.well-known/
-Allow: /WEBMCP.md
-Allow: /api/openapi.json
-Allow: /api/mcp/manifest
-Allow: /api/assets
-Disallow: /api/assets/
-Disallow: /admin.html
-Disallow: /create.html
-Disallow: /api/auth/
-Disallow: /api/moderation
-Disallow: /api/ui/
+Disallow: /api/
+Disallow: /mcp
+Disallow: /.well-known/
+Disallow: /assets/
 
 User-agent: Claude-Web
 Allow: /
-Allow: /.well-known/
-Allow: /WEBMCP.md
-Allow: /api/openapi.json
-Allow: /api/mcp/manifest
-Allow: /api/assets
-Disallow: /api/assets/
-Disallow: /admin.html
-Disallow: /create.html
-Disallow: /api/auth/
-Disallow: /api/moderation
-Disallow: /api/ui/
+Disallow: /api/
+Disallow: /mcp
+Disallow: /.well-known/
+Disallow: /assets/
 
 Sitemap: https://pull.md/sitemap.xml
-Content-Signal: ai-train=no, search=yes, ai-input=yes
+Content-Signal: ai-train=no, search=yes, ai-input=no

@@ -1,4 +1,4 @@
-export const CONTENT_SIGNAL = 'ai-train=no, search=yes, ai-input=yes';
+export const CONTENT_SIGNAL = 'ai-train=no, search=yes, ai-input=no';
 export const MARKDOWN_CONTENT_TYPE = 'text/markdown; charset=utf-8';
 
 function parseAcceptHeader(raw) {

@@ -7,8 +7,7 @@ import {
   setContentSignalHeader,
   setMarkdownDocumentHeaders
 } from './agent_ready.js';
-import { buildDiscoveryLinkHeader } from './discovery.js';
-import { buildDiscoveryUrls } from './public_contract.js';
+import { REDOWNLOAD_GRACE_END_AT, RETIRED_AT } from './retirement.js';
 
 const INDEX_HTML_PATH = path.join(process.cwd(), 'public', 'index.html');
 let homepageHtmlPromise = null;
@@ -25,69 +24,43 @@ function renderHomepageHtml(baseUrl) {
     template
       .replaceAll('__PULLMD_BASE_URL__', baseUrl)
       .replaceAll('__PULLMD_CANONICAL_URL__', `${baseUrl}/`)
-      .replaceAll('__PULLMD_SOCIAL_IMAGE_URL__', `${baseUrl}/graphics/pullmd-social-card.png`)
   );
 }
 
 function renderHomepageMarkdown(baseUrl) {
-  const discovery = buildDiscoveryUrls(baseUrl);
   return [
     '---',
-    'title: PULL.md',
-    'description: Markdown asset commerce for agents and humans.',
+    'title: PULL.md has been retired',
+    'status: retired',
+    `retired_at: ${RETIRED_AT}`,
+    `redownload_grace_ends_at: ${REDOWNLOAD_GRACE_END_AT}`,
     '---',
     '',
-    '# PULL.md',
+    '# PULL.md has been retired',
     '',
-    'PULL.md is a markdown-native asset marketplace. Agents and humans share the same catalog, the same MCP discovery surface, and the same canonical x402 download contract.',
-    'Souls, skills, playbooks, prompts, workflows, guides, policies, and knowledge assets all fit the same portable markdown commerce model.',
+    'The PULL.md marketplace experiment concluded on August 21, 2026.',
     '',
-    '## Quickstart',
+    '## Service status',
     '',
-    '- MCP transport: `POST /mcp`',
-    `- REST discovery: \`GET ${discovery.api_catalog.replace(baseUrl, '')}\``,
-    `- OpenAPI: \`GET ${discovery.openapi.replace(baseUrl, '')}\``,
-    `- MCP manifest: \`GET ${discovery.mcp_manifest.replace(baseUrl, '')}\``,
-    `- Public catalog: \`GET ${discovery.public_catalog.replace(baseUrl, '')}\``,
-    `- Purchase + re-download: \`GET ${discovery.canonical_purchase_endpoint_pattern.replace(baseUrl, '')}\``,
-    '- x402 paywall contract: `402 PAYMENT-REQUIRED` -> retry with `PAYMENT-SIGNATURE`',
-    `- MCP server card: \`GET ${discovery.mcp_server_card.replace(baseUrl, '')}\``,
-    `- Agent skills index: \`GET ${discovery.agent_skills.replace(baseUrl, '')}\``,
+    '- New publishing: unavailable',
+    '- MCP transport and tools: `410 Gone`',
+    '- Catalog and discovery APIs: `410 Gone`',
+    '- New purchases and x402 settlement: unavailable',
+    `- Existing entitlement recovery: available through ${REDOWNLOAD_GRACE_END_AT}`,
     '',
-    '## Discovery',
+    'Existing entitlement holders may continue using the original `GET /api/assets/{id}/download` endpoint during the grace period. A valid receipt or other existing entitlement proof is required; the endpoint will not issue payment quotes or settle new purchases.',
     '',
-    `- Base URL: ${baseUrl}`,
-    `- API catalog: ${discovery.api_catalog}`,
-    `- OpenAPI: ${discovery.openapi}`,
-    `- MCP manifest: ${discovery.mcp_manifest}`,
-    `- WebMCP markdown contract: ${discovery.webmcp_markdown}`,
+    'The source is preserved at https://github.com/tomismeta/pull-md.',
     '',
-    '## Commerce',
-    '',
-    '- PULL.md is an active commerce site with x402-protected markdown assets.',
-    '- Canonical paid route: `GET /api/assets/{id}/download`.',
-    '- First request returns `402 PAYMENT-REQUIRED` with a Base64-encoded payment contract.',
-    '- Retry the same route with `PAYMENT-SIGNATURE` to settle payment and receive markdown.',
-    '',
-    '## Current Catalog',
-    '',
-    '- Fetch `GET /api/assets` to enumerate the current public markdown asset catalog.',
-    '- Use `POST /mcp` with `list_assets` when you want the MCP orchestration view of the same catalog.',
-    '',
-    '## Notes',
-    '',
-    '- Publishing remains MCP-first: call `get_auth_challenge`, sign the exact SIWE message, then call `publish_listing`.',
-    '- Buying remains REST-first: call `GET /api/assets/{id}/download`, handle `402 PAYMENT-REQUIRED`, then retry with `PAYMENT-SIGNATURE`.',
-    '- Re-download remains entitlement-first: persist `X-PURCHASE-RECEIPT` as secret proof and retain `X-BLOCKCHAIN-TRANSACTION` as a secondary recovery pointer, then prove wallet control on later downloads.',
-    '- OAuth/OIDC discovery metadata is intentionally absent in this deployment: protected flows do not use bearer tokens. Wallet identity uses SIWE (EIP-4361); payment and entitlement delivery use x402 plus receipt-bound headers.'
+    `Canonical retirement notice: ${baseUrl}/`
   ].join('\n');
 }
 
-export async function handleHomepageRequest({ req, res, baseUrl }) {
+export async function handleHomepageRequest({ req, res, baseUrl, statusCode = 200 }) {
   const method = String(req.method || 'GET').toUpperCase();
   if (method === 'OPTIONS') {
     res.setHeader('Allow', 'GET, HEAD, OPTIONS');
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
   if (!['GET', 'HEAD'].includes(method)) {
@@ -95,11 +68,17 @@ export async function handleHomepageRequest({ req, res, baseUrl }) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const discoveryLinks = buildDiscoveryLinkHeader(baseUrl);
-  const alternateMarkdownLink = `<${baseUrl}/>; rel="alternate"; type="text/markdown"`;
-  res.setHeader('Link', `${discoveryLinks}, ${alternateMarkdownLink}`);
+  res.setHeader(
+    'Link',
+    `<${baseUrl}/>; rel="canonical", <${baseUrl}/>; rel="alternate"; type="text/markdown"`
+  );
   res.setHeader('Vary', 'Accept');
-  res.setHeader('Cache-Control', cacheControl({ sMaxAge: 900, staleWhileRevalidate: 86400 }));
+  res.setHeader('Cache-Control', cacheControl({ sMaxAge: 300, staleWhileRevalidate: 86400 }));
+  res.setHeader('Sunset', new Date(REDOWNLOAD_GRACE_END_AT).toUTCString());
+  res.setHeader('X-PULLMD-RETIRED', 'true');
+  if (statusCode >= 400) {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  }
   setContentSignalHeader(res);
 
   const prefersMarkdown = requestPrefersMarkdown(req.headers || {});
@@ -107,22 +86,22 @@ export async function handleHomepageRequest({ req, res, baseUrl }) {
     const markdown = renderHomepageMarkdown(baseUrl);
     setMarkdownDocumentHeaders(res, markdown, { sMaxAge: 300, staleWhileRevalidate: 86400 });
     if (method === 'HEAD') {
-      return res.status(200).end();
+      return res.status(statusCode).end();
     }
-    return res.status(200).send(markdown);
+    return res.status(statusCode).send(markdown);
   }
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   if (method === 'HEAD') {
-    return res.status(200).end();
+    return res.status(statusCode).end();
   }
 
   try {
     const rendered = await renderHomepageHtml(baseUrl);
-    return res.status(200).send(rendered);
+    return res.status(statusCode).send(rendered);
   } catch (error) {
     return res.status(500).json({
-      error: 'Unable to load homepage',
+      error: 'Unable to load retirement notice',
       details: error?.message || 'unknown_error'
     });
   }

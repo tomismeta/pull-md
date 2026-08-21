@@ -16,15 +16,15 @@
     },
     {
       "src": "/mcp",
-      "dest": "/api/mcp/index.js"
+      "dest": "/api/retired.js?path=mcp"
     },
     {
       "src": "/api/mcp",
-      "dest": "/api/mcp/index.js"
+      "dest": "/api/retired.js?path=api/mcp"
     },
     {
       "src": "/api/mcp/manifest",
-      "dest": "/api/mcp/manifest.js"
+      "dest": "/api/retired.js?path=api/mcp/manifest"
     },
     {
       "src": "/api/assets/([^/]+)/download",
@@ -32,11 +32,11 @@
     },
     {
       "src": "/assets/([^/]+)",
-      "dest": "/api/mcp/manifest.js?view=asset&id=$1"
+      "dest": "/api/mcp/manifest.js?view=retired&path=assets/$1"
     },
     {
       "src": "/asset\\.html",
-      "dest": "/api/mcp/manifest.js?view=asset"
+      "dest": "/api/mcp/manifest.js?view=retired&path=asset.html"
     },
     {
       "src": "/sitemap\\.xml",
@@ -44,15 +44,23 @@
     },
     {
       "src": "/\\.well-known/api-catalog",
-      "dest": "/api/well-known/api-catalog.js"
+      "dest": "/api/retired.js?path=.well-known/api-catalog"
+    },
+    {
+      "src": "/\\.well-known/(.*)",
+      "dest": "/api/retired.js?path=.well-known/$1"
     },
     {
       "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "dest": "/api/retired.js?path=api/$1"
     },
     {
       "src": "/WEBMCP\\.md",
-      "dest": "/api/mcp/webmcp_markdown.js"
+      "dest": "/api/retired.js?path=WEBMCP.md"
+    },
+    {
+      "src": "/(index|admin|create|security)\\.html",
+      "dest": "/api/mcp/manifest.js?view=retired&path=$1.html"
     },
     {
       "handle": "filesystem"
