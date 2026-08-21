@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PULL.md has been retired</title>
-  <meta name="description" content="PULL.md concluded its marketplace experiment on August 21, 2026.">
+  <meta name="description" content="PULL.md concluded its markdown-native marketplace experiment on August 21, 2026.">
   <meta property="og:title" content="PULL.md has been retired">
   <meta property="og:description" content="The markdown asset marketplace experiment concluded on August 21, 2026.">
   <meta property="og:type" content="website">
@@ -15,200 +15,281 @@
   <link rel="canonical" href="__PULLMD_CANONICAL_URL__">
   <link rel="alternate" href="/" type="text/markdown">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
   <style>
-    :root {
-      --ink: #151714;
-      --paper: #eee9dc;
-      --signal: #c9462d;
-      --muted: #68695f;
-      --line: rgba(21, 23, 20, 0.22);
+    html {
+      color-scheme: dark;
     }
-
-    * { box-sizing: border-box; }
-
-    html { color-scheme: light; }
 
     body {
-      min-height: 100vh;
-      margin: 0;
-      color: var(--ink);
-      background:
-        radial-gradient(circle at 82% 16%, rgba(201, 70, 45, 0.14), transparent 28rem),
-        linear-gradient(rgba(21, 23, 20, 0.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(21, 23, 20, 0.035) 1px, transparent 1px),
-        var(--paper);
-      background-size: auto, 32px 32px, 32px 32px, auto;
-      font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
-    }
-
-    main {
-      width: min(1120px, calc(100% - 40px));
-      min-height: 100vh;
-      margin: 0 auto;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-    }
-
-    header,
-    footer {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      min-height: 78px;
-      border-bottom: 1px solid var(--line);
-      font-size: 0.76rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      flex-direction: column;
     }
 
-    footer {
-      border-top: 1px solid var(--line);
-      border-bottom: 0;
-    }
-
-    .brand { font-weight: 700; }
-
-    .status {
+    .retirement-status {
       display: inline-flex;
       align-items: center;
       gap: 9px;
-      color: var(--signal);
-    }
-
-    .status::before {
-      width: 8px;
-      height: 8px;
-      content: "";
-      border-radius: 50%;
-      background: var(--signal);
-      box-shadow: 0 0 0 5px rgba(201, 70, 45, 0.12);
-    }
-
-    .notice {
-      display: grid;
-      grid-template-columns: minmax(0, 1.4fr) minmax(290px, 0.6fr);
-      gap: clamp(36px, 7vw, 96px);
-      align-items: center;
-      padding: 72px 0;
-    }
-
-    .eyebrow {
-      margin: 0 0 24px;
-      color: var(--signal);
-      font-size: 0.8rem;
+      min-height: 36px;
+      padding: 0 13px;
+      border: 1px solid rgba(248, 81, 73, 0.4);
+      border-radius: 999px;
+      background: rgba(248, 81, 73, 0.08);
+      color: #ffb4b0;
+      font-size: 0.75rem;
       font-weight: 700;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
     }
 
-    h1 {
+    .retirement-status::before {
+      width: 7px;
+      height: 7px;
+      content: "";
+      border-radius: 50%;
+      background: #f85149;
+      box-shadow: 0 0 0 4px rgba(248, 81, 73, 0.12);
+    }
+
+    .retirement-main {
+      display: flex;
+      flex: 1;
+      min-height: calc(100vh - 145px);
+      padding-bottom: 0;
+    }
+
+    .retirement-hero {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      padding: clamp(44px, 8vw, 88px) 0;
+    }
+
+    .retirement-shell {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(28px, 5vw, 52px);
+    }
+
+    .retirement-shell::after {
+      position: absolute;
+      top: -5rem;
+      right: -2rem;
+      z-index: 0;
+      content: "#";
+      color: rgba(88, 166, 255, 0.045);
+      font-size: clamp(15rem, 32vw, 27rem);
+      font-weight: 800;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .retirement-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .retirement-title {
+      max-width: 850px;
+      margin-bottom: 16px;
+      font-size: clamp(2.4rem, 6.5vw, 5rem);
+      letter-spacing: -0.045em;
+      line-height: 1.02;
+    }
+
+    .retirement-copy {
       max-width: 760px;
-      margin: 0;
-      font-family: "Iowan Old Style", Baskerville, "Palatino Linotype", serif;
-      font-size: clamp(4.1rem, 10vw, 9.2rem);
-      font-weight: 500;
-      letter-spacing: -0.065em;
-      line-height: 0.82;
-    }
-
-    .lede {
-      max-width: 690px;
-      margin: 40px 0 0;
-      color: var(--muted);
-      font-family: "Iowan Old Style", Baskerville, "Palatino Linotype", serif;
-      font-size: clamp(1.25rem, 2.4vw, 1.75rem);
-      line-height: 1.45;
-    }
-
-    .ledger {
-      border-top: 4px solid var(--ink);
-      border-bottom: 1px solid var(--ink);
-    }
-
-    .ledger-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 20px;
-      padding: 17px 0;
-      border-top: 1px solid var(--line);
-      font-size: 0.76rem;
-      line-height: 1.45;
-    }
-
-    .ledger-row:first-child { border-top: 0; }
-    .ledger-row span:last-child { text-align: right; }
-    .off { color: var(--signal); font-weight: 700; }
-
-    .grace {
-      margin-top: 30px;
-      padding: 22px;
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.28);
-      font-size: 0.78rem;
+      font-size: clamp(1rem, 2vw, 1.12rem);
       line-height: 1.65;
     }
 
-    .grace strong {
-      display: block;
-      margin-bottom: 7px;
-      color: var(--ink);
+    .retirement-actions {
+      margin-top: 26px;
+    }
+
+    .retirement-summary {
+      margin-top: clamp(34px, 6vw, 56px);
+      padding-top: 28px;
+      border-top: 1px solid var(--line);
+    }
+
+    .retirement-label {
+      margin-bottom: 12px;
+      color: var(--text-muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
     }
 
-    a { color: inherit; text-underline-offset: 4px; }
-    a:hover { color: var(--signal); }
+    .retirement-metrics {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-top: 0;
+    }
 
-    .links { display: flex; gap: 22px; }
+    .retirement-metrics strong {
+      font-family: 'IBM Plex Mono', monospace;
+    }
 
-    @media (max-width: 780px) {
-      main { width: min(100% - 28px, 1120px); }
-      .notice { grid-template-columns: 1fr; padding: 54px 0; }
-      h1 { font-size: clamp(4rem, 23vw, 7rem); }
-      header, footer { min-height: 68px; }
-      footer { align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; }
+    .retirement-recovery {
+      margin-top: 12px;
+      padding: 16px;
+      border-color: #345173;
+      background: #121b29;
+    }
+
+    .retirement-recovery code {
+      color: #9fc7ff;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+    }
+
+    .retirement-recovery .hero-inventory-copy span {
+      max-width: 720px;
+      line-height: 1.55;
+    }
+
+    .retirement-footer {
+      margin-top: auto;
+    }
+
+    .retirement-footer p {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px 24px;
+    }
+
+    .retirement-footer-links {
+      display: inline-flex;
+      gap: 18px;
+    }
+
+    @media (max-width: 760px) {
+      .header-content {
+        min-height: 64px;
+      }
+
+      .retirement-main {
+        min-height: auto;
+      }
+
+      .retirement-hero {
+        padding: 28px 0 36px;
+      }
+
+      .retirement-shell {
+        padding: 24px 20px;
+      }
+
+      .retirement-shell::after {
+        top: -1rem;
+        right: -1rem;
+      }
+
+      .retirement-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .retirement-recovery {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .retirement-footer p {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .container {
+        padding: 0 16px;
+      }
+
+      .retirement-title {
+        font-size: 2.25rem;
+      }
+
+      .retirement-metrics {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <main>
-    <header>
-      <span class="brand"># PULL.md</span>
-      <span class="status">Retired</span>
-    </header>
-
-    <section id="retirement" class="notice" aria-labelledby="retirement-title">
-      <div>
-        <p class="eyebrow">Experiment concluded / August 21, 2026</p>
-        <h1 id="retirement-title">Pulled<br>offline.</h1>
-        <p class="lede">
-          PULL.md explored markdown-native commerce for agents and humans. The marketplace is now closed,
-          and the work is preserved as an open source artifact.
-        </p>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/" class="logo" aria-label="PULL.md home">
+          <span class="logo-mark">#</span>
+          <span>PULL.md</span>
+        </a>
+        <span class="retirement-status">Retired</span>
       </div>
+    </div>
+  </header>
 
-      <aside>
-        <div class="ledger" aria-label="Retirement status">
-          <div class="ledger-row"><span>Publishing</span><span class="off">Unavailable</span></div>
-          <div class="ledger-row"><span>MCP + APIs</span><span class="off">410 Gone</span></div>
-          <div class="ledger-row"><span>New purchases</span><span class="off">Unavailable</span></div>
-          <div class="ledger-row"><span>Source</span><span>Archived</span></div>
-        </div>
+  <main class="retirement-main">
+    <section class="hero retirement-hero" aria-labelledby="retirement-title">
+      <div class="container">
+        <div class="hero-shell retirement-shell">
+          <div class="retirement-content">
+            <p class="hero-kicker">Experiment concluded / August 21, 2026</p>
+            <h1 class="hero-title retirement-title" id="retirement-title">PULL.md has been retired.</h1>
+            <p class="hero-subtitle retirement-copy">
+              PULL.md explored markdown-native commerce for agents and humans. The marketplace is now closed,
+              and the work is preserved as an open source artifact.
+            </p>
 
-        <div class="grace">
-          <strong>Entitlement recovery window</strong>
-          Existing receipt holders can use their original download endpoint through September 21, 2026.
-          New payment quotes and settlement retries are disabled.
+            <div class="hero-actions retirement-actions">
+              <a class="btn btn-primary btn-lg" href="https://github.com/tomismeta/pull-md" rel="noopener noreferrer">View Source</a>
+              <a class="btn btn-ghost btn-lg" href="https://x.com/tomismeta" rel="noopener noreferrer">Contact</a>
+            </div>
+
+            <div class="retirement-summary">
+              <p class="retirement-label">Service status</p>
+              <div class="hero-metrics retirement-metrics" aria-label="Retirement status">
+                <div><strong>Unavailable</strong><span>publishing</span></div>
+                <div><strong>410 Gone</strong><span>MCP + REST APIs</span></div>
+                <div><strong>Unavailable</strong><span>new purchases</span></div>
+                <div><strong>Read-only</strong><span>source archive</span></div>
+              </div>
+
+              <aside class="hero-inventory retirement-recovery">
+                <div class="hero-inventory-copy">
+                  <strong>Entitlement recovery window</strong>
+                  <span>
+                    Existing receipt holders can use their original download URL through September 21, 2026.
+                    New payment quotes and settlement retries are disabled.
+                  </span>
+                </div>
+                <code>/api/assets/{id}/download</code>
+              </aside>
+            </div>
+          </div>
         </div>
-      </aside>
+      </div>
     </section>
-
-    <footer>
-      <span>Domain retained under owner control</span>
-      <span class="links">
-        <a href="https://github.com/tomismeta/pull-md" rel="noopener noreferrer">Source</a>
-        <a href="https://x.com/tomismeta" rel="noopener noreferrer">Contact</a>
-      </span>
-    </footer>
   </main>
+
+  <footer class="footer retirement-footer">
+    <div class="container">
+      <p>
+        <span>PULL.md / Markdown Asset Commerce / Retired August 21, 2026</span>
+        <span class="retirement-footer-links">
+          <a href="https://github.com/tomismeta/pull-md" rel="noopener noreferrer">Source</a>
+          <a href="https://x.com/tomismeta" rel="noopener noreferrer">@tomismeta</a>
+        </span>
+      </p>
+    </div>
+  </footer>
 </body>
 </html>
