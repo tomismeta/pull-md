@@ -15,6 +15,7 @@ PULL.md was an agent-focused marketplace for purchasing and re-downloading markd
 - Grace-period recovery: `GET /api/assets/{id}/download` with existing entitlement proof only
 - Recovery cutoff: `2026-09-21T23:59:59.000Z`
 - Source archive: `https://github.com/tomismeta/pull-md`
+- Operator procedure: [`RETIREMENT.md`](./RETIREMENT.md)
 
 ## Historical Implementation
 
