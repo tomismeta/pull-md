@@ -1,15 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import assetsHandler from '../api/assets/index.js';
-import mcpHandler from '../api/mcp/index.js';
-import manifestHandler from '../api/mcp/manifest.js';
-import openApiHandler from '../api/openapi.json.js';
-import apiCatalogHandler from '../api/well-known/api-catalog.js';
+import retiredHandler from '../api/retired.js';
 
-function runRequest(handler, { method = 'GET', headers = {}, query = {}, body = {} } = {}) {
+function runRequest(handler, { method = 'GET', path = '/' } = {}) {
   return new Promise((resolve, reject) => {
-    const req = { method, headers, query, body };
+    const req = {
+      method,
+      headers: { host: 'pull.md', 'x-forwarded-proto': 'https' },
+      query: {},
+      body: {},
+      url: path
+    };
     const response = {
       statusCode: 200,
       headers: {},
@@ -37,87 +39,34 @@ function runRequest(handler, { method = 'GET', headers = {}, query = {}, body = 
         return this;
       }
     };
-
     Promise.resolve(handler(req, response)).catch(reject);
   });
 }
 
-test('api-catalog well-known endpoint returns RFC9727 linkset and head links', async () => {
-  const getRes = await runRequest(apiCatalogHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(getRes.statusCode, 200);
-  assert.match(String(getRes.headers['content-type'] || ''), /application\/linkset\+json/i);
-  assert.match(String(getRes.headers['content-type'] || ''), /rfc9727/i);
-  assert.ok(Array.isArray(getRes.body?.linkset));
-  assert.equal(getRes.body.linkset[0]?.anchor, 'https://pull.md/.well-known/api-catalog');
-  assert.equal(
-    Array.isArray(getRes.body.linkset[0]?.item) &&
-      getRes.body.linkset[0].item.some((entry) => entry?.href === 'https://pull.md/mcp'),
-    true
+test('all former MCP and REST discovery handlers fail closed with 410', async () => {
+  const endpoints = [
+    '/.well-known/api-catalog',
+    '/api/openapi.json',
+    '/api/assets',
+    '/mcp',
+    '/api/mcp/manifest'
+  ];
+
+  const responses = await Promise.all(
+    endpoints.map((path) => runRequest(retiredHandler, { path }))
   );
-  assert.ok(getRes.body.linkset.some((entry) => Array.isArray(entry?.['service-desc'])));
-  assert.ok(getRes.body.linkset.some((entry) => entry?.anchor === 'https://pull.md/api/assets/{id}/download'));
 
-  const headRes = await runRequest(apiCatalogHandler, {
-    method: 'HEAD',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(headRes.statusCode, 200);
-  assert.match(String(headRes.headers.link || ''), /rel="item"/);
-  assert.match(String(headRes.headers.link || ''), /\/api\/assets/);
+  for (const res of responses) {
+    assert.equal(res.statusCode, 410);
+    assert.equal(res.body?.code, 'service_retired');
+    assert.match(String(res.headers.link || ''), /rel="service-doc"/);
+    assert.doesNotMatch(String(res.headers.link || ''), /api-catalog|service-desc|service-meta/);
+  }
 });
 
-test('openapi endpoint exposes canonical REST paths', async () => {
-  const res = await runRequest(openApiHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(res.statusCode, 200);
-  assert.match(String(res.headers['content-type'] || ''), /openapi\+json/i);
-  assert.equal(res.body?.openapi, '3.1.0');
-  assert.ok(res.body?.paths?.['/api/assets']);
-  assert.ok(res.body?.paths?.['/api/assets/{id}/download']);
-  assert.ok(res.body?.paths?.['/api/mcp/manifest']);
-  assert.equal(res.body?.['x-pullmd-auth-model']?.oauth2_supported, false);
-  assert.equal(res.body?.['x-pullmd-commerce']?.commerce_site, true);
-  assert.equal(res.body?.['x-pullmd-commerce']?.paywall_status_code, 402);
-  assert.equal(res.body?.paths?.['/api/assets/{id}/download']?.get?.['x-pullmd-payment']?.bazaar_discovery_declared, true);
-  assert.match(String(res.body?.info?.description || ''), /OAuth\/OIDC discovery metadata is intentionally absent/i);
-});
-
-test('core endpoints include discovery Link headers', async () => {
-  const assetsRes = await runRequest(assetsHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(assetsRes.statusCode, 200);
-  assert.match(String(assetsRes.headers.link || ''), /rel="api-catalog"/);
-  assert.match(String(assetsRes.headers.link || ''), /rel="service-desc"/);
-
-  const mcpGetRes = await runRequest(mcpHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(mcpGetRes.statusCode, 200);
-  assert.match(String(mcpGetRes.headers.link || ''), /rel="api-catalog"/);
-  assert.match(String(mcpGetRes.headers.link || ''), /\/api\/mcp\/manifest/);
-
-  const manifestRes = await runRequest(manifestHandler, {
-    method: 'GET',
-    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(manifestRes.statusCode, 200);
-  assert.match(String(manifestRes.headers.link || ''), /rel="service-meta"/);
-});
-
-test('production www host canonicalizes discovery surfaces to apex pull.md', async () => {
-  const res = await runRequest(apiCatalogHandler, {
-    method: 'GET',
-    headers: { host: 'www.pull.md', 'x-forwarded-proto': 'https' }
-  });
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body?.linkset?.[0]?.anchor, 'https://pull.md/.well-known/api-catalog');
-  assert.match(String(res.headers.link || ''), /<https:\/\/pull\.md\/api\/openapi\.json>/);
+test('retired discovery handlers answer preflight without advertising active methods', async () => {
+  const res = await runRequest(retiredHandler, { method: 'OPTIONS', path: '/api/openapi.json' });
+  assert.equal(res.statusCode, 204);
+  assert.equal(res.body, null);
+  assert.equal(res.headers['x-pullmd-retired'], 'true');
 });

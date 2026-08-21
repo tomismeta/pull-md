@@ -1,4 +1,4 @@
-import { assetIdsResolved, getAssetResolved, loadAssetContent } from '../../_lib/catalog.js';
+import { getAssetResolved, loadAssetContent } from '../../_lib/catalog.js';
 import {
   classifyClientMode,
   classifyRedownloadHeaders,
@@ -16,7 +16,10 @@ import {
 import { getSellerAddress, resolveSiweIdentity, setCors, verifyWalletAuth } from '../../_lib/payments.js';
 import { buildSiweChallengeFields } from '../../_lib/siwe.js';
 import { recordTelemetryEvent } from '../../_lib/telemetry.js';
-import { setDiscoveryHeaders } from '../../_lib/discovery.js';
+import {
+  evaluateRetiredDownloadAccess,
+  sendRetirementProblem
+} from '../../_lib/retirement.js';
 
 export {
   classifyClientMode,
@@ -82,7 +85,6 @@ function resolveSiweIdentityFromRequest(req) {
 
 export default async function handler(req, res) {
   setCors(res, req.headers.origin);
-  setDiscoveryHeaders(res, req);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -94,41 +96,7 @@ export default async function handler(req, res) {
 
   const telemetryRoute = '/api/assets/{id}/download';
   const startMs = Date.now();
-  const siweIdentity = resolveSiweIdentityFromRequest(req);
   const assetId = req.query.id;
-  const asset = await getAssetResolved(assetId);
-  if (!asset) {
-    const availableIds = await assetIdsResolved();
-    recordDownloadTelemetry({
-      eventType: 'download.not_found',
-      route: telemetryRoute,
-      assetId,
-      success: false,
-      statusCode: 404,
-      errorCode: 'asset_not_found'
-    });
-    return res.status(404).json({
-      error: 'Asset not found',
-      available_assets: availableIds,
-      available_souls: availableIds
-    });
-  }
-
-  const delivery = resolveDeliveryMetadata(asset, assetId);
-  const sellerAddress = asset.sellerAddress || getSellerAddress();
-  if (!sellerAddress) {
-    recordDownloadTelemetry({
-      eventType: 'download.config_error',
-      route: telemetryRoute,
-      assetId,
-      assetType: delivery.assetType,
-      success: false,
-      statusCode: 500,
-      errorCode: 'missing_seller_address'
-    });
-    return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required' });
-  }
-
   const { rawMode: clientModeRaw, strictAgentMode } = classifyClientMode({ headers: req.headers, query: req.query });
   const walletHintForQuote = String(req.headers['x-wallet-address'] || req.query?.wallet_address || '').trim();
   const {
@@ -154,6 +122,61 @@ export default async function handler(req, res) {
     cookieHeader: req.headers.cookie,
     assetId
   });
+
+  const retiredAccess = evaluateRetiredDownloadAccess({
+    hasExistingEntitlementProof: hasAnyValidEntitlementHeaders
+  });
+  if (!retiredAccess.allowed) {
+    recordDownloadTelemetry({
+      eventType: 'download.retired',
+      route: telemetryRoute,
+      action: 'retirement_gate',
+      walletAddress: wallet || null,
+      assetId,
+      success: false,
+      statusCode: 410,
+      errorCode: retiredAccess.reason
+    });
+    return sendRetirementProblem({
+      req,
+      res,
+      path: `/api/assets/${encodeURIComponent(String(assetId || ''))}/download`,
+      cacheControl: 'private, no-store, max-age=0'
+    });
+  }
+
+  const asset = await getAssetResolved(assetId);
+  if (!asset) {
+    recordDownloadTelemetry({
+      eventType: 'download.not_found',
+      route: telemetryRoute,
+      assetId,
+      success: false,
+      statusCode: 404,
+      errorCode: 'asset_not_found'
+    });
+    return res.status(404).json({
+      error: 'Asset not found',
+      code: 'asset_not_found'
+    });
+  }
+
+  const delivery = resolveDeliveryMetadata(asset, assetId);
+  const siweIdentity = resolveSiweIdentityFromRequest(req);
+
+  const sellerAddress = asset.sellerAddress || getSellerAddress();
+  if (!sellerAddress) {
+    recordDownloadTelemetry({
+      eventType: 'download.config_error',
+      route: telemetryRoute,
+      assetId,
+      assetType: delivery.assetType,
+      success: false,
+      statusCode: 500,
+      errorCode: 'missing_seller_address'
+    });
+    return res.status(500).json({ error: 'Server configuration error: SELLER_ADDRESS is required' });
+  }
 
   if (legacyPaymentHeader) {
     return res.status(410).json({

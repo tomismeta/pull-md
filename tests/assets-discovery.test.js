@@ -1,17 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import assetsHandler from '../api/assets/index.js';
+import assetsHandler from '../api/retired.js';
 
 function runAssetsRequest({ method = 'GET', headers = {}, query = {} } = {}) {
-  return new Promise((resolve) => {
-    const req = { method, headers, query };
+  return new Promise((resolve, reject) => {
+    const req = { method, headers, query, url: '/api/assets' };
     const response = {
       statusCode: 200,
       headers: {},
       body: null,
       setHeader(key, value) {
-        this.headers[key.toLowerCase()] = value;
+        this.headers[String(key).toLowerCase()] = value;
       },
       status(code) {
         this.statusCode = code;
@@ -22,30 +22,33 @@ function runAssetsRequest({ method = 'GET', headers = {}, query = {} } = {}) {
         resolve(this);
         return this;
       },
-      end() {
+      end(payload) {
+        if (payload !== undefined) this.body = payload;
         resolve(this);
         return this;
       }
     };
-    assetsHandler(req, response);
+    Promise.resolve(assetsHandler(req, response)).catch(reject);
   });
 }
 
-test('public assets discovery endpoint returns canonical asset response shape', async () => {
-  const res = await runAssetsRequest();
-  assert.equal(res.statusCode, 200);
-  assert.ok(res.body);
-  assert.ok(Array.isArray(res.body.assets));
-  assert.equal(typeof res.body.count, 'number');
-  assert.equal(res.body.count, res.body.assets.length);
-  assert.equal(res.body.meta?.api_catalog, '/.well-known/api-catalog');
-  assert.equal(res.body.meta?.service_desc, '/api/openapi.json');
-  assert.equal(res.body.meta?.mcp_manifest, '/api/mcp/manifest');
-  assert.equal(res.body.meta?.mcp_endpoint, '/mcp');
-  assert.equal(res.body.meta?.mcp_list_tool, 'list_assets');
-  assert.equal(res.body.meta?.commerce_site, true);
-  assert.equal(res.body.meta?.payment_protocol, 'x402');
-  assert.equal(res.body.meta?.canonical_purchase_endpoint_pattern, '/api/assets/{id}/download');
-  assert.equal(res.body.meta?.paywall_status_code, 402);
-  assert.match(String(res.body.meta?.purchase_flow || ''), /\/api\/assets\/\{id\}\/download/);
+test('public asset discovery is permanently retired', async () => {
+  const res = await runAssetsRequest({
+    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
+  });
+  assert.equal(res.statusCode, 410);
+  assert.match(String(res.headers['content-type'] || ''), /application\/problem\+json/i);
+  assert.equal(res.headers['x-pullmd-retired'], 'true');
+  assert.equal(res.body?.code, 'service_retired');
+  assert.equal(res.body?.service_status?.new_purchases, 'retired');
+});
+
+test('asset discovery HEAD preserves the 410 status without a body', async () => {
+  const res = await runAssetsRequest({
+    method: 'HEAD',
+    headers: { host: 'pull.md', 'x-forwarded-proto': 'https' }
+  });
+  assert.equal(res.statusCode, 410);
+  assert.equal(res.body, null);
+  assert.equal(res.headers['x-pullmd-retired'], 'true');
 });
