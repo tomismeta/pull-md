@@ -35,7 +35,7 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "vercel": "^58.9.4"
+    "vercel": "^59.1.4"
   },
   "overrides": {
     "axios": "1.19.0",
