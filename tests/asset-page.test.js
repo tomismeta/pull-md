@@ -61,5 +61,5 @@ test('legacy asset.html also returns the retirement notice', async () => {
     url: '/asset.html?id=meta-starter-v1'
   });
   assert.equal(res.statusCode, 410);
-  assert.match(String(res.body || ''), /Pulled<br>offline\./i);
+  assert.match(String(res.body || ''), /PULL\.md has been retired/i);
 });
